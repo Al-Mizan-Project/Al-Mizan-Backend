@@ -18,3 +18,5 @@ coverage/
 htmlcov/
 services/auth/.env
 services/acteurs/.env
+services/acteurs/.env.example
+services/auth/.env.example
