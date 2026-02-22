@@ -1,8 +1,20 @@
-echo "venv/
+venv/
 __pycache__/
 *.pyc
-db.sqlite3
-.env
+*.pyo
+*.pyd
+*.sqlite3
 *.egg-info/
 dist/
-.DS_Store" > .gitignore
+build/
+.DS_Store
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+htmlcov/
+services/auth/.env
+services/acteurs/.env
