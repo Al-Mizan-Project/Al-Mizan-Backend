@@ -30,7 +30,7 @@ class PermissionRoleSerializer(serializers.ModelSerializer):
 
 
 class UtilisateurSerializer(serializers.ModelSerializer):
-    id_role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all())
+    id_role = serializers.IntegerField(source="id_role_id", read_only=True)
 
     class Meta:
         model = Utilisateur
@@ -115,6 +115,10 @@ class ResetPasswordSerializer(serializers.Serializer):
 
 class RolePermissionsReplaceSerializer(serializers.Serializer):
     permission_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), allow_empty=True)
+
+
+class UserRoleUpdateSerializer(serializers.Serializer):
+    id_role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all())
 
 
 class RedisAwareTokenRefreshSerializer(TokenRefreshSerializer):

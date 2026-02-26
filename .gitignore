@@ -10,7 +10,6 @@ build/
 .DS_Store
 .env
 .env.*
-!.env.example
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -18,5 +17,3 @@ coverage/
 htmlcov/
 services/auth/.env
 services/acteurs/.env
-services/acteurs/.env.example
-services/auth/.env.example

@@ -51,7 +51,7 @@ class UtilisateurManager(BaseUserManager):
 class Utilisateur(AbstractBaseUser):
     id_utilisateur = models.AutoField(primary_key=True)
     id_role = models.ForeignKey(Role, on_delete=models.PROTECT, db_column="id_role", related_name="utilisateurs")
-    id_membre = models.IntegerField()
+    id_membre = models.IntegerField(db_index=True)
     email = models.EmailField(unique=True, max_length=255)
     password = models.CharField(max_length=255, db_column="password_hash")
     created_at = models.DateTimeField(auto_now_add=True)

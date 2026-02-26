@@ -9,7 +9,6 @@ venv/
 # Environment files
 .env
 .env.*
-!.env.example
 
 # Test/cache artifacts
 .pytest_cache/
