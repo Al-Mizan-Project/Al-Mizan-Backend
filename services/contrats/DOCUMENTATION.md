@@ -662,44 +662,44 @@ Le service est entièrement configurable via des **variables d'environnement** (
 
 **Variables principales :**
 
-| Variable                  | Défaut                                | Description                                     |
-| ------------------------- | ------------------------------------- | ----------------------------------------------- |
-| `SECRET_KEY` / `DJANGO_SECRET_KEY` | `unsafe-dev-secret`          | Clé secrète Django (obligatoire en production)  |
-| `DJANGO_ENV`              | `development`                         | Environnement (`development` / `production`)    |
-| `DEBUG` / `DJANGO_DEBUG`  | `true` (dev) / `false` (prod)         | Mode debug (auto-détection par DJANGO_ENV)      |
-| `ALLOWED_HOSTS`           | `localhost,127.0.0.1`                 | Hôtes autorisés (séparés par virgule)           |
-| `CORS_ALLOWED_ORIGINS`    | `""`                                  | Origines CORS autorisées                        |
-| `LOG_LEVEL`               | `INFO`                                | Niveau de logging (`DEBUG`, `INFO`, `WARNING`)  |
+| Variable                           | Défaut                        | Description                                    |
+| ---------------------------------- | ----------------------------- | ---------------------------------------------- |
+| `SECRET_KEY` / `DJANGO_SECRET_KEY` | `unsafe-dev-secret`           | Clé secrète Django (obligatoire en production) |
+| `DJANGO_ENV`                       | `development`                 | Environnement (`development` / `production`)   |
+| `DEBUG` / `DJANGO_DEBUG`           | `true` (dev) / `false` (prod) | Mode debug (auto-détection par DJANGO_ENV)     |
+| `ALLOWED_HOSTS`                    | `localhost,127.0.0.1`         | Hôtes autorisés (séparés par virgule)          |
+| `CORS_ALLOWED_ORIGINS`             | `""`                          | Origines CORS autorisées                       |
+| `LOG_LEVEL`                        | `INFO`                        | Niveau de logging (`DEBUG`, `INFO`, `WARNING`) |
 
 **Base de données (PgBouncer) :**
 
-| Variable            | Défaut                | Description                               |
-| ------------------- | --------------------- | ----------------------------------------- |
-| `DB_NAME`           | `contrats_db`         | Nom de la base PostgreSQL                 |
-| `DB_USER`           | `contrats_user`       | Utilisateur PostgreSQL                    |
-| `DB_PASSWORD`       | `contrats_password`   | Mot de passe PostgreSQL                   |
-| `DB_HOST`           | `pgbouncer_contrats`  | Hôte — pointe vers PgBouncer (pas la BDD directe) |
-| `DB_PORT`           | `6432`                | Port PgBouncer (PostgreSQL natif = 5432)  |
-| `DATABASE_URL`      | `""`                  | URL complète (prioritaire si définie)     |
-| `CONN_MAX_AGE`      | `120`                 | Durée de vie d'une connexion (secondes)   |
+| Variable       | Défaut               | Description                                       |
+| -------------- | -------------------- | ------------------------------------------------- |
+| `DB_NAME`      | `contrats_db`        | Nom de la base PostgreSQL                         |
+| `DB_USER`      | `contrats_user`      | Utilisateur PostgreSQL                            |
+| `DB_PASSWORD`  | `contrats_password`  | Mot de passe PostgreSQL                           |
+| `DB_HOST`      | `pgbouncer_contrats` | Hôte — pointe vers PgBouncer (pas la BDD directe) |
+| `DB_PORT`      | `6432`               | Port PgBouncer (PostgreSQL natif = 5432)          |
+| `DATABASE_URL` | `""`                 | URL complète (prioritaire si définie)             |
+| `CONN_MAX_AGE` | `120`                | Durée de vie d'une connexion (secondes)           |
 
 > **Important :** Notez que `DB_HOST` par défaut pointe vers `pgbouncer_contrats` (port `6432`) et non vers `contrats_db` (port `5432`). Django ne communique **jamais** directement avec PostgreSQL — PgBouncer sert d'intermédiaire.
 
 **Cache Redis :**
 
-| Variable                | Défaut                                   | Description                 |
-| ----------------------- | ---------------------------------------- | --------------------------- |
-| `REDIS_URL`             | `redis://redis_contrats:6379/1`          | URL de connexion Redis      |
-| `REDIS_PASSWORD`        | `contrats_redis_password`                | Mot de passe Redis          |
-| `CACHE_TTL`             | `60`                                     | TTL par défaut du cache (s) |
-| `REDIS_MAX_CONNECTIONS` | `200`                                    | Connexions max au pool      |
+| Variable                | Défaut                          | Description                 |
+| ----------------------- | ------------------------------- | --------------------------- |
+| `REDIS_URL`             | `redis://redis_contrats:6379/1` | URL de connexion Redis      |
+| `REDIS_PASSWORD`        | `contrats_redis_password`       | Mot de passe Redis          |
+| `CACHE_TTL`             | `60`                            | TTL par défaut du cache (s) |
+| `REDIS_MAX_CONNECTIONS` | `200`                           | Connexions max au pool      |
 
 **Throttling (limitation de débit) :**
 
-| Variable               | Défaut         | Description                        |
-| ---------------------- | -------------- | ---------------------------------- |
-| `THROTTLE_ANON_RATE`   | `240/minute`   | Requêtes max par minute (anonyme)  |
-| `THROTTLE_USER_RATE`   | `1200/minute`  | Requêtes max par minute (authentifié) |
+| Variable             | Défaut        | Description                           |
+| -------------------- | ------------- | ------------------------------------- |
+| `THROTTLE_ANON_RATE` | `240/minute`  | Requêtes max par minute (anonyme)     |
+| `THROTTLE_USER_RATE` | `1200/minute` | Requêtes max par minute (authentifié) |
 
 **Services distants :**
 
@@ -770,8 +770,8 @@ X_FRAME_OPTIONS = "DENY"
 
 La sécurité s'adapte à l'environnement :
 
-| Paramètre              | Développement | Production                  |
-| ----------------------- | ------------- | --------------------------- |
+| Paramètre               | Développement | Production                   |
+| ----------------------- | ------------- | ---------------------------- |
 | `SESSION_COOKIE_SECURE` | `False`       | `True` (auto via DJANGO_ENV) |
 | `CSRF_COOKIE_SECURE`    | `False`       | `True` (auto via DJANGO_ENV) |
 | `SECURE_SSL_REDIRECT`   | `False`       | Configurable                 |
@@ -983,12 +983,12 @@ exec "$@"
 
 **Différences clés avec la v1.0 :**
 
-| Aspect          | v1.0                                         | v1.1 (actuel)                           |
-| --------------- | -------------------------------------------- | --------------------------------------- |
-| Host attendu    | `contrats-db:5432` (PostgreSQL direct)       | `pgbouncer_contrats:6432` (PgBouncer)   |
-| Lancement       | `exec gunicorn config.wsgi:application ...`  | `exec "$@"` (délègue au CMD)            |
-| Protocole       | WSGI                                         | ASGI (Uvicorn)                          |
-| Workers default | 3                                            | 2                                       |
+| Aspect          | v1.0                                        | v1.1 (actuel)                         |
+| --------------- | ------------------------------------------- | ------------------------------------- |
+| Host attendu    | `contrats-db:5432` (PostgreSQL direct)      | `pgbouncer_contrats:6432` (PgBouncer) |
+| Lancement       | `exec gunicorn config.wsgi:application ...` | `exec "$@"` (délègue au CMD)          |
+| Protocole       | WSGI                                        | ASGI (Uvicorn)                        |
+| Workers default | 3                                           | 2                                     |
 
 > **Pourquoi `exec "$@"` ?** Cette syntaxe shell exécute le `CMD` du Dockerfile en remplacement du processus shell actuel (via `exec`). `$@` représente tous les arguments passés au script — ici, le CMD complet de Gunicorn. Le processus Gunicorn devient PID 1, recevant directement les signaux Docker.
 
@@ -1026,13 +1026,13 @@ Le fichier `docker-compose.yml` définit **5 services** (un de plus qu'en v1.0 �
 └─────────────────────────────────────────────────────────┘
 ```
 
-| Service               | Image                      | Rôle                      | Healthcheck      | Dépend de         |
-| --------------------- | -------------------------- | ------------------------- | ---------------- | ----------------- |
-| `contrats_db`         | `postgres:16-alpine`       | Base de données           | `pg_isready`     | —                 |
-| `pgbouncer_contrats`  | `edoburu/pgbouncer:latest` | Connection pooler         | `pg_isready`     | `contrats_db`     |
-| `redis_contrats`      | `redis:7.4-alpine`         | Cache + sessions          | `redis-cli ping` | —                 |
-| `contrats_api`        | Build local (Dockerfile)   | Application Django (ASGI) | —                | db + pgb + redis  |
-| `contrats_nginx`      | `nginx:1.27-alpine`        | Reverse proxy             | —                | `contrats_api`    |
+| Service              | Image                      | Rôle                      | Healthcheck      | Dépend de        |
+| -------------------- | -------------------------- | ------------------------- | ---------------- | ---------------- |
+| `contrats_db`        | `postgres:16-alpine`       | Base de données           | `pg_isready`     | —                |
+| `pgbouncer_contrats` | `edoburu/pgbouncer:latest` | Connection pooler         | `pg_isready`     | `contrats_db`    |
+| `redis_contrats`     | `redis:7.4-alpine`         | Cache + sessions          | `redis-cli ping` | —                |
+| `contrats_api`       | Build local (Dockerfile)   | Application Django (ASGI) | —                | db + pgb + redis |
+| `contrats_nginx`     | `nginx:1.27-alpine`        | Reverse proxy             | —                | `contrats_api`   |
 
 > **Convention de nommage :** Les services utilisent des **underscores** (`contrats_api`, `redis_contrats`) au lieu de tirets (`contrats-api`). Ceci est une convention du projet Al-Mizan pour cohérence entre les services.
 
@@ -1047,14 +1047,14 @@ Django ──(N connexions)──► PgBouncer ──(M connexions)──► Pos
 
 **Configuration dans docker-compose.yml :**
 
-| Variable                       | Défaut             | Description                             |
-| ------------------------------ | ------------------ | --------------------------------------- |
-| `PGBOUNCER_PORT`               | `6432`             | Port d'écoute de PgBouncer              |
-| `PGBOUNCER_AUTH_TYPE`          | `scram-sha-256`    | Méthode d'authentification              |
-| `PGBOUNCER_POOL_MODE`         | `transaction`      | Mode de pooling (voir ci-dessous)       |
-| `PGBOUNCER_MAX_CLIENT_CONN`   | `500`              | Max connexions côté client              |
-| `PGBOUNCER_DEFAULT_POOL_SIZE` | `40`               | Connexions maintenues vers PostgreSQL   |
-| `PGBOUNCER_RESERVE_POOL_SIZE` | `10`               | Pool de réserve (pic de charge)         |
+| Variable                      | Défaut          | Description                           |
+| ----------------------------- | --------------- | ------------------------------------- |
+| `PGBOUNCER_PORT`              | `6432`          | Port d'écoute de PgBouncer            |
+| `PGBOUNCER_AUTH_TYPE`         | `scram-sha-256` | Méthode d'authentification            |
+| `PGBOUNCER_POOL_MODE`         | `transaction`   | Mode de pooling (voir ci-dessous)     |
+| `PGBOUNCER_MAX_CLIENT_CONN`   | `500`           | Max connexions côté client            |
+| `PGBOUNCER_DEFAULT_POOL_SIZE` | `40`            | Connexions maintenues vers PostgreSQL |
+| `PGBOUNCER_RESERVE_POOL_SIZE` | `10`            | Pool de réserve (pic de charge)       |
 
 > **Concept clé — Modes de pooling :**
 >
@@ -1118,15 +1118,15 @@ http {
 
 **Améliorations par rapport à v1.0 :**
 
-| Fonctionnalité         | v1.0            | v1.1 (actuel)                        |
-| ---------------------- | --------------- | ------------------------------------ |
-| Compression            | Aucune          | GZIP (JSON, level 5)                 |
-| Keepalive upstream     | Aucun           | `keepalive 64` (pool de connexions)  |
-| HTTP version           | 1.0 (défaut)   | 1.1 (keepalive possible)             |
-| Worker connections     | 1024 (défaut)   | 2048                                 |
-| Proxy buffers          | Défaut Nginx    | `32 × 16k` (optimisé pour JSON)     |
-| `tcp_nopush`           | Non             | Oui (optimise l'envoi réseau)        |
-| `server_tokens`        | Oui (défaut)    | `off` (cache la version Nginx)       |
+| Fonctionnalité     | v1.0          | v1.1 (actuel)                       |
+| ------------------ | ------------- | ----------------------------------- |
+| Compression        | Aucune        | GZIP (JSON, level 5)                |
+| Keepalive upstream | Aucun         | `keepalive 64` (pool de connexions) |
+| HTTP version       | 1.0 (défaut)  | 1.1 (keepalive possible)            |
+| Worker connections | 1024 (défaut) | 2048                                |
+| Proxy buffers      | Défaut Nginx  | `32 × 16k` (optimisé pour JSON)     |
+| `tcp_nopush`       | Non           | Oui (optimise l'envoi réseau)       |
+| `server_tokens`    | Oui (défaut)  | `off` (cache la version Nginx)      |
 
 > **Concept clé — `keepalive 64` :** Sans keepalive upstream, Nginx ouvre et ferme une connexion TCP pour chaque requête vers Gunicorn. Avec `keepalive 64`, il maintient un pool de 64 connexions persistantes, éliminant la latence du TCP handshake.
 
@@ -1617,22 +1617,22 @@ docker compose down -v       # Arrêter + supprimer les volumes (données)
 
 ### 16.1 Patterns Utilisés
 
-| Pattern                       | Où                                 | Explication                                                   |
-| ----------------------------- | ---------------------------------- | ------------------------------------------------------------- |
-| **Database per Service**      | Architecture globale               | Chaque microservice a sa propre BDD pour l'isolation          |
-| **Remote FK Validation**      | `serializers.py`                   | Vérification d'existence par appel HTTP plutôt que FK SQL     |
-| **Data Enrichment**           | `ContratDocumentsListView`         | Données minimales locales, détails récupérés à la lecture     |
-| **Graceful Degradation**      | `_validate_remote_fk()`            | Si l'URL n'est pas configurée, la validation est ignorée      |
-| **Idempotency**               | `ContratDocumentDetailView.post()` | `get_or_create` évite les doublons sur appels répétés         |
-| **Health/Ready Probes**       | `HealthView`, `ReadyView`          | Séparation liveness vs readiness pour l'orchestration         |
-| **12-Factor App**             | `settings.py`                      | Configuration via variables d'environnement                   |
-| **Least Privilege**           | `Dockerfile`                       | Le conteneur s'exécute en tant qu'utilisateur non-root        |
-| **Connection Pooling**        | PgBouncer                          | Mutualisation des connexions PostgreSQL (500 → 40)            |
-| **ASGI**                      | Gunicorn + Uvicorn                 | Serveur asynchrone supportant HTTP/2 et WebSockets            |
-| **ENTRYPOINT/CMD Separation** | Dockerfile                         | Init (migrations) séparé du processus principal (Gunicorn)    |
-| **Centralized Gateway**       | `gateway/nginx.conf`               | Point d'entrée unique pour tous les microservices             |
-| **Rate Limiting (Throttling)**| DRF throttle classes               | Protection contre les abus et DDoS                            |
-| **Structured Logging**        | `LOGGING` dict                     | Logs formatés sur stdout pour capture Docker                  |
+| Pattern                        | Où                                 | Explication                                                |
+| ------------------------------ | ---------------------------------- | ---------------------------------------------------------- |
+| **Database per Service**       | Architecture globale               | Chaque microservice a sa propre BDD pour l'isolation       |
+| **Remote FK Validation**       | `serializers.py`                   | Vérification d'existence par appel HTTP plutôt que FK SQL  |
+| **Data Enrichment**            | `ContratDocumentsListView`         | Données minimales locales, détails récupérés à la lecture  |
+| **Graceful Degradation**       | `_validate_remote_fk()`            | Si l'URL n'est pas configurée, la validation est ignorée   |
+| **Idempotency**                | `ContratDocumentDetailView.post()` | `get_or_create` évite les doublons sur appels répétés      |
+| **Health/Ready Probes**        | `HealthView`, `ReadyView`          | Séparation liveness vs readiness pour l'orchestration      |
+| **12-Factor App**              | `settings.py`                      | Configuration via variables d'environnement                |
+| **Least Privilege**            | `Dockerfile`                       | Le conteneur s'exécute en tant qu'utilisateur non-root     |
+| **Connection Pooling**         | PgBouncer                          | Mutualisation des connexions PostgreSQL (500 → 40)         |
+| **ASGI**                       | Gunicorn + Uvicorn                 | Serveur asynchrone supportant HTTP/2 et WebSockets         |
+| **ENTRYPOINT/CMD Separation**  | Dockerfile                         | Init (migrations) séparé du processus principal (Gunicorn) |
+| **Centralized Gateway**        | `gateway/nginx.conf`               | Point d'entrée unique pour tous les microservices          |
+| **Rate Limiting (Throttling)** | DRF throttle classes               | Protection contre les abus et DDoS                         |
+| **Structured Logging**         | `LOGGING` dict                     | Logs formatés sur stdout pour capture Docker               |
 
 ### 16.2 Sécurité
 
@@ -1648,16 +1648,16 @@ docker compose down -v       # Arrêter + supprimer les volumes (données)
 
 ### 16.3 Performance
 
-| Technique                 | Composant     | Impact                                                      |
-| ------------------------- | ------------- | ----------------------------------------------------------- |
-| PgBouncer connection pool | Base de données | 500 clients Django partagent 40 connexions PostgreSQL       |
-| Redis connection pool     | Cache         | Pool de 200 connexions avec retry on timeout                |
-| Nginx keepalive 64        | Reverse proxy | Connexions persistantes → pas de TCP handshake par requête  |
-| Gzip compression          | Nginx         | Trafic JSON réduit (~60-80% sur les grosses réponses)       |
-| Proxy buffers 32×16k      | Nginx         | Lit la réponse complète avant de l'envoyer au client        |
-| ASGI (Uvicorn)            | Application   | Traitement asynchrone, meilleure utilisation des workers    |
-| `CONN_MAX_AGE=120`        | Django ORM    | Réutilise les connexions pendant 2 minutes                  |
-| `tcp_nopush`              | Nginx         | Combine les petits paquets en un seul envoi réseau          |
+| Technique                 | Composant       | Impact                                                     |
+| ------------------------- | --------------- | ---------------------------------------------------------- |
+| PgBouncer connection pool | Base de données | 500 clients Django partagent 40 connexions PostgreSQL      |
+| Redis connection pool     | Cache           | Pool de 200 connexions avec retry on timeout               |
+| Nginx keepalive 64        | Reverse proxy   | Connexions persistantes → pas de TCP handshake par requête |
+| Gzip compression          | Nginx           | Trafic JSON réduit (~60-80% sur les grosses réponses)      |
+| Proxy buffers 32×16k      | Nginx           | Lit la réponse complète avant de l'envoyer au client       |
+| ASGI (Uvicorn)            | Application     | Traitement asynchrone, meilleure utilisation des workers   |
+| `CONN_MAX_AGE=120`        | Django ORM      | Réutilise les connexions pendant 2 minutes                 |
+| `tcp_nopush`              | Nginx           | Combine les petits paquets en un seul envoi réseau         |
 
 ### 16.4 Django REST Framework — Rappels
 
@@ -1695,29 +1695,29 @@ docker compose down -v       # Arrêter + supprimer les volumes (données)
 
 ## 17. Glossaire
 
-| Terme                       | Définition                                                                                                                         |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **API REST**                | Interface de programmation utilisant les méthodes HTTP (GET, POST, PUT, PATCH, DELETE) sur des ressources identifiées par des URLs |
-| **ASGI**                    | Asynchronous Server Gateway Interface — successeur de WSGI, supporte l'asynchrone, WebSockets et HTTP/2                           |
-| **Connection Pooler**       | Composant qui mutualise un pool de connexions BDD entre de nombreux clients (ex: PgBouncer)                                        |
-| **CORS**                    | Cross-Origin Resource Sharing — mécanisme HTTP permettant à un serveur d'autoriser les requêtes depuis d'autres origines           |
-| **CRUD**                    | Create, Read, Update, Delete — les quatre opérations de base sur les données                                                       |
-| **dj-database-url**         | Bibliothèque Python qui parse une URL de BDD (`postgres://user:pass@host/db`) en dict Django                                      |
-| **Django ORM**              | Object-Relational Mapping — couche d'abstraction qui permet de manipuler la BDD via des objets Python                              |
-| **DRF**                     | Django REST Framework — bibliothèque pour construire des APIs REST avec Django                                                     |
-| **FK (Foreign Key)**        | Clé étrangère — référence vers une autre entité                                                                                    |
-| **Gateway**                 | Reverse proxy centralisé qui route les requêtes vers les différents microservices selon l'URL                                      |
-| **Gunicorn**                | Green Unicorn — serveur WSGI/ASGI de production pour Python, gère plusieurs workers (processus)                                    |
-| **Idempotent**              | Une opération qui, exécutée plusieurs fois, produit le même résultat qu'une seule exécution                                        |
-| **Microservice**            | Service indépendant avec sa propre BDD, communiquant via des API                                                                   |
-| **Migration**               | Fichier Python décrivant les changements de schéma de BDD (géré par Django)                                                        |
-| **Nginx**                   | Serveur web/reverse proxy performant                                                                                               |
-| **OpenAPI**                 | Standard de description d'APIs REST (anciennement Swagger)                                                                         |
-| **PgBouncer**               | Connection pooler léger pour PostgreSQL — mutualise les connexions entre les workers Django et la BDD                              |
-| **Probe (Health/Ready)**    | Endpoint utilisé par un orchestrateur pour vérifier l'état d'un service                                                            |
-| **Throttling**              | Limitation du nombre de requêtes par client dans un intervalle de temps — protège contre les abus et DDoS                          |
-| **12-Factor App**           | Méthodologie de développement d'applications cloud-native (config par env vars, logs sur stdout, etc.)                             |
-| **Uvicorn**                 | Serveur ASGI ultra-rapide basé sur `uvloop` — utilisé comme worker dans Gunicorn pour le support asynchrone                        |
+| Terme                    | Définition                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **API REST**             | Interface de programmation utilisant les méthodes HTTP (GET, POST, PUT, PATCH, DELETE) sur des ressources identifiées par des URLs |
+| **ASGI**                 | Asynchronous Server Gateway Interface — successeur de WSGI, supporte l'asynchrone, WebSockets et HTTP/2                            |
+| **Connection Pooler**    | Composant qui mutualise un pool de connexions BDD entre de nombreux clients (ex: PgBouncer)                                        |
+| **CORS**                 | Cross-Origin Resource Sharing — mécanisme HTTP permettant à un serveur d'autoriser les requêtes depuis d'autres origines           |
+| **CRUD**                 | Create, Read, Update, Delete — les quatre opérations de base sur les données                                                       |
+| **dj-database-url**      | Bibliothèque Python qui parse une URL de BDD (`postgres://user:pass@host/db`) en dict Django                                       |
+| **Django ORM**           | Object-Relational Mapping — couche d'abstraction qui permet de manipuler la BDD via des objets Python                              |
+| **DRF**                  | Django REST Framework — bibliothèque pour construire des APIs REST avec Django                                                     |
+| **FK (Foreign Key)**     | Clé étrangère — référence vers une autre entité                                                                                    |
+| **Gateway**              | Reverse proxy centralisé qui route les requêtes vers les différents microservices selon l'URL                                      |
+| **Gunicorn**             | Green Unicorn — serveur WSGI/ASGI de production pour Python, gère plusieurs workers (processus)                                    |
+| **Idempotent**           | Une opération qui, exécutée plusieurs fois, produit le même résultat qu'une seule exécution                                        |
+| **Microservice**         | Service indépendant avec sa propre BDD, communiquant via des API                                                                   |
+| **Migration**            | Fichier Python décrivant les changements de schéma de BDD (géré par Django)                                                        |
+| **Nginx**                | Serveur web/reverse proxy performant                                                                                               |
+| **OpenAPI**              | Standard de description d'APIs REST (anciennement Swagger)                                                                         |
+| **PgBouncer**            | Connection pooler léger pour PostgreSQL — mutualise les connexions entre les workers Django et la BDD                              |
+| **Probe (Health/Ready)** | Endpoint utilisé par un orchestrateur pour vérifier l'état d'un service                                                            |
+| **Throttling**           | Limitation du nombre de requêtes par client dans un intervalle de temps — protège contre les abus et DDoS                          |
+| **12-Factor App**        | Méthodologie de développement d'applications cloud-native (config par env vars, logs sur stdout, etc.)                             |
+| **Uvicorn**              | Serveur ASGI ultra-rapide basé sur `uvloop` — utilisé comme worker dans Gunicorn pour le support asynchrone                        |
 | **Sérialiseur**          | Composant qui convertit des données entre format JSON et objets Python                                                             |
 | **WSGI**                 | Web Server Gateway Interface — standard Python pour communiquer entre un serveur web et une application                            |
 | **12-Factor App**        | Méthodologie de développement de services cloud-natifs (configuration via env vars, etc.)                                          |
