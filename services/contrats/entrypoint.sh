@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-DB_HOST="${DB_HOST:-contrats-db}"
-DB_PORT="${DB_PORT:-5432}"
+DB_HOST="${DB_HOST:-pgbouncer_contrats}"
+DB_PORT="${DB_PORT:-6432}"
 
 python - <<PY
 import os
@@ -10,8 +10,8 @@ import socket
 import sys
 import time
 
-host = os.getenv("DB_HOST", "contrats-db")
-port = int(os.getenv("DB_PORT", "5432"))
+host = os.getenv("DB_HOST", "pgbouncer_contrats")
+port = int(os.getenv("DB_PORT", "6432"))
 
 for _ in range(90):
     try:
@@ -23,4 +23,4 @@ sys.exit(1)
 PY
 
 python manage.py migrate --noinput
-exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers "${GUNICORN_WORKERS:-3}" --timeout "${GUNICORN_TIMEOUT:-60}" --access-logfile - --error-logfile -
+exec "$@"
