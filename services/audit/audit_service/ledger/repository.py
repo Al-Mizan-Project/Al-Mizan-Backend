@@ -13,7 +13,7 @@ class AuditLedgerRepository:
             .first()
         )
         if last_log:
-            return last_log.hash_actuel
+            return bytes(last_log.hash_actuel)
         return b"\x00" * 32
 
     @transaction.atomic(using="ledger")

@@ -13,7 +13,7 @@ class AuditLogRead(models.Model):
 
     class Meta:
         db_table = "audit_read_projection"
-        managed = False
+        managed = True
         indexes = [
             models.Index(fields=["entite_type", "entite_id"]),
             models.Index(fields=["utilisateur_id", "horodatage"]),
