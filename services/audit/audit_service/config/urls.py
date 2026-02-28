@@ -20,4 +20,5 @@ from django.urls import include, path
 urlpatterns = [
     path('journaux-audit/', include('ledger.urls')),
     path('journaux-audit/', include('readstore.urls')),
+    path('journaux-audit/', include('integrity.urls')),
 ]
