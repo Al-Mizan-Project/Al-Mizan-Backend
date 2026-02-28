@@ -84,22 +84,21 @@ DATABASES = {
     },
     'ledger': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'ledger_db',
-        'USER': 'postgres',
-        'PASSWORD': 'root',
-        'HOST': 'localhost',
+        'NAME': 'ledger',
+        'USER': 'ledger_user',
+        'PASSWORD': 'ledger_pass',
+        'HOST': 'db',
         'PORT': '5432',
     },
     'read': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'read_db',
-        'USER': 'postgres',
-        'PASSWORD': 'root',
-        'HOST': 'localhost',
+        'USER': 'ledger_user',
+        'PASSWORD': 'ledger_pass',
+        'HOST': 'db',
         'PORT': '5432',
     },
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

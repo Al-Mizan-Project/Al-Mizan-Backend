@@ -47,14 +47,13 @@ class AuditDatabaseRouter:
         """
         Control which apps migrate to which database.
         """
-
         if app_label == "ledger":
             return db == "ledger"
 
         if app_label == "readstore":
-            return False
+            return db == "read"
 
         if app_label == "integrity":
-            return False
+            return db == "ledger"
 
         return db == "default"

@@ -1,0 +1,25 @@
+services:
+  db:
+    image: postgres-logical:15
+    container_name: postgres-ledger
+    environment:
+      - POSTGRES_USER=ledger_user
+      - POSTGRES_PASSWORD=ledger_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "listen_addresses=*"]
+
+  web:
+    build: .
+    container_name: django-audit
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DEBUG=1
