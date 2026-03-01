@@ -1,0 +1,29 @@
+{
+  "name": "audit-outbox-connector",
+ 
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "topic.prefix": "audit_ledger",
+    "database.hostname": "db",
+    "database.port":     "5432",
+    "database.user":     "ledger_user",
+    "database.password": "ledger_pass",
+    "database.dbname":   "ledger",
+    "database.server.name": "audit_ledger",
+    "slot.name": "debezium_audit_outbox_slot",
+    "publication.name": "debezium_outbox_pub",
+    "plugin.name": "pgoutput",
+    "table.include.list": "public.journaux_outbox",
+    "transforms": "outbox",
+    "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
+    "transforms.outbox.table.field.event.key": "aggregate_id",
+    "transforms.outbox.table.field.event.payload": "payload",
+    "transforms.outbox.route.by.field": "aggregate_type",
+    "transforms.outbox.route.topic.replacement": "outbox.event.${routedByValue}",
+    "snapshot.mode": "initial",
+    "heartbeat.interval.ms": "30000",
+    "tombstones.on.delete": "true",
+    "decimal.handling.mode": "string",
+    "time.precision.mode": "connect"
+  }
+}
