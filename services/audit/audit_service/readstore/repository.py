@@ -61,7 +61,7 @@ class AuditReadRepository:
         page_obj = paginator.get_page(page)
 
         return {
-            "items": list(page_obj.object_list),
+            "items": page_obj.object_list,
             "total": paginator.count,
             "num_pages": paginator.num_pages,
             "current_page": page_obj.number,

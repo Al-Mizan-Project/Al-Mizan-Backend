@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from .serializers import AuditLogReadSerializer
 
 from .services import AuditReadService
 
@@ -30,6 +31,9 @@ class AuditListView(APIView):
         page_size = int(request.query_params.get("page_size", 50))
 
         result = self.service.list_logs(filters, page, page_size)
+        
+        serializer = AuditLogReadSerializer(result["items"], many=True)
+        result["items"] = serializer.data
 
         return Response(result, status=status.HTTP_200_OK)
 
@@ -49,20 +53,10 @@ class AuditDetailView(APIView):
                 {"error": "Not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        
+        serializer = AuditLogReadSerializer(log)
 
-        return Response(
-            {
-                "id": log.id,
-                "utilisateur_id": log.utilisateur_id,
-                "action": log.action,
-                "entite_type": log.entite_type,
-                "entite_id": log.entite_id,
-                "horodatage": log.horodatage,
-                "adresse_ip": log.adresse_ip,
-                "details_action": log.details_action,
-            },
-            status=status.HTTP_200_OK,
-        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class AuditByUserView(APIView):
@@ -77,6 +71,9 @@ class AuditByUserView(APIView):
         page_size = int(request.query_params.get("page_size", 50))
 
         result = self.service.get_logs_by_user(user_id, page, page_size)
+        
+        serializer = AuditLogReadSerializer(result["items"], many=True)
+        result["items"] = serializer.data
 
         return Response(result, status=status.HTTP_200_OK)
 
@@ -98,5 +95,8 @@ class AuditByEntityView(APIView):
             page,
             page_size,
         )
+        
+        serializer = AuditLogReadSerializer(result["items"], many=True)
+        result["items"] = serializer.data
 
         return Response(result, status=status.HTTP_200_OK)

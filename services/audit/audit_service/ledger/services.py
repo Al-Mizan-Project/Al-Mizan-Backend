@@ -48,6 +48,7 @@ class AuditLedgerService:
                 "adresse_ip": data.get("adresse_ip"),
                 "previous_hash": previous_hash.hex(),
                 "current_hash": chain_hash.hex(),
+                'horodatage':     log.horodatage.isoformat(),
             },
         )
 
