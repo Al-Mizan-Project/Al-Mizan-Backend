@@ -104,8 +104,15 @@ services:
     command: python -u /app/projection-consumer/consumer.py
     networks:
       - audit-network
-    restart: unless-stopped
-    
+    restart: unless-stopped  
+  redis:
+      image: redis:7-alpine
+      container_name: audit-redis
+      ports:
+        - "6379:6379"
+      command: redis-server --appendonly no
+      networks:
+        - audit-network
 networks:
     audit-network:
       driver: bridge

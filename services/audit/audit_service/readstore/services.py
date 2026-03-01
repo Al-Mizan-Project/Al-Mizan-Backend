@@ -1,6 +1,6 @@
 from typing import Dict
 from .repository import AuditReadRepository
-
+from django.core.cache import cache
 
 class AuditReadService:
 
@@ -8,10 +8,21 @@ class AuditReadService:
         self.repository = AuditReadRepository()
 
     def get_log(self, log_id: int):
-        return self.repository.get_by_id(log_id)
+        key = f"log:{log_id}"
+        result = cache.get(key)
+        if result is None:
+            result = self.repository.get_by_id(log_id)
+            if result:
+                cache.set(key, result, timeout=300)
+        return result
 
     def get_logs_by_user(self, user_id: int, page: int, page_size: int):
-        return self.repository.get_by_user(user_id, page, page_size)
+        key = f"user_logs:{user_id}:page:{page}:size:{page_size}"
+        result = cache.get(key)
+        if result is None:
+            result = self.repository.get_by_user(user_id, page, page_size)
+            cache.set(key, result, timeout=300)
+        return result
 
     def get_logs_by_entity(
         self,
@@ -20,12 +31,18 @@ class AuditReadService:
         page: int,
         page_size: int,
     ):
-        return self.repository.get_by_entity(
-            entite_type,
-            entite_id,
-            page,
-            page_size,
-        )
+        key = f"entity_logs:{entite_type}:{entite_id}:page:{page}:size:{page_size}"
+        result = cache.get(key)
+        if result is None:
+            result = self.repository.get_by_entity(entite_type, entite_id, page, page_size)
+            cache.set(key, result, timeout=300)
+        return result
 
     def list_logs(self, filters: Dict, page: int, page_size: int):
-        return self.repository.list_logs(filters, page, page_size)
+        key_parts = [f"{k}:{v}" for k, v in sorted(filters.items())]
+        key = f"logs_list:{'-'.join(key_parts)}:page:{page}:size:{page_size}"
+        result = cache.get(key)
+        if result is None:
+            result = self.repository.list_logs(filters, page, page_size)
+            cache.set(key, result, timeout=300)
+        return result
