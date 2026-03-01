@@ -1,0 +1,65 @@
+from django.db import models
+
+class SoumissionStatut(models.TextChoices):
+    SOUMIS = 'SOUMIS', 'Soumis'
+    EN_OUVERTURE = 'EN_OUVERTURE', 'En Ouverture'
+    EN_EVALUATION = 'EN_EVALUATION', 'En Évaluation'
+    EVALU_TERMINEE = 'EVALU_TERMINEE', 'Évaluation Terminée'
+    RETRAITE = 'RETRAITE', 'Retraitée'
+
+class Soumission(models.Model):
+    id_soumission = models.AutoField(primary_key=True)
+    id_appel_offre = models.IntegerField(help_text="Reference to the Appel d'Offre in the Appels Service")
+    id_soumissionnaire = models.IntegerField(help_text="Reference to the Entreprise/User in Auth Service")
+    
+    # Financial Offer Encryption
+    offre_financiere_chiffree_url = models.URLField(max_length=500, help_text="MinIO URL of the encrypted PDF")
+    cle_dechiffrement_hash = models.TextField(help_text="AES Key encrypted with Appel d'Offre public RSA key")
+    
+    statut = models.CharField(
+        max_length=50, 
+        choices=SoumissionStatut.choices, 
+        default=SoumissionStatut.SOUMIS
+    )
+    
+    # Decrypted later
+    montant_financier = models.DecimalField(
+        max_digits=15, 
+        decimal_places=2, 
+        null=True, 
+        blank=True, 
+        help_text="Filled ONLY after official opening of bids"
+    )
+    
+    date_soumission = models.DateTimeField(auto_now_add=True)
+    
+    # AI Analysis Fields
+    conformite_statut = models.CharField(max_length=100, null=True, blank=True)
+    conformite_rapport = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'soumissions'
+        # One soumissionnaire can submit only one active bid per appel_offre (mostly)
+        # But they might retry/replace it before date_limite_soumission. We'll leave it without strict unique constraint for now, 
+        # handling uniqueness in the business logic if necessary.
+
+    def __str__(self):
+        return f"Soumission #{self.id_soumission} - AO #{self.id_appel_offre}"
+
+class Evaluation(models.Model):
+    id_evaluation = models.AutoField(primary_key=True)
+    id_soumission = models.ForeignKey(Soumission, on_delete=models.CASCADE, related_name='evaluations')
+    id_comission = models.IntegerField(help_text="ID of the Commission via Appels Service")
+    id_membre = models.IntegerField(help_text="ID of the Commission Member")
+    
+    note = models.FloatField(help_text="Score out of 100")
+    commentaires = models.TextField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'evaluations'
+        unique_together = ('id_soumission', 'id_membre')
+
+    def __str__(self):
+        return f"Eval #{self.id_evaluation} - Comm #{self.id_comission}"

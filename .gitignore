@@ -17,3 +17,12 @@ coverage/
 htmlcov/
 services/auth/.env
 services/acteurs/.env
+services/documents/.env
+services/soumissions/.env
+services/soumissions/db.sqlite3
+services/soumissions/venv/
+services/documents/venv/
+services/documents/db.sqlite3
+.pytest_cache/
+__pycache__/
+*.log
