@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-DB_HOST="${DB_HOST:-auth-db}"
-DB_PORT="${DB_PORT:-5432}"
+DB_HOST="${DB_HOST:-pgbouncer_auth}"
+DB_PORT="${DB_PORT:-6432}"
 
 python - <<PY
 import os
@@ -10,8 +10,8 @@ import socket
 import sys
 import time
 
-host = os.getenv("DB_HOST", "auth-db")
-port = int(os.getenv("DB_PORT", "5432"))
+host = os.getenv("DB_HOST", "pgbouncer_auth")
+port = int(os.getenv("DB_PORT", "6432"))
 
 for _ in range(90):
     try:
@@ -24,4 +24,4 @@ PY
 
 python manage.py migrate --noinput
 python manage.py bootstrap_admin
-exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers "${GUNICORN_WORKERS:-3}" --timeout "${GUNICORN_TIMEOUT:-60}" --access-logfile - --error-logfile -
+exec "$@"
