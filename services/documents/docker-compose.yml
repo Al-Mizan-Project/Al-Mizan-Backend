@@ -11,7 +11,7 @@ services:
       - DJANGO_ENV=development
       - DATABASE_URL=postgres://documents_user:documents_password@pgbouncer_documents:5432/documents_db
       - REDIS_URL=redis://redis_documents:6379/1
-      - MINIO_URL=http://minio_documents:9000
+      - MINIO_URL=http://minio-documents:9000
       - MINIO_ACCESS_KEY=admin_almizan
       - MINIO_SECRET_KEY=SecurePassword123!
       - MINIO_BUCKET_NAME=almizan-documents
@@ -64,6 +64,10 @@ services:
     environment:
       MINIO_ROOT_USER: admin_almizan
       MINIO_ROOT_PASSWORD: SecurePassword123!
+    networks:
+      default:
+        aliases:
+          - minio-documents
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -87,9 +91,12 @@ services:
       - minio_documents
     entrypoint: >
       /bin/sh -c "
-      /usr/bin/mc config host add myminio http://minio_documents:9000 admin_almizan SecurePassword123!;
-      /usr/bin/mc mb myminio/almizan-documents || true;
-      /usr/bin/mc anonymous set download myminio/almizan-documents;
+      until /usr/bin/mc alias set myminio http://minio-documents:9000 admin_almizan SecurePassword123!; do
+        echo 'Waiting for MinIO to be ready...';
+        sleep 2;
+      done;
+      /usr/bin/mc mb myminio/almizan-documents --ignore-existing;
+      /usr/bin/mc anonymous set download myminio/almizan-documents || true;
       exit 0;
       "
 
