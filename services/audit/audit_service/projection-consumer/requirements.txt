@@ -1,0 +1,9 @@
+Django>=4.2
+psycopg2-binary>=2.9
+ 
+# confluent-kafka is the official Confluent Python client.
+# It wraps librdkafka which is production-grade and actively maintained.
+# kafka-python is an alternative but confluent-kafka has better performance
+# and is the standard for production systems.
+confluent-kafka>=2.3.0
+djangorestframework>=3.14

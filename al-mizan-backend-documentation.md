@@ -491,12 +491,13 @@
 - `details_action` - text
 
 ## Endpoints
-- `GET /journaux-audit`
-- `POST /journaux-audit`
+- `GET /journaux-audit/list`
+- `POST /journaux-audit/create`
 - `GET /journaux-audit/{log_id}`
 - `GET /journaux-audit/entity/{entity_type}/{entity_id}`
 - `GET /journaux-audit/user/{user_id}`
-- `POST /journaux-audit/verifier-integrite`
+- `GET /journaux-audit/verifier-integrite`
+- `GET /journaux-audit/verifier-integrite/record/{record_id}`
 
 ---
 
