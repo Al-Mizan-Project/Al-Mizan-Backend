@@ -1,0 +1,17 @@
+Django>=5.0,<6.0
+djangorestframework
+djangorestframework-simplejwt
+psycopg2-binary
+cryptography
+PyJWT
+redis
+django-redis
+dj-database-url
+django-cors-headers
+drf-spectacular
+pytest
+pytest-django
+factory-boy
+django-filter
+gunicorn
+python-dotenv
