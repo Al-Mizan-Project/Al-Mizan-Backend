@@ -12,6 +12,7 @@ services:
       - DATABASE_URL=postgres://soumissions_user:soumissions_password@pgbouncer_soumissions:5432/soumissions_db
       - REDIS_URL=redis://redis_soumissions:6379/1
       - SECRET_KEY=unsafe-dev-secret-soumissions
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-change-me-internal-token}
     depends_on:
       pgbouncer_soumissions:
         condition: service_started

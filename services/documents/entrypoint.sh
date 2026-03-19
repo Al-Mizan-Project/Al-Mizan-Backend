@@ -1,8 +1,8 @@
 #!/bin/sh
 
-set -e
+set -eu
 
-if [ "$DATABASE_URL" ]; then
+if [ -n "${DATABASE_URL:-}" ]; then
     echo "Waiting for PostgreSQL/PgBouncer..."
     host="${DATABASE_URL#*@}"
     host="${host%%/*}"
@@ -15,7 +15,7 @@ if [ "$DATABASE_URL" ]; then
     echo "PostgreSQL check completed."
 fi
 
-if [ "$MINIO_URL" ]; then
+if [ -n "${MINIO_URL:-}" ]; then
     echo "Waiting for MinIO..."
     host="${MINIO_URL#*//}"
     port="${host##*:}"

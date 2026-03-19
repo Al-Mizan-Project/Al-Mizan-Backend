@@ -1,7 +1,9 @@
 from drf_spectacular.utils import extend_schema, OpenApiResponse
+from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from .models import Soumission, Evaluation, SoumissionStatut
@@ -126,3 +128,53 @@ class EvaluationCreateView(APIView):
             }
         )
         return Response({"message": "Évaluation enregistrée.", "id": evaluation.id_evaluation}, status=status.HTTP_201_CREATED)
+
+
+class SoumissionConformitePatchView(APIView):
+    """
+    PATCH /api/soumissions/<soumission_id>/conformite/
+    Permet au service IA de publier le résultat de conformité.
+    """
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=None,
+        responses={200: OpenApiResponse(description='Conformité mise à jour')},
+        description="Mise à jour du statut et rapport de conformité d'une soumission"
+    )
+    def patch(self, request, soumission_id, *args, **kwargs):
+        # Inter-service call path: allow internal token for IA service while
+        # preserving authenticated user access for backoffice/manual operations.
+        is_authenticated_user = bool(getattr(request, "user", None) and request.user.is_authenticated)
+        internal_token = request.headers.get("X-Internal-Service-Token", "")
+        expected_token = getattr(settings, "INTERNAL_SERVICE_TOKEN", "")
+
+        if not is_authenticated_user:
+            if not expected_token or internal_token != expected_token:
+                return Response({"error": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        soum = get_object_or_404(Soumission, id_soumission=soumission_id)
+
+        conformite_statut = request.data.get("conformite_statut")
+        conformite_rapport = request.data.get("conformite_rapport")
+
+        if conformite_statut is None:
+            return Response(
+                {"error": "conformite_statut est requis"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        soum.conformite_statut = conformite_statut
+        if conformite_rapport is not None:
+            soum.conformite_rapport = conformite_rapport
+        soum.save(update_fields=["conformite_statut", "conformite_rapport"])
+
+        return Response(
+            {
+                "id_soumission": soum.id_soumission,
+                "conformite_statut": soum.conformite_statut,
+                "conformite_rapport": soum.conformite_rapport,
+            },
+            status=status.HTTP_200_OK,
+        )

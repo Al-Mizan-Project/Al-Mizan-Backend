@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from datetime import timedelta
+import sys
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -74,6 +75,18 @@ DATABASES = {
     )
 }
 
+IS_TEST_RUN = 'test' in sys.argv or 'pytest' in sys.argv[0]
+if IS_TEST_RUN:
+    if env_bool("TEST_USE_SQLITE", True):
+        DATABASES['default'] = {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': str(BASE_DIR / 'test_db.sqlite3'),
+        }
+    else:
+        # PgBouncer setups often disallow CREATE DATABASE; reuse current DB.
+        DATABASES['default'].setdefault('TEST', {})
+        DATABASES['default']['TEST']['NAME'] = DATABASES['default'].get('NAME')
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
@@ -83,11 +96,9 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-import sys
-
 REDIS_URL = env_str("REDIS_URL", "redis://localhost:6379/1")
 
-if 'test' in sys.argv or 'pytest' in sys.argv[0]:
+if IS_TEST_RUN:
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -141,3 +152,6 @@ MINIO_URL = env_str("MINIO_URL", "http://localhost:9000")
 MINIO_ACCESS_KEY = env_str("MINIO_ACCESS_KEY", "admin_almizan")
 MINIO_SECRET_KEY = env_str("MINIO_SECRET_KEY", "SecurePassword123!")
 MINIO_BUCKET_NAME = env_str("MINIO_BUCKET_NAME", "almizan-documents")
+
+# Shared token used by trusted internal services (e.g. IA service).
+INTERNAL_SERVICE_TOKEN = env_str("INTERNAL_SERVICE_TOKEN", "")
