@@ -20,3 +20,20 @@ htmlcov/
 
 # OS/editor
 .DS_Store
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+*.log
+
+# Docker Volumes
+documents_pg_data/
+documents_redis_data/
+documents_minio_data/
+
+# Testing/Downloads
+*.pdf
+*.zip
+*.txt
