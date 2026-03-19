@@ -3,6 +3,7 @@ version: "3.8"
 services:
   api:
     build: .
+    entrypoint: ["sh", "-c"]
     volumes:
       - .:/app
     ports:
@@ -24,7 +25,7 @@ services:
       minio_documents:
         condition: service_started
     command: >
-      sh -c "./entrypoint.sh && python manage.py runserver 0.0.0.0:8000"
+      "sh /app/entrypoint.sh && python manage.py runserver 0.0.0.0:8000"
 
   db_documents:
     image: postgres:16-alpine
