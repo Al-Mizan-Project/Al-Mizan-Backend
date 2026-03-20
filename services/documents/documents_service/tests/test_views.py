@@ -159,6 +159,29 @@ class DocumentApiTests(APITestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]['related_type'], 'contrat')
 
+    def test_search_documents_with_ids_filter(self):
+        doc1 = Document.objects.create(
+            related_type="contrat",
+            nom="contract.pdf",
+            type_document="pdf",
+            storage_url="uuid-ids-1",
+            hash_sha256="hids1",
+        )
+        doc2 = Document.objects.create(
+            related_type="soumission",
+            nom="offer.docx",
+            type_document="docx",
+            storage_url="uuid-ids-2",
+            hash_sha256="hids2",
+        )
+
+        url = reverse('document_search')
+        response = self.client.get(url, {'ids': f'{doc2.id_document},{doc1.id_document}'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data['results'] if 'results' in response.data else response.data
+        self.assertEqual(len(results), 2)
+        self.assertEqual({item['id_document'] for item in results}, {doc1.id_document, doc2.id_document})
+
     def test_temporal_visibility(self):
         past_date = timezone.now() - timedelta(days=1)
         future_date = timezone.now() + timedelta(days=1)
