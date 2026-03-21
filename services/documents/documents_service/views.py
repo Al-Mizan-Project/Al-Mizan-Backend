@@ -19,12 +19,24 @@ class DocumentFilterMixin:
     """
     def get_filtered_queryset(self, request):
         queryset = Document.objects.all()
+        ids = request.query_params.get('ids')
         related_type = request.query_params.get('related_type')
         ia_verif_statut = request.query_params.get('ia_verif_statut')
         is_encrypted = request.query_params.get('is_encrypted')
         type_document = request.query_params.get('type_document')
         min_size = request.query_params.get('min_size')
         max_size = request.query_params.get('max_size')
+
+        if ids:
+            parsed_ids = []
+            for value in ids.split(','):
+                value = value.strip()
+                if value.isdigit():
+                    parsed_ids.append(int(value))
+            if parsed_ids:
+                queryset = queryset.filter(id_document__in=parsed_ids)
+            else:
+                return queryset.none()
         
         if related_type:
             queryset = queryset.filter(related_type=related_type)

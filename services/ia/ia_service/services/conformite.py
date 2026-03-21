@@ -1,8 +1,89 @@
+import re
+import unicodedata
 from typing import Dict, List, Tuple
 
 
+DOCUMENT_TYPE_SYNONYMS = {
+    "rc": ["rc", "registre commerce", "registre de commerce", "registre_commerce"],
+    "nif": ["nif", "numero identification fiscale", "identification fiscale"],
+    "nis": ["nis", "numero identification statistique", "identification statistique"],
+    "ai": ["ai", "article imposition", "attestation imposition"],
+    "cnas": ["cnas", "attestation cnas", "certificat cnas"],
+    "casnos": ["casnos", "attestation casnos", "certificat casnos"],
+    "attestation_fiscale": [
+        "attestation fiscale",
+        "regularite fiscale",
+        "quitus fiscal",
+        "extrait role",
+    ],
+    "declaration_probite": ["probite", "declaration de probite", "déclaration de probité"],
+    "offre_technique": ["offre technique", "technique"],
+    "offre_financiere": ["offre financiere", "offre financière", "financiere", "financière"],
+}
+
+
+def _normalize_text(value: str) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def infer_document_type_from_text(*values: str) -> str:
+    normalized_values = [_normalize_text(item) for item in values if str(item).strip()]
+    haystack = f" {' '.join(normalized_values)} "
+
+    for canonical, aliases in DOCUMENT_TYPE_SYNONYMS.items():
+        for alias in aliases:
+            token = _normalize_text(alias)
+            if token and f" {token} " in haystack:
+                return canonical
+
+    return normalized_values[0] if normalized_values else ""
+
+
+def infer_document_type_from_metadata(document: Dict) -> str:
+    return infer_document_type_from_text(
+        str(document.get("type_document_label", "")),
+        str(document.get("nom", "")),
+        str(document.get("type_document", "")),
+        str(document.get("ocr_text", "")),
+    )
+
+
+def build_required_documents_from_metadata(documents: List[Dict]) -> List[str]:
+    inferred = [infer_document_type_from_metadata(doc) for doc in documents]
+    return sorted({item for item in inferred if item})
+
+
+def build_provided_documents_from_metadata(documents: List[Dict], enforce_validity_checks: bool = True) -> List[Dict]:
+    provided = []
+    for doc in documents:
+        inferred_type = infer_document_type_from_metadata(doc)
+        if not inferred_type:
+            continue
+
+        is_valid = doc.get("is_valid")
+        if is_valid is None:
+            if enforce_validity_checks:
+                is_valid = str(doc.get("ia_verif_statut", "")).upper() != "ANOMALY"
+            else:
+                is_valid = True
+
+        provided.append(
+            {
+                "id_document": doc.get("id_document"),
+                "type_document": inferred_type,
+                "is_valid": bool(is_valid),
+            }
+        )
+
+    return provided
+
+
 def _extract_doc_type(doc: Dict) -> str:
-    return str(doc.get("type_document", "")).strip().lower()
+    return _normalize_text(str(doc.get("type_document", "")))
 
 
 def run_conformite_check(required_documents: List[str], provided_documents: List[Dict]) -> Tuple[str, Dict]:

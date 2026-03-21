@@ -15,6 +15,7 @@ class Soumission(models.Model):
     # Financial Offer Encryption
     offre_financiere_chiffree_url = models.URLField(max_length=500, help_text="MinIO URL of the encrypted PDF")
     cle_dechiffrement_hash = models.TextField(help_text="AES Key encrypted with Appel d'Offre public RSA key")
+    document_ids = models.JSONField(default=list, blank=True, help_text="Linked document IDs in Documents service")
     
     statut = models.CharField(
         max_length=50, 
