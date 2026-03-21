@@ -1,3 +1,5 @@
+import json
+
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from django.conf import settings
 from rest_framework.views import APIView
@@ -19,6 +21,43 @@ class SoumissionCreateView(APIView):
     POST /api/soumissions/
     Permet à l'opérateur économique de déposer son offre chiffrée.
     """
+    def get(self, request, *args, **kwargs):
+        queryset = Soumission.objects.all().order_by("-date_soumission")
+
+        id_soumissionnaire = request.query_params.get("id_soumissionnaire")
+        id_appel_offre = request.query_params.get("id_appel_offre")
+
+        if id_soumissionnaire is not None:
+            queryset = queryset.filter(id_soumissionnaire=id_soumissionnaire)
+        if id_appel_offre is not None:
+            queryset = queryset.filter(id_appel_offre=id_appel_offre)
+
+        items = []
+        for soum in queryset:
+            rapport = soum.conformite_rapport
+            if isinstance(rapport, str) and rapport:
+                try:
+                    rapport = json.loads(rapport)
+                except Exception:
+                    pass
+
+            items.append(
+                {
+                    "id_soumission": soum.id_soumission,
+                    "id_appel_offre": soum.id_appel_offre,
+                    "id_soumissionnaire": soum.id_soumissionnaire,
+                    "offre_financiere_chiffree_url": soum.offre_financiere_chiffree_url,
+                    "document_ids": soum.document_ids or [],
+                    "statut": soum.statut,
+                    "montant_financier": soum.montant_financier,
+                    "date_soumission": soum.date_soumission,
+                    "conformite_statut": soum.conformite_statut,
+                    "conformite_rapport": rapport,
+                }
+            )
+
+        return Response(items, status=status.HTTP_200_OK)
+
     @extend_schema(
         request=None, 
         responses={201: OpenApiResponse(description='Soumission déposée')},
@@ -30,15 +69,59 @@ class SoumissionCreateView(APIView):
         if not all(k in data for k in ('id_appel_offre', 'id_soumissionnaire', 'offre_financiere_chiffree_url', 'cle_dechiffrement_hash')):
             return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
         
+        document_ids = data.get('document_ids', [])
+        if not isinstance(document_ids, list):
+            return Response({"error": "document_ids must be a list"}, status=status.HTTP_400_BAD_REQUEST)
+
+        normalized_document_ids = []
+        for value in document_ids:
+            try:
+                normalized_document_ids.append(int(value))
+            except (TypeError, ValueError):
+                continue
+
         soumission = Soumission.objects.create(
             id_appel_offre=data['id_appel_offre'],
             id_soumissionnaire=data['id_soumissionnaire'],
             offre_financiere_chiffree_url=data['offre_financiere_chiffree_url'],
             cle_dechiffrement_hash=data['cle_dechiffrement_hash'],
+            document_ids=normalized_document_ids,
             statut=SoumissionStatut.SOUMIS,
         )
         # Audit log dispatch would happen here (via signal on pre_save/post_save)
         return Response({"message": "Soumission déposée et chiffrée avec succès.", "id": soumission.id_soumission}, status=status.HTTP_201_CREATED)
+
+
+class SoumissionDetailView(APIView):
+    """
+    GET /api/soumissions/<id_soumission>/
+    """
+
+    def get(self, request, soumission_id, *args, **kwargs):
+        soum = get_object_or_404(Soumission, id_soumission=soumission_id)
+
+        rapport = soum.conformite_rapport
+        if isinstance(rapport, str) and rapport:
+            try:
+                rapport = json.loads(rapport)
+            except Exception:
+                pass
+
+        return Response(
+            {
+                "id_soumission": soum.id_soumission,
+                "id_appel_offre": soum.id_appel_offre,
+                "id_soumissionnaire": soum.id_soumissionnaire,
+                "offre_financiere_chiffree_url": soum.offre_financiere_chiffree_url,
+                "document_ids": soum.document_ids or [],
+                "statut": soum.statut,
+                "montant_financier": soum.montant_financier,
+                "date_soumission": soum.date_soumission,
+                "conformite_statut": soum.conformite_statut,
+                "conformite_rapport": rapport,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 class OpenBidsView(APIView):
     """

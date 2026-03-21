@@ -90,6 +90,20 @@ services:
     networks:
       - ia-net
 
+  pgadmin_ia:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    ports:
+      - "5052:80"
+    depends_on:
+      ia_db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ia-net
+
 volumes:
   ia-db-data:
 
