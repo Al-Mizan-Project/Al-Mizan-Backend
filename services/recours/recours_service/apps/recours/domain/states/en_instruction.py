@@ -1,5 +1,5 @@
 from datetime import datetime
-from domain.states.base_state import RecoursState
+from .base_state import RecoursState
 
 
 class EnInstructionState(RecoursState):

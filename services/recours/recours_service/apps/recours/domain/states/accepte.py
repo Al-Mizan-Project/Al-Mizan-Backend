@@ -1,4 +1,4 @@
-from domain.states.base_state import RecoursState
+from .base_state import RecoursState
 
 
 class AccepteState(RecoursState):

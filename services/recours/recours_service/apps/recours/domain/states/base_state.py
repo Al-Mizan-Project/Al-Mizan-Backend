@@ -1,4 +1,4 @@
-from domain.exceptions import InvalidStateTransition
+from ..exceptions import InvalidStateTransition
 
 
 class RecoursState:

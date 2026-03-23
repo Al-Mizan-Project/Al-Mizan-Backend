@@ -2,19 +2,19 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from application.services.recours_service import RecoursService
-from application.dto.recours_dto import (
+from ...application.services.recours_service import RecoursService
+from ...application.dto.recours_dto import (
     RecoursCreateDTO,
     RecoursDecisionDTO,
 )
 
-from presentation.serializers.recours_serializers import (
+from ..serializers.recours_serializers import (
     RecoursCreateSerializer,
     RecoursDecisionSerializer,
     RecoursResponseSerializer,
 )
 
-from common.exceptions import ApplicationException
+from ....common.exceptions import ApplicationException
 
 
 class BaseAPIView(APIView):

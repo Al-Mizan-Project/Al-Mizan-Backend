@@ -1,16 +1,16 @@
 from datetime import datetime
 
-from domain.entities.recours import Recours
-from domain.services.recours_domain_service import RecoursDomainService
+from ...domain.entities.recours import Recours
+from ...domain.services.recours_domain_service import RecoursDomainService
 
-from domain.repositories.recours_repository import RecoursRepository
+from ...domain.repositories.recours_repository import RecoursRepository
 
-from integrations.soumissions_client import SoumissionsClient
-from integrations.appels_client import AppelsClient
-from integrations.notification_client import NotificationClient
-from integrations.audit_client import AuditClient
+from ....integrations.soumissions_client import SoumissionsClient
+from ....integrations.appels_client import AppelsClient
+from ....integrations.notification_client import NotificationClient
+from ....integrations.audit_client import AuditClient
 
-from application.dto.recours_dto import (
+from ...application.dto.recours_dto import (
     RecoursCreateDTO,
     RecoursDecisionDTO,
     RecoursResponseDTO,

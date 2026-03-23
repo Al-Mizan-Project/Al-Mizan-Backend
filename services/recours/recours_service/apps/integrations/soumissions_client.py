@@ -1,4 +1,4 @@
-from integrations.base_client import BaseHttpClient
+from .base_client import BaseHttpClient
 
 
 class SoumissionsClient(BaseHttpClient):

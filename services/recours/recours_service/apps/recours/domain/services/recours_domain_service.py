@@ -1,5 +1,5 @@
 from datetime import datetime
-from domain.exceptions import (
+from ..exceptions import (
     DuplicateRecours,
     DeadlineExceeded,
     UnauthorizedAction,
