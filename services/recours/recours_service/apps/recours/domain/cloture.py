@@ -1,2 +1,0 @@
-class ClotureState(RecoursState):
-    pass
