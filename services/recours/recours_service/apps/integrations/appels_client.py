@@ -1,0 +1,3 @@
+class AppelsClient:
+
+    def get_appel_offre(self, appel_id: int): ...

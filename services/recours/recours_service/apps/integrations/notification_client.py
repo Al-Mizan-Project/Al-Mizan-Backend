@@ -1,0 +1,3 @@
+class NotificationClient:
+
+    def send_notification(self, payload: dict): ...

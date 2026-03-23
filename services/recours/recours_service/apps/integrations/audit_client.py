@@ -1,0 +1,3 @@
+class AuditClient:
+
+    def log_action(self, payload: dict): ...
