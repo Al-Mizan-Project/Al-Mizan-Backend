@@ -3,7 +3,7 @@ from django.db import models
 
 class Validation(models.Model):
     id_validation = models.AutoField(primary_key=True)
-    id_organisation = models.IntegerField()
+    id_utilisateur = models.IntegerField()
     id_soumission = models.IntegerField()
     type = models.CharField(
         max_length=20,
