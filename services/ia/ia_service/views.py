@@ -41,7 +41,7 @@ from .services.integrations import (
     patch_document_ia_metadata,
     patch_soumission_conformite,
 )
-from .services.ocr import extract_document_text
+from .services.ocr import extract_document_text, extract_documents_text_parallel
 from .services.saucissonnage import detect_saucissonnage
 
 
@@ -591,24 +591,43 @@ class VerifierConformiteSoumissionAutoView(APIView):
         ocr_processed = 0
         ocr_succeeded = 0
         if perform_ocr:
-            enriched_provided = []
-            for original_doc, projected_doc in zip(provided_meta_sync.get("documents", []), provided_documents):
-                enriched = {**projected_doc}
-                doc_id = original_doc.get("id_document")
-                if doc_id is not None:
-                    ocr_processed += 1
+            # Build lookup by id_document to avoid misalignment when
+            # build_provided_documents_from_metadata() filters out entries.
+            original_docs_by_id = {
+                doc.get("id_document"): doc
+                for doc in provided_meta_sync.get("documents", [])
+                if doc.get("id_document") is not None
+            }
+
+            # ── Phase 1: Fetch binaries & collect OCR tasks ─────────────
+            ocr_tasks = []          # (index, payload, filename)
+            ocr_task_indices = []   # indices into provided_documents
+
+            for idx, projected_doc in enumerate(provided_documents):
+                doc_id = projected_doc.get("id_document")
+                original_doc = original_docs_by_id.get(doc_id)
+                if doc_id is not None and original_doc is not None:
                     binary = fetch_document_binary(int(doc_id))
                     if binary.get("ok"):
-                        extraction = extract_document_text(
-                            payload=binary.get("content", b""),
-                            filename=str(original_doc.get("nom", "")),
+                        ocr_tasks.append(
+                            (binary.get("content", b""), str(original_doc.get("nom", "")))
                         )
-                        if extraction.get("used"):
-                            ocr_succeeded += 1
-                            inferred_from_ocr = infer_document_type_from_text(extraction.get("text", ""))
-                            if inferred_from_ocr:
-                                enriched["type_document"] = inferred_from_ocr
-                enriched_provided.append(enriched)
+                        ocr_task_indices.append(idx)
+
+            ocr_processed = len(ocr_tasks)
+
+            # ── Phase 2: Run OCR in parallel ────────────────────────────
+            ocr_results = extract_documents_text_parallel(ocr_tasks)
+
+            # ── Phase 3: Enrich provided_documents with OCR results ─────
+            enriched_provided = [{**doc} for doc in provided_documents]
+            for task_pos, doc_idx in enumerate(ocr_task_indices):
+                extraction = ocr_results[task_pos]
+                if extraction.get("used"):
+                    ocr_succeeded += 1
+                    inferred_from_ocr = infer_document_type_from_text(extraction.get("text", ""))
+                    if inferred_from_ocr:
+                        enriched_provided[doc_idx]["type_document"] = inferred_from_ocr
             provided_documents = enriched_provided
 
         conformite_statut, rapport = run_conformite_check(required_documents, provided_documents)

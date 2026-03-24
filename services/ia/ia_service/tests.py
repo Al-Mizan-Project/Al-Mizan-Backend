@@ -10,7 +10,7 @@ from ia_service.services.anomalies import (
     detect_price_and_similarity_anomalies,
     generate_anomaly_summary,
 )
-from ia_service.services.ocr import extract_document_text
+from ia_service.services.ocr import extract_document_text, extract_documents_text_parallel
 from ia_service.services.saucissonnage import detect_saucissonnage
 
 
@@ -184,6 +184,57 @@ class OcrServiceTests(TestCase):
         self.assertEqual(result["text"], "fallback texte")
         self.assertTrue(result["used"])
         mock_img.assert_called_once()
+
+    @patch("ia_service.services.ocr._extract_pdf_text", return_value="")
+    @patch("ia_service.services.ocr._extract_pdf_ocr_text", return_value="registre de commerce")
+    def test_pdf_ocr_fallback_for_scanned_pdf(self, mock_pdf_ocr, mock_pdf_text):
+        """When pypdf returns empty text, pdf2image+tesseract should be tried."""
+        result = extract_document_text(payload=b"scanned-pdf-bytes", filename="scan.pdf")
+        self.assertEqual(result["engine"], "pdf2image+tesseract")
+        self.assertEqual(result["text"], "registre de commerce")
+        self.assertTrue(result["used"])
+        mock_pdf_text.assert_called_once()
+        mock_pdf_ocr.assert_called_once()
+
+    def test_file_size_limit_rejects_large_files(self):
+        """Files exceeding MAX_OCR_FILE_SIZE should be skipped."""
+        large_payload = b"x" * (1024 * 1024 + 1)  # ~1 MB
+        with self.settings(MAX_OCR_FILE_SIZE=1024 * 1024):  # 1 MB limit
+            result = extract_document_text(payload=large_payload, filename="big.pdf")
+        self.assertFalse(result["used"])
+        self.assertEqual(result["engine"], "none")
+        self.assertEqual(result.get("skipped_reason"), "file_too_large")
+
+    @patch("ia_service.services.ocr._extract_pdf_text", return_value="small file text")
+    def test_file_size_limit_allows_small_files(self, mock_pdf):
+        """Files under MAX_OCR_FILE_SIZE should be processed normally."""
+        small_payload = b"x" * 100
+        with self.settings(MAX_OCR_FILE_SIZE=1024 * 1024):
+            result = extract_document_text(payload=small_payload, filename="small.pdf")
+        self.assertTrue(result["used"])
+        self.assertEqual(result["engine"], "pypdf")
+
+    @patch("ia_service.services.ocr._extract_pdf_text")
+    def test_parallel_extraction_preserves_order(self, mock_pdf):
+        """extract_documents_text_parallel must return results in input order."""
+        mock_pdf.side_effect = ["texte A", "texte B", "texte C"]
+        items = [
+            (b"a", "a.pdf"),
+            (b"b", "b.pdf"),
+            (b"c", "c.pdf"),
+        ]
+        results = extract_documents_text_parallel(items)
+        self.assertEqual(len(results), 3)
+        self.assertEqual(results[0]["text"], "texte A")
+        self.assertEqual(results[1]["text"], "texte B")
+        self.assertEqual(results[2]["text"], "texte C")
+
+    @patch("ia_service.services.ocr._extract_image_ocr_text", return_value="single")
+    def test_parallel_single_item_uses_sequential(self, mock_img):
+        """A single item should not spin up a thread pool."""
+        results = extract_documents_text_parallel([(b"x", "img.png")])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["text"], "single")
 
 
 # ===========================================================================
