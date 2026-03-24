@@ -41,7 +41,7 @@ class ValidationSerializer(serializers.ModelSerializer):
         model = Validation
         fields = [
             "id_validation",
-            "id_organisation",
+            "id_utilisateur",
             "id_soumission",
             "type",
             "is_validated",
@@ -51,9 +51,9 @@ class ValidationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id_validation", "created_at", "updated_at"]
 
-    def validate_id_organisation(self, value):
+    def validate_id_utilisateur(self, value):
         return _validate_remote_fk(
-            value, "ACTEURS_SERVICE_URL", "organisations/{}", "id_organisation"
+            value, "AUTH_SERVICE_URL", "users/{}", "id_utilisateur"
         )
 
     def validate_id_soumission(self, value):
@@ -66,16 +66,16 @@ class ValidationUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Validation
         fields = [
-            "id_organisation",
+            "id_utilisateur",
             "id_soumission",
             "type",
             "is_validated",
             "commentaire",
         ]
 
-    def validate_id_organisation(self, value):
+    def validate_id_utilisateur(self, value):
         return _validate_remote_fk(
-            value, "ACTEURS_SERVICE_URL", "organisations/{}", "id_organisation"
+            value, "AUTH_SERVICE_URL", "users/{}", "id_utilisateur"
         )
 
     def validate_id_soumission(self, value):
