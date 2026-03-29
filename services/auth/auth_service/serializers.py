@@ -1,14 +1,48 @@
 from django.conf import settings
+from django.contrib.auth import password_validation
 from django.core.cache import cache
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import AccessToken
+from rest_framework_simplejwt.exceptions import TokenError
 import requests
 import hashlib
 
 from .models import Utilisateur, Role, Permission, PermissionRole
+from .services.access_control import user_permission_names
+
+
+def validate_membre_reference(value):
+    membres_service_url = settings.MEMBRES_SERVICE_URL
+    if not membres_service_url:
+        return value
+    url = f"{membres_service_url.rstrip('/')}/membres/{value}"
+    token = AccessToken()
+    token["user_id"] = 0
+    token["email"] = "auth-service@internal"
+    token["role"] = "service"
+    token["permissions"] = ["membres.read"]
+    try:
+        response = requests.get(
+            url,
+            timeout=settings.MEMBRES_SERVICE_TIMEOUT,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    except requests.RequestException:
+        raise serializers.ValidationError("Unable to validate id_membre at this time")
+    if response.status_code != 200:
+        raise serializers.ValidationError("id_membre does not exist")
+    return value
+
+
+def apply_user_claims(token, user):
+    token["email"] = user.email
+    token["role"] = user.id_role.nom_role
+    token["permissions"] = user_permission_names(user)
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -48,22 +82,16 @@ class UtilisateurCreateSerializer(serializers.ModelSerializer):
         read_only_fields = ["id_utilisateur", "created_at", "updated_at"]
 
     def validate_id_membre(self, value):
-        membres_service_url = settings.MEMBRES_SERVICE_URL
-        if not membres_service_url:
-            return value
-        url = f"{membres_service_url.rstrip('/')}/membres/{value}"
-        try:
-            response = requests.get(url, timeout=settings.MEMBRES_SERVICE_TIMEOUT)
-        except requests.RequestException:
-            raise serializers.ValidationError("Unable to validate id_membre at this time")
-        if response.status_code != 200:
-            raise serializers.ValidationError("id_membre does not exist")
-        return value
+        return validate_membre_reference(value)
 
     @transaction.atomic
     def create(self, validated_data):
         password = validated_data.pop("password")
         user = Utilisateur(**validated_data)
+        try:
+            password_validation.validate_password(password, user=user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"password": list(exc.messages)})
         user.set_password(password)
         user.save()
         return user
@@ -77,17 +105,7 @@ class UtilisateurUpdateSerializer(serializers.ModelSerializer):
         fields = ["id_role", "id_membre", "email"]
 
     def validate_id_membre(self, value):
-        membres_service_url = settings.MEMBRES_SERVICE_URL
-        if not membres_service_url:
-            return value
-        url = f"{membres_service_url.rstrip('/')}/membres/{value}"
-        try:
-            response = requests.get(url, timeout=settings.MEMBRES_SERVICE_TIMEOUT)
-        except requests.RequestException:
-            raise serializers.ValidationError("Unable to validate id_membre at this time")
-        if response.status_code != 200:
-            raise serializers.ValidationError("id_membre does not exist")
-        return value
+        return validate_membre_reference(value)
 
 
 class LoginSerializer(serializers.Serializer):
@@ -124,16 +142,29 @@ class UserRoleUpdateSerializer(serializers.Serializer):
 class RedisAwareTokenRefreshSerializer(TokenRefreshSerializer):
     def validate(self, attrs):
         raw_refresh = attrs.get("refresh")
-        token = RefreshToken(raw_refresh)
+        try:
+            token = RefreshToken(raw_refresh)
+        except TokenError as exc:
+            raise serializers.ValidationError({"refresh": [str(exc)]})
         jti = token.get("jti")
         key = f"auth:revoked:{jti}"
         if cache.get(key):
             raise serializers.ValidationError({"detail": "Token has been revoked"})
-        return super().validate(attrs)
+        data = super().validate(attrs)
+        user_id = token.get("user_id")
+        user = Utilisateur.objects.select_related("id_role").filter(id_utilisateur=user_id).first()
+        if user:
+            access_token = token.access_token
+            apply_user_claims(access_token, user)
+            data["access"] = str(access_token)
+        return data
 
 
 def revoke_refresh_token(raw_refresh):
-    token = RefreshToken(raw_refresh)
+    try:
+        token = RefreshToken(raw_refresh)
+    except TokenError as exc:
+        raise serializers.ValidationError({"refresh": [str(exc)]})
     exp = token.get("exp")
     jti = token.get("jti")
     ttl = max(0, int(exp - timezone.now().timestamp()))

@@ -32,6 +32,7 @@ def env_list(name, default=""):
 DJANGO_ENV = env_str("DJANGO_ENV", "development").lower()
 DEBUG = env_bool("DEBUG", env_bool("DJANGO_DEBUG", DJANGO_ENV != "production"))
 SECRET_KEY = env_str("SECRET_KEY", env_str("DJANGO_SECRET_KEY", "unsafe-dev-secret"))
+JWT_SIGNING_KEY = env_str("JWT_SIGNING_KEY", SECRET_KEY)
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", env_str("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1"))
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", env_str("DJANGO_CSRF_TRUSTED_ORIGINS", ""))
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", ",".join(CORS_ALLOWED_ORIGINS))
@@ -174,9 +175,10 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.getenv("ACCESS_TOKEN_MINUTES", "15"))),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.getenv("REFRESH_TOKEN_DAYS", "7"))),
     "ALGORITHM": "HS256",
-    "SIGNING_KEY": SECRET_KEY,
+    "SIGNING_KEY": JWT_SIGNING_KEY,
     "USER_ID_FIELD": "id_utilisateur",
     "USER_ID_CLAIM": "user_id",
+    "AUTH_HEADER_TYPES": ("Bearer",),
     "UPDATE_LAST_LOGIN": True,
 }
 
