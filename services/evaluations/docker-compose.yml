@@ -1,3 +1,6 @@
+# Evaluations Service
+# Requires shared infrastructure: docker compose -f infrastructure/docker-compose.yml up -d
+
 services:
   evaluations_api:
     build:
@@ -7,73 +10,12 @@ services:
       - .env
     environment:
       PORT: ${PORT:-8000}
-      DB_HOST: ${DB_HOST:-pgbouncer_evaluations}
-      DB_PORT: ${DB_PORT:-6432}
-    depends_on:
-      evaluations_db:
-        condition: service_healthy
-      pgbouncer_evaluations:
-        condition: service_healthy
-      redis_evaluations:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - evaluations-net
-
-  evaluations_db:
-    image: postgres:16-alpine
-    env_file:
-      - .env
-    environment:
-      POSTGRES_DB: ${DB_NAME:-evaluations_db}
-      POSTGRES_USER: ${DB_USER:-evaluations_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-evaluations_password}
-    volumes:
-      - evaluations-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-evaluations_user} -d ${DB_NAME:-evaluations_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-    networks:
-      - evaluations-net
-
-  pgbouncer_evaluations:
-    image: edoburu/pgbouncer:latest
-    environment:
-      DB_HOST: evaluations_db
-      DB_PORT: 5432
+      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME:-evaluations_db}
       DB_USER: ${DB_USER:-evaluations_user}
       DB_PASSWORD: ${DB_PASSWORD:-evaluations_password}
-      LISTEN_PORT: ${PGBOUNCER_PORT:-6432}
-      AUTH_TYPE: ${PGBOUNCER_AUTH_TYPE:-scram-sha-256}
-      POOL_MODE: ${PGBOUNCER_POOL_MODE:-transaction}
-      MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-500}
-      DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-40}
-      RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-10}
-      IGNORE_STARTUP_PARAMETERS: extra_float_digits,options
-    depends_on:
-      evaluations_db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p ${PGBOUNCER_PORT:-6432} -U ${DB_USER:-evaluations_user} -d ${DB_NAME:-evaluations_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-    networks:
-      - evaluations-net
-
-  redis_evaluations:
-    image: redis:7.4-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      REDIS_URL: ${REDIS_URL:-redis://:almizan_redis_password@host.docker.internal:6379/5}
     restart: unless-stopped
     networks:
       - evaluations-net
@@ -89,9 +31,6 @@ services:
     restart: unless-stopped
     networks:
       - evaluations-net
-
-volumes:
-  evaluations-db-data:
 
 networks:
   evaluations-net:

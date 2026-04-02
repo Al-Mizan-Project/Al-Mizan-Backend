@@ -12,6 +12,23 @@
 La base de données est conçue pour un système d'e-procurement souverain et intelligent (Micro-services). 
 L'architecture utilise un modèle d'héritage d'acteurs (L'entité centrale `Organisation` est étendue par `Services_Contractants`, `Operateurs_Economiques`, `Tutelle`, `Comission_Externe`).
 
+### Infrastructure Partagée (Mise à jour Avril 2026)
+
+Tous les microservices utilisent une **infrastructure PostgreSQL + Redis partagée** :
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│            PostgreSQL 16 (almizan_shared_postgres)          │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│  │ auth_db  │ │acteurs_db│ │appels_db │ │contrats_db│ ...  │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **1 conteneur PostgreSQL** avec 12 databases logiques (une par service)
+- **1 conteneur Redis** partagé (DB index 0-15 pour isolation)
+- Voir `context/infrastructure.md` pour le guide de démarrage
+
 ---
 
 ## 🎯 2. SCOPE PRIORITAIRE : SERVICES "DOCUMENT" ET "SOUMISSION"

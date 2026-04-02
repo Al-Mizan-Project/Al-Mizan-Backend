@@ -1,3 +1,7 @@
+# Audit Service (Event Sourcing with Kafka + Debezium CDC)
+# Requires shared infrastructure: docker compose -f infrastructure/docker-compose.yml up -d
+# Note: This service uses Kafka for event streaming, not the shared PostgreSQL
+
 services:
   db:
     image: postgres-logical:15
@@ -29,12 +33,14 @@ services:
       - .:/app
     ports:
       - "8000:8000"
-    depends_on:
-      - db
     environment:
       - DEBUG=1
+      - REDIS_URL=redis://:almizan_redis_password@host.docker.internal:6379/10
+    depends_on:
+      - db
     networks:
       - audit-network
+
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
@@ -52,6 +58,7 @@ services:
       - audit-network
     depends_on:
       - zookeeper
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
@@ -76,6 +83,7 @@ services:
     depends_on:
       - kafka
       - db
+
   projection-consumer:
     build:
       context: ./projection-consumer
@@ -104,15 +112,8 @@ services:
     command: python -u /app/projection-consumer/consumer.py
     networks:
       - audit-network
-    restart: unless-stopped  
-  redis:
-      image: redis:7-alpine
-      container_name: audit-redis
-      ports:
-        - "6379:6379"
-      command: redis-server --appendonly no
-      networks:
-        - audit-network
+    restart: unless-stopped
+
 networks:
-    audit-network:
-      driver: bridge
+  audit-network:
+    driver: bridge

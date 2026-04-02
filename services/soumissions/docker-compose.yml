@@ -1,4 +1,5 @@
-version: "3.8"
+# Soumissions Service
+# Requires shared infrastructure: docker compose -f infrastructure/docker-compose.yml up -d
 
 services:
   api:
@@ -9,61 +10,9 @@ services:
       - "8004:8000"
     environment:
       - DJANGO_ENV=development
-      - DATABASE_URL=postgres://soumissions_user:soumissions_password@pgbouncer_soumissions:5432/soumissions_db
-      - REDIS_URL=redis://redis_soumissions:6379/1
+      - DATABASE_URL=postgres://soumissions_user:soumissions_password@host.docker.internal:5432/soumissions_db
+      - REDIS_URL=redis://:almizan_redis_password@host.docker.internal:6379/9
       - SECRET_KEY=unsafe-dev-secret-soumissions
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-change-me-internal-token}
-    depends_on:
-      pgbouncer_soumissions:
-        condition: service_started
-      redis_soumissions:
-        condition: service_started
     command: >
       sh -c "python manage.py makemigrations && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
-
-  db_soumissions:
-    image: postgres:16-alpine
-    environment:
-      - POSTGRES_DB=soumissions_db
-      - POSTGRES_USER=soumissions_user
-      - POSTGRES_PASSWORD=soumissions_password
-    ports:
-      - "5434:5432"
-    volumes:
-      - soumissions_pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U soumissions_user -d soumissions_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  pgbouncer_soumissions:
-    image: edoburu/pgbouncer:latest
-    environment:
-      - DATABASE_URL=postgres://soumissions_user:soumissions_password@db_soumissions:5432/soumissions_db
-      - POOL_MODE=transaction
-      - MAX_CLIENT_CONN=100
-      - DEFAULT_POOL_SIZE=20
-      - AUTH_TYPE=scram-sha-256
-    depends_on:
-      db_soumissions:
-        condition: service_healthy
-
-  redis_soumissions:
-    image: redis:7-alpine
-    volumes:
-      - soumissions_redis_data:/data
-
-  pgadmin_soumissions:
-    image: dpage/pgadmin4:latest
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: root
-    ports:
-      - "5051:80"
-    depends_on:
-      - db_soumissions
-
-volumes:
-  soumissions_pg_data:
-  soumissions_redis_data:

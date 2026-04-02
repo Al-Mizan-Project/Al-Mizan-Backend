@@ -1,3 +1,6 @@
+# IA Service
+# Requires shared infrastructure: docker compose -f infrastructure/docker-compose.yml up -d
+
 services:
   ia_api:
     build:
@@ -7,73 +10,12 @@ services:
       - .env
     environment:
       PORT: ${PORT:-8000}
-      DB_HOST: ${DB_HOST:-pgbouncer_ia}
-      DB_PORT: ${DB_PORT:-6432}
-    depends_on:
-      ia_db:
-        condition: service_healthy
-      pgbouncer_ia:
-        condition: service_healthy
-      redis_ia:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - ia-net
-
-  ia_db:
-    image: postgres:16-alpine
-    env_file:
-      - .env
-    environment:
-      POSTGRES_DB: ${DB_NAME:-ia_db}
-      POSTGRES_USER: ${DB_USER:-ia_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-ia_password}
-    volumes:
-      - ia-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ia_user} -d ${DB_NAME:-ia_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-    networks:
-      - ia-net
-
-  pgbouncer_ia:
-    image: edoburu/pgbouncer:latest
-    environment:
-      DB_HOST: ia_db
-      DB_PORT: 5432
+      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME:-ia_db}
       DB_USER: ${DB_USER:-ia_user}
       DB_PASSWORD: ${DB_PASSWORD:-ia_password}
-      LISTEN_PORT: ${PGBOUNCER_PORT:-6432}
-      AUTH_TYPE: ${PGBOUNCER_AUTH_TYPE:-scram-sha-256}
-      POOL_MODE: ${PGBOUNCER_POOL_MODE:-transaction}
-      MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-500}
-      DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-40}
-      RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-10}
-      IGNORE_STARTUP_PARAMETERS: extra_float_digits,options
-    depends_on:
-      ia_db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p ${PGBOUNCER_PORT:-6432} -U ${DB_USER:-ia_user} -d ${DB_NAME:-ia_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-    networks:
-      - ia-net
-
-  redis_ia:
-    image: redis:7.4-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      REDIS_URL: ${REDIS_URL:-redis://:almizan_redis_password@host.docker.internal:6379/7}
     restart: unless-stopped
     networks:
       - ia-net
@@ -89,23 +31,6 @@ services:
     restart: unless-stopped
     networks:
       - ia-net
-
-  pgadmin_ia:
-    image: dpage/pgadmin4:latest
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: root
-    ports:
-      - "5052:80"
-    depends_on:
-      ia_db:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - ia-net
-
-volumes:
-  ia-db-data:
 
 networks:
   ia-net:
