@@ -1,8 +1,8 @@
-#!/bin/sh
+﻿#!/bin/sh
 set -eu
 
-DB_HOST="${DB_HOST:-pgbouncer_contrats}"
-DB_PORT="${DB_PORT:-6432}"
+DB_HOST="{DB_HOST:-host.docker.internal}"
+DB_PORT="{DB_PORT:-5432}"
 
 python - <<PY
 import os
@@ -10,8 +10,8 @@ import socket
 import sys
 import time
 
-host = os.getenv("DB_HOST", "pgbouncer_contrats")
-port = int(os.getenv("DB_PORT", "6432"))
+host = os.getenv("DB_HOST", "host.docker.internal")
+port = int(os.getenv("DB_PORT", "5432"))
 
 for _ in range(90):
     try:
