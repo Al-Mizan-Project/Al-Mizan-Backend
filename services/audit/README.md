@@ -167,16 +167,21 @@ docker compose up -d
 ```
 
 The audit service uses:
+- **Shared PostgreSQL** (localhost:5433) with two databases: `audit_ledger` and `audit_read`
 - **Shared Redis** (localhost:6379) for caching read queries
-- **Own PostgreSQL** (localhost:5434) for audit ledger and read database
 
 ### Environment Variables
 
-The service requires `REDIS_URL` to connect to shared Redis:
+The service is configured in `docker-compose.yml` to use:
 ```
+DB_HOST=host.docker.internal
+DB_PORT=5433
+DB_LEDGER_NAME=audit_ledger
+DB_READ_NAME=audit_read
+DB_LEDGER_USER=audit_user
+DB_LEDGER_PASSWORD=audit_password
 REDIS_URL=redis://:almizan_redis_password@host.docker.internal:6379/10
 ```
-This is configured in `docker-compose.yml`.
 
 ### Startup
 
@@ -184,16 +189,16 @@ This is configured in `docker-compose.yml`.
 # Navigate to audit service
 cd audit_service
 
-# Start all infrastructure
+# Start Kafka infrastructure and Django
 docker compose up --build -d
 
-# Run migrations
+# Run migrations on shared PostgreSQL
 docker compose exec web python manage.py makemigrations
 docker compose exec web python manage.py migrate ledger --database=ledger
 docker compose exec web python manage.py migrate readstore --database=read
 
-# Configure WAL on PostgreSQL
-Get-Content ./postgres/init_ledger.sql | docker compose exec -T db psql -U ledger_user -d ledger
+# Configure WAL on shared PostgreSQL for CDC
+docker exec almizan_shared_postgres psql -U audit_user -d audit_ledger -c "CREATE PUBLICATION debezium_outbox_pub FOR TABLE journaux_outbox;"
 
 # Register Debezium connector
 Invoke-RestMethod -Method Post -ContentType "application/json" -Body (Get-Content -Raw ./debezium/connectors/outbox-connector.json) -Uri "http://localhost:8083/connectors"

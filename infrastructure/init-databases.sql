@@ -19,7 +19,7 @@ CREATE USER appels_user WITH PASSWORD 'appels_password';
 CREATE DATABASE appels_db OWNER appels_user;
 GRANT ALL PRIVILEGES ON DATABASE appels_db TO appels_user;
 
--- Audit Service (CQRS with separate write/read databases)
+-- Audit Service (CQRS with Event Sourcing - uses 2 databases)
 CREATE USER audit_user WITH PASSWORD 'audit_password';
 CREATE DATABASE audit_ledger OWNER audit_user;
 CREATE DATABASE audit_read OWNER audit_user;
