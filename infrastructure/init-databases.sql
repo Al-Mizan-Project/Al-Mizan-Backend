@@ -19,10 +19,13 @@ CREATE USER appels_user WITH PASSWORD 'appels_password';
 CREATE DATABASE appels_db OWNER appels_user;
 GRANT ALL PRIVILEGES ON DATABASE appels_db TO appels_user;
 
--- Audit Service
+-- Audit Service (CQRS with separate write/read databases)
 CREATE USER audit_user WITH PASSWORD 'audit_password';
-CREATE DATABASE audit_db OWNER audit_user;
-GRANT ALL PRIVILEGES ON DATABASE audit_db TO audit_user;
+CREATE DATABASE audit_ledger OWNER audit_user;
+CREATE DATABASE audit_read OWNER audit_user;
+GRANT ALL PRIVILEGES ON DATABASE audit_ledger TO audit_user;
+GRANT ALL PRIVILEGES ON DATABASE audit_read TO audit_user;
+ALTER USER audit_user WITH REPLICATION;
 
 -- Contractant Service
 CREATE USER contractant_user WITH PASSWORD 'contractant_password';
