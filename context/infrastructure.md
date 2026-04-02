@@ -10,7 +10,7 @@ Al-Mizan utilise une **infrastructure partagée** pour tous les microservices :
 
 | Composant | Port | Description |
 |-----------|------|-------------|
-| **PostgreSQL 16** | 5432 | Base de données unique avec 12 databases logiques |
+| **PostgreSQL 16** | 5433 | Base de données unique avec 12 databases logiques |
 | **Redis 7.4** | 6379 | Cache partagé et rate-limiting |
 | **PgAdmin 4** | 5050 | Interface web d'administration (optionnel) |
 
@@ -102,13 +102,13 @@ Chaque service doit configurer ces variables d'environnement :
 ```env
 # Via variables individuelles
 DB_HOST=host.docker.internal
-DB_PORT=5432
+DB_PORT=5433
 DB_NAME=auth_db
 DB_USER=auth_user
 DB_PASSWORD=auth_password
 
 # Ou via DATABASE_URL (format Django/SQLAlchemy)
-DATABASE_URL=postgres://auth_user:auth_password@host.docker.internal:5432/auth_db
+DATABASE_URL=postgres://auth_user:auth_password@host.docker.internal:5433/auth_db
 ```
 
 ### Connexion Redis
@@ -202,7 +202,7 @@ KEYS *
 2. Login : `admin@almizan.dz` / `admin`
 3. Ajouter un serveur :
    - Host : `shared_postgres`
-   - Port : `5432`
+   - Port : `5433`
    - Username : `almizan_admin`
    - Password : `almizan_admin_password`
 

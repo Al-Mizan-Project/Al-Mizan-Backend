@@ -59,7 +59,7 @@ cd services/auth && docker compose up --build
 
 All services connect to centralized infrastructure:
 
-- **PostgreSQL** (port 5432): 12 logical databases, one per service
+- **PostgreSQL** (port 5433): 12 logical databases, one per service
 - **Redis** (port 6379): Shared cache and rate limiting
 - **PgAdmin** (port 5050): Web UI for database management
 

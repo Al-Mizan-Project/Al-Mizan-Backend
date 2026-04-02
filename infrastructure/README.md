@@ -16,7 +16,7 @@ docker compose ps
 
 | Service | Port | Description |
 |---------|------|-------------|
-| `shared_postgres` | 5432 | PostgreSQL 16 with all service databases |
+| `shared_postgres` | 5433 | PostgreSQL 16 with all service databases |
 | `shared_redis` | 6379 | Redis 7.4 for caching and rate limiting |
 | `pgadmin` | 5050 | PgAdmin web UI (optional) |
 
@@ -46,7 +46,7 @@ Each service should use these environment variables:
 ```env
 # Database
 DB_HOST=host.docker.internal  # or 'shared_postgres' if on same network
-DB_PORT=5432
+DB_PORT=5433
 DB_NAME=<service>_db
 DB_USER=<service>_user
 DB_PASSWORD=<service>_password
@@ -68,7 +68,7 @@ REDIS_URL=redis://:almizan_redis_password@shared_redis:6379/0
 2. Login: `admin@almizan.dz` / `admin`
 3. Add server:
    - Host: `shared_postgres`
-   - Port: `5432`
+   - Port: `5433`
    - Username: `almizan_admin`
    - Password: `almizan_admin_password`
 
@@ -81,7 +81,7 @@ Data is stored in Docker volumes:
 ## Network
 
 Services can connect to infrastructure via:
-1. **Host networking**: `host.docker.internal:5432` (default for isolated services)
+1. **Host networking**: `host.docker.internal:5433` (default for isolated services)
 2. **Shared network**: Join `almizan-infra` network and use service names
 
 To join the network from another compose file:

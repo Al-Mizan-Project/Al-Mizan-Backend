@@ -1,4 +1,4 @@
-﻿# Contrats Service - Testing Guide
+# Contrats Service - Testing Guide
 
 ## Prerequisites
 1. Docker Desktop running

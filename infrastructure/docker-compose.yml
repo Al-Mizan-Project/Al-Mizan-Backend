@@ -42,21 +42,6 @@ services:
     networks:
       - almizan-infra
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: almizan_pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@almizan.dz}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
-    ports:
-      - "${PGADMIN_PORT:-5050}:80"
-    depends_on:
-      shared_postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - almizan-infra
-
 volumes:
   shared-postgres-data:
   shared-redis-data:

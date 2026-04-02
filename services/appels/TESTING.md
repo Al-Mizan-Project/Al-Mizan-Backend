@@ -1,4 +1,4 @@
-﻿# Appels Service - Testing Guide
+# Appels Service - Testing Guide
 
 ## Prerequisites
 1. Docker Desktop running

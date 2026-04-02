@@ -1,4 +1,4 @@
-﻿# Soumissions Service - Testing Guide
+# Soumissions Service - Testing Guide
 
 ## Prerequisites
 1. Docker Desktop running

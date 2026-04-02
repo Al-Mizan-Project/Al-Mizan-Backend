@@ -1,4 +1,4 @@
-﻿# Documents Service - Testing Guide
+# Documents Service - Testing Guide
 
 ## Prerequisites
 1. Docker Desktop running

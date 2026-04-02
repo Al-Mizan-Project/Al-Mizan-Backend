@@ -1,4 +1,4 @@
-﻿# IA Service - Testing Guide
+# IA Service - Testing Guide
 
 ## Prerequisites
 1. Docker Desktop running

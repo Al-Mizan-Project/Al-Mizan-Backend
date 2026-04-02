@@ -1,4 +1,4 @@
-﻿# Notifications Service - Testing Guide
+# Notifications Service - Testing Guide
 
 ## Prerequisites
 1. Docker Desktop running

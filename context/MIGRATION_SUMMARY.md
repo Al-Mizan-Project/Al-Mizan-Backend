@@ -35,7 +35,7 @@ infrastructure/
 ```
 
 **What it does:**
-- PostgreSQL 15 on port `5432`
+- PostgreSQL 15 on port `5433`
 - Redis 7 on port `6379`
 - PgAdmin UI on port `5050`
 - Automatically creates all 12 databases on first start
@@ -52,7 +52,7 @@ infrastructure/
 - ❌ Isolated networks
 
 **Changed to:**
-- ✅ Connect to `host.docker.internal:5432` (shared PostgreSQL)
+- ✅ Connect to `host.docker.internal:5433` (shared PostgreSQL)
 - ✅ Connect to `host.docker.internal:6379` (shared Redis)
 - ✅ Each service uses unique Redis DB index (0-10)
 
@@ -84,7 +84,7 @@ DB_PORT="${DB_PORT:-6432}"
 **To:**
 ```bash
 DB_HOST="${DB_HOST:-host.docker.internal}"
-DB_PORT="${DB_PORT:-5432}"
+DB_PORT="${DB_PORT:-5433}"
 ```
 
 **Also:**
@@ -213,20 +213,20 @@ services/soumissions/TESTING.md
 
 | Service       | Database Name      | DB User            | Port | Redis DB |
 |---------------|--------------------|--------------------|------|----------|
-| auth          | auth_db            | auth_user          | 5432 | 0        |
-| acteurs       | acteurs_db         | acteurs_user       | 5432 | 1        |
-| appels        | appels_db          | appels_user        | 5432 | 2        |
-| contractant   | contractant_db     | contractant_user   | 5432 | 3        |
-| contrats      | contrats_db        | contrats_user      | 5432 | 4        |
-| documents     | documents_db       | documents_user     | 5432 | 5        |
-| evaluations   | evaluations_db     | evaluations_user   | 5432 | 6        |
-| ia            | ia_db              | ia_user            | 5432 | 7        |
-| notifications | notifications_db   | notifications_user | 5432 | 8        |
-| soumissions   | soumissions_db     | soumissions_user   | 5432 | 9        |
-| audit         | audit_db           | audit_user         | 5432 | 10       |
-| recours       | recours_db         | recours_user       | 5432 | 11       |
+| auth          | auth_db            | auth_user          | 5433 | 0        |
+| acteurs       | acteurs_db         | acteurs_user       | 5433 | 1        |
+| appels        | appels_db          | appels_user        | 5433 | 2        |
+| contractant   | contractant_db     | contractant_user   | 5433 | 3        |
+| contrats      | contrats_db        | contrats_user      | 5433 | 4        |
+| documents     | documents_db       | documents_user     | 5433 | 5        |
+| evaluations   | evaluations_db     | evaluations_user   | 5433 | 6        |
+| ia            | ia_db              | ia_user            | 5433 | 7        |
+| notifications | notifications_db   | notifications_user | 5433 | 8        |
+| soumissions   | soumissions_db     | soumissions_user   | 5433 | 9        |
+| audit         | audit_db           | audit_user         | 5433 | 10       |
+| recours       | recours_db         | recours_user       | 5433 | 11       |
 
-All databases share: `postgres:5432` on `host.docker.internal`
+All databases share: `postgres:5433` on `host.docker.internal`
 
 ---
 
@@ -294,7 +294,7 @@ All services tested and verified:
    cp services/auth/.env.example services/auth/.env
    ```
 
-3. **Port 5432 must be free** - No local PostgreSQL on port 5432
+3. **port 5433 must be free** - No local PostgreSQL on port 5433
 
 ### For Deployment
 - Infrastructure becomes a **hard dependency**
@@ -380,7 +380,7 @@ curl http://localhost:18080/health
 **Issues?** Look for:
 - "Connection refused" → Infrastructure not running
 - "Database does not exist" → Run `docker compose down -v` and restart infrastructure
-- "Port already in use" → Check with `docker ps` or `netstat -ano | findstr :5432`
+- "Port already in use" → Check with `docker ps` or `netstat -ano | findstr :5433`
 
 ---
 

@@ -1,4 +1,4 @@
-﻿# Contractant Service - Testing Guide
+# Contractant Service - Testing Guide
 
 ## Prerequisites
 1. Docker Desktop running

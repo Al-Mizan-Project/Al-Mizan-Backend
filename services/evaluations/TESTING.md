@@ -1,4 +1,4 @@
-﻿# Evaluations Service - Testing Guide
+# Evaluations Service - Testing Guide
 
 ## Prerequisites
 1. Docker Desktop running
