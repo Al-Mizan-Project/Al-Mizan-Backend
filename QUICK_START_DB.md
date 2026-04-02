@@ -38,7 +38,11 @@ Check "Save password", then click Save.
 **Browse databases:**
 Servers > Al-Mizan PostgreSQL > Databases
 
-You'll see 12 databases: auth_db, acteurs_db, appels_db, audit_db, contractant_db, contrats_db, documents_db, evaluations_db, ia_db, notifications_db, soumissions_db, recours_db.
+
+You'll see 13 databases:
+- Standard services (10): auth_db, acteurs_db, appels_db, contractant_db, contrats_db, documents_db, evaluations_db, ia_db, notifications_db, soumissions_db
+- Audit service (2): audit_ledger, audit_read
+- Future: recours_db
 
 ## Stop Database
 

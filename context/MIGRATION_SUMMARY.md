@@ -223,8 +223,8 @@ services/soumissions/TESTING.md
 | ia            | ia_db              | ia_user            | 5433 | 7        |
 | notifications | notifications_db   | notifications_user | 5433 | 8        |
 | soumissions   | soumissions_db     | soumissions_user   | 5433 | 9        |
-| audit         | audit_db           | audit_user         | 5433 | 10       |
-| recours       | recours_db         | recours_user       | 5433 | 11       |
+| audit         | audit_ledger, audit_read | audit_user   | 5433 | 10, 11   |
+| recours       | recours_db         | recours_user       | 5433 | 12       |
 
 All databases share: `postgres:5433` on `host.docker.internal`
 

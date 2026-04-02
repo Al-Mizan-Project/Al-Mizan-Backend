@@ -55,7 +55,7 @@ Client
 
 ### Infrastructure Details
 
-- **Audit PostgreSQL**: Port 5434 (separate from shared infrastructure on 5433)
+- **Shared PostgreSQL**: Port 5433 (two databases: `audit_ledger` and `audit_read`)
 - **Shared Redis**: Port 6379 (used for caching read queries)
 - **Django API**: Port 8000
 - **Debezium Connect**: Port 8083

@@ -23,7 +23,8 @@ evaluations_db   → evaluations_user / evaluations_password
 ia_db            → ia_user / ia_password
 notifications_db → notifications_user / notifications_password
 soumissions_db   → soumissions_user / soumissions_password
-audit_db         → audit_user / audit_password
+audit_ledger     → audit_user / audit_password (CQRS write-side)
+audit_read       → audit_user / audit_password (CQRS read-side)
 recours_db       → recours_user / recours_password
 ```
 
@@ -148,7 +149,8 @@ Expected output:
  ia_db
  notifications_db
  soumissions_db
- audit_db
+ audit_ledger
+ audit_read
  recours_db
 ```
 

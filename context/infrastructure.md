@@ -85,8 +85,8 @@ L'infrastructure crée automatiquement 12 databases au premier démarrage :
 | ia | `ia_db` | `ia_user` | 7 |
 | documents | `documents_db` | `documents_user` | 8 |
 | soumissions | `soumissions_db` | `soumissions_user` | 9 |
-| audit | `audit_db` | `audit_user` | 10 |
-| recours | `recours_db` | `recours_user` | 11 |
+| audit | `audit_ledger`, `audit_read` | `audit_user` | 10, 11 |
+| recours | `recours_db` | `recours_user` | 12 |
 
 ### Mot de passe par défaut
 Tous les users utilisent le pattern `<service>_password` (ex: `auth_password`).

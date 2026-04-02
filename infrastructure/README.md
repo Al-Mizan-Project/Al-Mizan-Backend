@@ -29,7 +29,8 @@ The PostgreSQL container automatically creates these databases on first startup:
 | auth_db | auth_user | Authentication & RBAC |
 | acteurs_db | acteurs_user | Organizations & Members |
 | appels_db | appels_user | Tender Calls |
-| audit_db | audit_user | Audit Logs |
+| audit_ledger | audit_user | Audit Logs (Write-side CQRS) |
+| audit_read | audit_user | Audit Logs (Read-side CQRS) |
 | contractant_db | contractant_user | Contracting Services |
 | contrats_db | contrats_user | Contracts |
 | documents_db | documents_user | Document Management |
