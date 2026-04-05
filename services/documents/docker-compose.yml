@@ -1,4 +1,5 @@
-version: "3.8"
+# Documents Service
+# Requires shared infrastructure: docker compose -f infrastructure/docker-compose.yml up -d
 
 services:
   api:
@@ -10,55 +11,18 @@ services:
       - "8003:8000"
     environment:
       - DJANGO_ENV=development
-      - DATABASE_URL=postgres://documents_user:documents_password@pgbouncer_documents:5432/documents_db
-      - REDIS_URL=redis://redis_documents:6379/1
+      - DATABASE_URL=postgres://documents_user:documents_password@host.docker.internal:5432/documents_db
+      - REDIS_URL=redis://:almizan_redis_password@host.docker.internal:6379/8
       - MINIO_URL=http://minio-documents:9000
       - MINIO_ACCESS_KEY=admin_almizan
       - MINIO_SECRET_KEY=SecurePassword123!
       - MINIO_BUCKET_NAME=almizan-documents
       - SECRET_KEY=unsafe-dev-secret
     depends_on:
-      pgbouncer_documents:
-        condition: service_started
-      redis_documents:
-        condition: service_started
       minio_documents:
         condition: service_started
     command: >
       "sh /app/entrypoint.sh && python manage.py runserver 0.0.0.0:8000"
-
-  db_documents:
-    image: postgres:16-alpine
-    environment:
-      - POSTGRES_DB=documents_db
-      - POSTGRES_USER=documents_user
-      - POSTGRES_PASSWORD=documents_password
-    ports:
-      - "5433:5432"
-    volumes:
-      - documents_pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U documents_user -d documents_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  pgbouncer_documents:
-    image: edoburu/pgbouncer:latest
-    environment:
-      - DATABASE_URL=postgres://documents_user:documents_password@db_documents:5432/documents_db
-      - POOL_MODE=transaction
-      - MAX_CLIENT_CONN=100
-      - DEFAULT_POOL_SIZE=20
-      - AUTH_TYPE=scram-sha-256
-    depends_on:
-      db_documents:
-        condition: service_healthy
-
-  redis_documents:
-    image: redis:7-alpine
-    volumes:
-      - documents_redis_data:/data
 
   minio_documents:
     image: minio/minio:latest
@@ -76,16 +40,6 @@ services:
       - documents_minio_data:/data
     command: server /data --console-address ":9001"
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: root
-    ports:
-      - "5050:80"
-    depends_on:
-      - db_documents
-
   create_bucket:
     image: minio/mc:latest
     depends_on:
@@ -102,6 +56,4 @@ services:
       "
 
 volumes:
-  documents_pg_data:
-  documents_redis_data:
   documents_minio_data:

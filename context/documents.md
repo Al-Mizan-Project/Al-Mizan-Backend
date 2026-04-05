@@ -3,10 +3,10 @@
 ## Architecture
 
 - **Stack:** Python, Django, Django REST Framework
-- **Database:** PostgreSQL
-- **Object Storage:** MinIO (via `boto3` or `minio` python SDK)
-- **Cache/Rate-Limiting:** Redis
-- **Deployment:** Dockerized local stacks (Django API, Postgres, Redis, PgBouncer, MinIO)
+- **Database:** PostgreSQL (shared infrastructure - `documents_db`)
+- **Object Storage:** MinIO (via `boto3` or `minio` python SDK) - local to service
+- **Cache/Rate-Limiting:** Redis (shared infrastructure - DB index 8)
+- **Deployment:** Dockerized (Django API + MinIO only; PostgreSQL & Redis are shared)
 
 ## Database Schema (`documents` table)
 

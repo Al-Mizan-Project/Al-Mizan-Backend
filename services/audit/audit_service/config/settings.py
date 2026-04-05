@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -84,26 +85,26 @@ DATABASES = {
     },
     'ledger': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'ledger',
-        'USER': 'ledger_user',
-        'PASSWORD': 'ledger_pass',
-        'HOST': 'db',
-        'PORT': '5432',
+        'NAME': os.environ.get('DB_LEDGER_NAME', 'audit_ledger'),
+        'USER': os.environ.get('DB_LEDGER_USER', 'audit_user'),
+        'PASSWORD': os.environ.get('DB_LEDGER_PASSWORD', 'audit_password'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5433'),
     },
     'read': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'read_db',
-        'USER': 'ledger_user',
-        'PASSWORD': 'ledger_pass',
-        'HOST': 'db',
-        'PORT': '5432',
+        'NAME': os.environ.get('DB_READ_NAME', 'audit_read'),
+        'USER': os.environ.get('DB_READ_USER', 'audit_user'),
+        'PASSWORD': os.environ.get('DB_READ_PASSWORD', 'audit_password'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5433'),
     },
 }
 
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://redis:6379/0",
+        "LOCATION": os.environ.get("REDIS_URL", "redis://redis:6379/0"),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
         },

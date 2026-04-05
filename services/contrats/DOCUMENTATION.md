@@ -1,8 +1,12 @@
 # Documentation Complète — Service Contrats (Al-Mizan)
 
-> **Audience :** Étudiants en 4ᵉ année d'informatique
-> **Dernière mise à jour :** 27 février 2026
+> **Audience :** Étudiants en 4ᵉ année d'informatique  
+> **Dernière mise à jour :** 27 février 2026  
 > **Version :** 1.1.0
+
+> ⚠️ **IMPORTANT:** This documentation references the **old architecture** with individual PgBouncer containers.  
+> **Current architecture** (April 2026): Services now use a **shared PostgreSQL** on port **5433**.  
+> See `context/infrastructure.md` and `TESTING.md` for current setup.
 
 ---
 
