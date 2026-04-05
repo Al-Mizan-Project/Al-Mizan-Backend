@@ -1,4 +1,5 @@
 import json
+import logging
 
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from django.conf import settings
@@ -7,14 +8,21 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
-from .models import Soumission, Evaluation, SoumissionStatut
+from .models import Soumission, SoumissionStatut
 from .permissions import IsCommissionMember, CanOpenBids
+from .serializers import SoumissionListSerializer, SoumissionCreateSerializer, EvaluationCreateSerializer
 from .services.crypto_service import CryptoService
-from cryptography.hazmat.primitives.asymmetric import rsa
+from .services.integrations import (
+    validate_appel_offre,
+    validate_document_ids,
+    fetch_evaluations_for_soumission,
+    create_evaluation,
+    fetch_appel_private_key,
+    download_encrypted_file,
+)
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
-# Mocking a global private key for testing simplicity since we don't have a secure vault here
-MOCK_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+logger = logging.getLogger(__name__)
 
 class SoumissionCreateView(APIView):
     """
@@ -32,63 +40,42 @@ class SoumissionCreateView(APIView):
         if id_appel_offre is not None:
             queryset = queryset.filter(id_appel_offre=id_appel_offre)
 
-        items = []
-        for soum in queryset:
-            rapport = soum.conformite_rapport
-            if isinstance(rapport, str) and rapport:
-                try:
-                    rapport = json.loads(rapport)
-                except Exception:
-                    pass
-
-            items.append(
-                {
-                    "id_soumission": soum.id_soumission,
-                    "id_appel_offre": soum.id_appel_offre,
-                    "id_soumissionnaire": soum.id_soumissionnaire,
-                    "offre_financiere_chiffree_url": soum.offre_financiere_chiffree_url,
-                    "document_ids": soum.document_ids or [],
-                    "statut": soum.statut,
-                    "montant_financier": soum.montant_financier,
-                    "date_soumission": soum.date_soumission,
-                    "conformite_statut": soum.conformite_statut,
-                    "conformite_rapport": rapport,
-                }
-            )
-
-        return Response(items, status=status.HTTP_200_OK)
+        serializer = SoumissionListSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
-        request=None, 
+        request=SoumissionCreateSerializer,
         responses={201: OpenApiResponse(description='Soumission déposée')},
         description="Dépôt d'une offre financière chiffrée"
     )
     def post(self, request, *args, **kwargs):
-        # Expected body: id_appel_offre, id_soumissionnaire, encrypted_url, aes_key_hash
-        data = request.data
-        if not all(k in data for k in ('id_appel_offre', 'id_soumissionnaire', 'offre_financiere_chiffree_url', 'cle_dechiffrement_hash')):
-            return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        document_ids = data.get('document_ids', [])
-        if not isinstance(document_ids, list):
-            return Response({"error": "document_ids must be a list"}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = SoumissionCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        normalized_document_ids = []
-        for value in document_ids:
-            try:
-                normalized_document_ids.append(int(value))
-            except (TypeError, ValueError):
-                continue
+        data = serializer.validated_data
+
+        # Validate appel d'offre exists via Appels service
+        appel_exists, _ = validate_appel_offre(data['id_appel_offre'])
+        if not appel_exists:
+            return Response({"error": f"Appel d'offre {data['id_appel_offre']} introuvable."}, status=status.HTTP_400_BAD_REQUEST)
+
+        document_ids = data.get('document_ids', [])
+
+        # Validate document IDs exist via Documents service
+        if document_ids:
+            docs_valid, missing = validate_document_ids(document_ids)
+            if not docs_valid:
+                return Response({"error": f"Documents introuvables: {missing}"}, status=status.HTTP_400_BAD_REQUEST)
 
         soumission = Soumission.objects.create(
             id_appel_offre=data['id_appel_offre'],
             id_soumissionnaire=data['id_soumissionnaire'],
             offre_financiere_chiffree_url=data['offre_financiere_chiffree_url'],
             cle_dechiffrement_hash=data['cle_dechiffrement_hash'],
-            document_ids=normalized_document_ids,
+            document_ids=document_ids,
             statut=SoumissionStatut.SOUMIS,
         )
-        # Audit log dispatch would happen here (via signal on pre_save/post_save)
         return Response({"message": "Soumission déposée et chiffrée avec succès.", "id": soumission.id_soumission}, status=status.HTTP_201_CREATED)
 
 
@@ -99,29 +86,8 @@ class SoumissionDetailView(APIView):
 
     def get(self, request, soumission_id, *args, **kwargs):
         soum = get_object_or_404(Soumission, id_soumission=soumission_id)
-
-        rapport = soum.conformite_rapport
-        if isinstance(rapport, str) and rapport:
-            try:
-                rapport = json.loads(rapport)
-            except Exception:
-                pass
-
-        return Response(
-            {
-                "id_soumission": soum.id_soumission,
-                "id_appel_offre": soum.id_appel_offre,
-                "id_soumissionnaire": soum.id_soumissionnaire,
-                "offre_financiere_chiffree_url": soum.offre_financiere_chiffree_url,
-                "document_ids": soum.document_ids or [],
-                "statut": soum.statut,
-                "montant_financier": soum.montant_financier,
-                "date_soumission": soum.date_soumission,
-                "conformite_statut": soum.conformite_statut,
-                "conformite_rapport": rapport,
-            },
-            status=status.HTTP_200_OK,
-        )
+        serializer = SoumissionListSerializer(soum)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 class OpenBidsView(APIView):
     """
@@ -138,42 +104,69 @@ class OpenBidsView(APIView):
         soumissions = Soumission.objects.filter(id_appel_offre=id_appel_offre, statut=SoumissionStatut.SOUMIS)
         if not soumissions.exists():
             return Response({"message": "Aucune soumission à ouvrir pour cet appel d'offres."}, status=status.HTTP_404_NOT_FOUND)
-        
+
+        # Fetch the appel d'offre's private RSA key for decryption
+        private_key_pem = fetch_appel_private_key(id_appel_offre)
+        private_key = None
+        if private_key_pem:
+            try:
+                private_key = load_pem_private_key(private_key_pem, password=None)
+            except Exception as exc:
+                logger.error("Failed to load private key for AO %s: %s", id_appel_offre, exc)
+
         opened_count = 0
         for soum in soumissions:
             # Transition -> EN_OUVERTURE
             soum.statut = SoumissionStatut.EN_OUVERTURE
-            soum.save() # Triggers audit log
-            
-            # --- START DECRYPTION PROCESS ---
+            soum.save()  # Triggers audit log
+
             try:
-                # 1. Decrypt AES Key using AO's private key
-                # aes_key = CryptoService.decrypt_aes_key(soum.cle_dechiffrement_hash, MOCK_PRIVATE_KEY)
-                
-                # 2. Fetch encrypted file into RAM (Mocked here since we'd normally download it from MinIO)
-                # minio_client = get_minio_client()
-                # encrypted_file_bytes = minio_client.get_object(soum.offre_financiere_chiffree_url).read()
-                
-                # 3. Decrypt file
-                # decrypted_pdf_bytes = CryptoService.decrypt_financial_offer(encrypted_file_bytes, aes_key, iv=b'0'*16)
-                
-                # 4. Extract amount
-                # montant = CryptoService.extract_montant(decrypted_pdf_bytes)
-                
-                # MOCK SUCCESS:
-                montant = 1500000.00
-                
-                # Clean up memory explicitly if dealing with large files
-                # del decrypted_pdf_bytes
-                
+                montant = None
+
+                if private_key:
+                    # 1. Decrypt AES key using AO's private RSA key
+                    aes_key = CryptoService.decrypt_aes_key(
+                        soum.cle_dechiffrement_hash, private_key
+                    )
+
+                    # 2. Download encrypted file from MinIO / object storage
+                    encrypted_file_bytes = download_encrypted_file(
+                        soum.offre_financiere_chiffree_url
+                    )
+                    if encrypted_file_bytes is None:
+                        raise RuntimeError(
+                            f"Impossible de télécharger le fichier: {soum.offre_financiere_chiffree_url}"
+                        )
+
+                    # 3. Decrypt file with AES
+                    decrypted_pdf_bytes = CryptoService.decrypt_financial_offer(
+                        encrypted_file_bytes, aes_key, iv=b"\x00" * 16
+                    )
+
+                    # 4. Extract amount from decrypted PDF
+                    montant = CryptoService.extract_montant(decrypted_pdf_bytes)
+
+                    # Clean up sensitive data from memory
+                    del decrypted_pdf_bytes
+                    del encrypted_file_bytes
+                else:
+                    logger.warning(
+                        "No private key available for AO %s — decryption skipped for soumission %s",
+                        id_appel_offre,
+                        soum.id_soumission,
+                    )
+
                 soum.montant_financier = montant
-                # Transition -> EN_EVALUATION
                 soum.statut = SoumissionStatut.EN_EVALUATION
                 soum.save()
                 opened_count += 1
-                
+
             except Exception as e:
-                # If a bid fails to decrypt, it shouldn't stop others, we just flag it.
+                logger.error(
+                    "Decryption failed for soumission %s: %s",
+                    soum.id_soumission,
+                    e,
+                )
                 soum.conformite_statut = "ERREUR_DECHIFFREMENT"
                 soum.conformite_rapport = str(e)
                 soum.statut = SoumissionStatut.EN_EVALUATION
@@ -183,34 +176,98 @@ class OpenBidsView(APIView):
 
 class EvaluationCreateView(APIView):
     """
-    POST /api/soumissions/<id_soumission>/evaluate/
+    GET  /api/soumissions/<id_soumission>/evaluate/ → list evaluations (from Evaluations service)
+    POST /api/soumissions/<id_soumission>/evaluate/ → create evaluation (proxied to Evaluations service)
     """
+
+    def get(self, request, soumission_id, *args, **kwargs):
+        get_object_or_404(Soumission, id_soumission=soumission_id)
+        evaluations = fetch_evaluations_for_soumission(soumission_id)
+        return Response(evaluations, status=status.HTTP_200_OK)
+
     @extend_schema(
-        request=None, 
+        request=EvaluationCreateSerializer,
         responses={201: OpenApiResponse(description='Évaluation enregistrée')},
-        description="Attribution d'une note par un membre de la commission"
+        description="Attribution d'une note par un membre de la commission (proxied to Evaluations service)"
     )
     def post(self, request, soumission_id, *args, **kwargs):
         soum = get_object_or_404(Soumission, id_soumission=soumission_id)
-        
-        # Must be in evaluation phase
+
         if soum.statut not in [SoumissionStatut.EN_OUVERTURE, SoumissionStatut.EN_EVALUATION]:
             return Response({"error": "La soumission n'est pas en phase d'évaluation."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        data = request.data
-        if not all(k in data for k in ('id_comission', 'id_membre', 'note')):
-            return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
-            
-        evaluation, created = Evaluation.objects.update_or_create(
-            id_soumission=soum,
-            id_membre=data['id_membre'],
-            defaults={
-                'id_comission': data['id_comission'],
-                'note': data['note'],
-                'commentaires': data.get('commentaires', '')
-            }
+
+        serializer = EvaluationCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        validated = serializer.validated_data
+        payload = {
+            "id_comission": validated["id_comission"],
+            "id_soumission": soumission_id,
+            "id_utilisateur": validated["id_utilisateur"],
+            "type": validated["type"],
+            "note": validated["note"],
+            "commentaire": validated.get("commentaire", ""),
+        }
+
+        resp_status, resp_body = create_evaluation(payload)
+        return Response(resp_body, status=resp_status)
+
+
+class SoumissionWithdrawView(APIView):
+    """
+    POST /api/soumissions/<id_soumission>/retirer/
+    Permet au soumissionnaire de retirer sa soumission (avant ouverture des plis).
+    """
+
+    @extend_schema(
+        request=None,
+        responses={200: OpenApiResponse(description='Soumission retirée')},
+        description="Retrait d'une soumission avant l'ouverture des plis"
+    )
+    def post(self, request, soumission_id, *args, **kwargs):
+        soum = get_object_or_404(Soumission, id_soumission=soumission_id)
+
+        if soum.statut != SoumissionStatut.SOUMIS:
+            return Response(
+                {"error": "Seule une soumission au statut SOUMIS peut être retirée."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        soum.statut = SoumissionStatut.RETRAITE
+        soum.save()
+        return Response(
+            {"message": "Soumission retirée avec succès.", "id_soumission": soum.id_soumission, "statut": soum.statut},
+            status=status.HTTP_200_OK,
         )
-        return Response({"message": "Évaluation enregistrée.", "id": evaluation.id_evaluation}, status=status.HTTP_201_CREATED)
+
+
+class SoumissionTerminerEvaluationView(APIView):
+    """
+    POST /api/soumissions/<id_soumission>/terminer-evaluation/
+    Clôture la phase d'évaluation d'une soumission.
+    """
+
+    @extend_schema(
+        request=None,
+        responses={200: OpenApiResponse(description='Évaluation terminée')},
+        description="Clôture de la phase d'évaluation"
+    )
+    def post(self, request, soumission_id, *args, **kwargs):
+        soum = get_object_or_404(Soumission, id_soumission=soumission_id)
+
+        if soum.statut != SoumissionStatut.EN_EVALUATION:
+            return Response(
+                {"error": "La soumission doit être en phase EN_EVALUATION."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        soum.statut = SoumissionStatut.EVALU_TERMINEE
+        soum.save()
+        return Response(
+            {"message": "Évaluation terminée.", "id_soumission": soum.id_soumission, "statut": soum.statut},
+            status=status.HTTP_200_OK,
+        )
 
 
 class SoumissionConformitePatchView(APIView):

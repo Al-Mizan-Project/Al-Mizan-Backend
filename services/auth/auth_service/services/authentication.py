@@ -1,12 +1,20 @@
 import secrets
 
 from django.conf import settings
+from django.contrib.auth import password_validation
 from django.contrib.auth.hashers import check_password
+from django.contrib.auth.models import update_last_login
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.exceptions import AuthenticationFailed, NotFound, ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from auth_service.models import Utilisateur
-from auth_service.serializers import consume_password_reset_token, revoke_refresh_token, store_password_reset_token
+from auth_service.serializers import (
+    apply_user_claims,
+    consume_password_reset_token,
+    revoke_refresh_token,
+    store_password_reset_token,
+)
 
 
 def authenticate_user(email, password):
@@ -14,6 +22,8 @@ def authenticate_user(email, password):
     if not user or not check_password(password, user.password):
         raise AuthenticationFailed("Invalid credentials")
     refresh = RefreshToken.for_user(user)
+    apply_user_claims(refresh, user)
+    update_last_login(None, user)
     return {"access": str(refresh.access_token), "refresh": str(refresh)}
 
 
@@ -24,6 +34,10 @@ def logout_user(raw_refresh):
 def change_password(user, old_password, new_password):
     if not user.check_password(old_password):
         raise ValidationError({"old_password": ["Old password is incorrect"]})
+    try:
+        password_validation.validate_password(new_password, user=user)
+    except DjangoValidationError as exc:
+        raise ValidationError({"new_password": list(exc.messages)})
     user.set_password(new_password)
     user.save(update_fields=["password", "updated_at"])
 
@@ -50,5 +64,9 @@ def complete_password_reset(token, new_password):
     user = Utilisateur.objects.filter(id_utilisateur=user_id).first()
     if not user:
         raise NotFound("User not found")
+    try:
+        password_validation.validate_password(new_password, user=user)
+    except DjangoValidationError as exc:
+        raise ValidationError({"new_password": list(exc.messages)})
     user.set_password(new_password)
     user.save(update_fields=["password", "updated_at"])

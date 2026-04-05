@@ -153,5 +153,12 @@ MINIO_ACCESS_KEY = env_str("MINIO_ACCESS_KEY", "admin_almizan")
 MINIO_SECRET_KEY = env_str("MINIO_SECRET_KEY", "SecurePassword123!")
 MINIO_BUCKET_NAME = env_str("MINIO_BUCKET_NAME", "almizan-documents")
 
+# ── Inter-service URLs ──────────────────────────────────────────────────
+APPELS_SERVICE_URL = env_str("APPELS_SERVICE_URL", "http://localhost:18083")
+DOCUMENTS_SERVICE_URL = env_str("DOCUMENTS_SERVICE_URL", "http://localhost:8003")
+EVALUATIONS_SERVICE_URL = env_str("EVALUATIONS_SERVICE_URL", "http://localhost:18086")
+AUDIT_SERVICE_URL = env_str("AUDIT_SERVICE_URL", "http://localhost:8000")
+REMOTE_SERVICE_TIMEOUT = int(env_str("REMOTE_SERVICE_TIMEOUT", "3"))
+
 # Shared token used by trusted internal services (e.g. IA service).
-INTERNAL_SERVICE_TOKEN = env_str("INTERNAL_SERVICE_TOKEN", "")
+INTERNAL_SERVICE_TOKEN = env_str("INTERNAL_SERVICE_TOKEN", "dev-internal-token")

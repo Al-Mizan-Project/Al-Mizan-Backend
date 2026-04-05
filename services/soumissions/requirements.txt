@@ -14,4 +14,5 @@ pytest-django
 factory-boy
 django-filter
 gunicorn
+requests
 python-dotenv

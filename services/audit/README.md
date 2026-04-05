@@ -53,6 +53,14 @@ Client
           └── Redis cache miss ──► query read_db ──► cache ──► return
 ```
 
+### Infrastructure Details
+
+- **Shared PostgreSQL**: Port 5433 (two databases: `audit_ledger` and `audit_read`)
+- **Shared Redis**: Port 6379 (used for caching read queries)
+- **Django API**: Port 8000
+- **Debezium Connect**: Port 8083
+- **Kafka**: Internal only (9092 inside Docker network)
+
 ---
 
 ## What Changed
@@ -150,23 +158,67 @@ requirements.txt            # Added: django-redis, confluent-kafka, django-filte
 
 ## How to Run
 
+### Prerequisites
+
+Start the shared infrastructure (PostgreSQL on port 5433 and Redis on port 6379):
 ```bash
-# Start all infrastructure:
-docker-compose up --build -d
+cd ../../infrastructure
+docker compose up -d
+```
 
-# Run migrations:
-docker-compose exec web python manage.py makemigrations
-docker-compose exec web python manage.py migrate ledger --database=ledger
-docker-compose exec web python manage.py migrate readstore --database=read
+The audit service uses:
+- **Shared PostgreSQL** (localhost:5433) with two databases: `audit_ledger` and `audit_read`
+- **Shared Redis** (localhost:6379) for caching read queries
 
-# Config WAL on Postgresql
-Get-Content ./postgres/init_ledger.sql | docker-compose exec -T db psql -U ledger_user -d ledger
+### Environment Variables
 
-# Register Kafka
+The service is configured in `docker-compose.yml` to use:
+```
+DB_HOST=host.docker.internal
+DB_PORT=5433
+DB_LEDGER_NAME=audit_ledger
+DB_READ_NAME=audit_read
+DB_LEDGER_USER=audit_user
+DB_LEDGER_PASSWORD=audit_password
+REDIS_URL=redis://:almizan_redis_password@host.docker.internal:6379/10
+```
+
+### Startup
+
+```bash
+# Navigate to audit service
+cd audit_service
+
+# Start Kafka infrastructure and Django
+docker compose up --build -d
+
+# Run migrations on shared PostgreSQL
+docker compose exec web python manage.py makemigrations
+docker compose exec web python manage.py migrate ledger --database=ledger
+docker compose exec web python manage.py migrate readstore --database=read
+
+# Configure WAL on shared PostgreSQL for CDC
+docker exec almizan_shared_postgres psql -U audit_user -d audit_ledger -c "CREATE PUBLICATION debezium_outbox_pub FOR TABLE journaux_outbox;"
+
+# Register Debezium connector
 Invoke-RestMethod -Method Post -ContentType "application/json" -Body (Get-Content -Raw ./debezium/connectors/outbox-connector.json) -Uri "http://localhost:8083/connectors"
 
-# Create Kafta Topic
-docker-compose exec kafka kafka-topics --create --topic outbox.event.AuditLog --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+# Create Kafka topic
+docker compose exec kafka kafka-topics --create --topic outbox.event.AuditLog --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+```
+
+### Test Endpoints
+
+```bash
+# Create audit log
+$json = '{"utilisateur_id": 123, "action": "USER_LOGIN", "entite_type": "USER", "entite_id": 456, "details": {"ip": "127.0.0.1"}}'
+Invoke-WebRequest -Method Post -Uri "http://localhost:8000/journaux-audit/create/" -ContentType "application/json" -Body $json
+
+# List audit logs
+Invoke-WebRequest -Method Get -Uri "http://localhost:8000/journaux-audit/list/"
+
+# Verify integrity
+Invoke-WebRequest -Method Get -Uri "http://localhost:8000/journaux-audit/verifier-integrite/"
 ```
 
 ## To Do Later

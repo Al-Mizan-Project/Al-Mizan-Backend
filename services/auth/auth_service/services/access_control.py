@@ -52,6 +52,15 @@ def list_user_permissions(user_id):
     return Permission.objects.filter(role_links__id_role=user.id_role).distinct().order_by("id_permission")
 
 
+def user_permission_names(user):
+    return list(
+        Permission.objects.filter(role_links__id_role=user.id_role)
+        .order_by("id_permission")
+        .values_list("nom_permission", flat=True)
+        .distinct()
+    )
+
+
 def list_role_permissions(role_id):
     role = get_role_or_404(role_id)
     return Permission.objects.filter(role_links__id_role=role).distinct().order_by("id_permission")

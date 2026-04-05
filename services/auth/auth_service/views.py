@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenRefreshView
 
+from .permissions import AuthServicePermission
 from .serializers import (
     ChangePasswordSerializer,
     ForgotPasswordSerializer,
@@ -82,6 +83,8 @@ class AuthRefreshView(TokenRefreshView):
 
 
 class AuthLogoutView(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
         serializer = LogoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -157,6 +160,11 @@ class CachedRetrieveMixin:
 
 class UserListCreateView(CachedListMixin, ListCreateAPIView):
     cache_namespace = "users"
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "GET": ("users.read",),
+        "POST": ("users.write",),
+    }
 
     def get_queryset(self):
         return users_queryset()
@@ -175,6 +183,13 @@ class UserRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDestroyAPI
     cache_namespace = "users"
     lookup_field = "id_utilisateur"
     lookup_url_kwarg = "user_id"
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "GET": ("users.read",),
+        "PATCH": ("users.write",),
+        "PUT": ("users.write",),
+        "DELETE": ("users.write",),
+    }
 
     def get_queryset(self):
         return users_queryset()
@@ -194,6 +209,11 @@ class UserRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDestroyAPI
 
 
 class UserRoleUpdateView(APIView):
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "PATCH": ("users.write",),
+    }
+
     def patch(self, request, user_id):
         serializer = UserRoleUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -202,6 +222,11 @@ class UserRoleUpdateView(APIView):
 
 
 class UserPermissionsView(APIView):
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "GET": ("users.read",),
+    }
+
     def get(self, request, user_id):
         query_string = request.META.get("QUERY_STRING", "")
         cached = read_cached("users-permissions", str(user_id), query_string)
@@ -216,6 +241,11 @@ class UserPermissionsView(APIView):
 class RoleListCreateView(CachedListMixin, ListCreateAPIView):
     cache_namespace = "roles"
     serializer_class = RoleSerializer
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "GET": ("roles.read",),
+        "POST": ("roles.write",),
+    }
 
     def get_queryset(self):
         return roles_queryset()
@@ -230,6 +260,13 @@ class RoleRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDestroyAPI
     serializer_class = RoleSerializer
     lookup_field = "id_role"
     lookup_url_kwarg = "role_id"
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "GET": ("roles.read",),
+        "PATCH": ("roles.write",),
+        "PUT": ("roles.write",),
+        "DELETE": ("roles.write",),
+    }
 
     def get_queryset(self):
         return roles_queryset()
@@ -246,6 +283,11 @@ class RoleRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDestroyAPI
 class PermissionListCreateView(CachedListMixin, ListCreateAPIView):
     cache_namespace = "permissions"
     serializer_class = PermissionSerializer
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "GET": ("permissions.read",),
+        "POST": ("permissions.write",),
+    }
 
     def get_queryset(self):
         return permissions_queryset()
@@ -260,6 +302,13 @@ class PermissionRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDest
     serializer_class = PermissionSerializer
     lookup_field = "id_permission"
     lookup_url_kwarg = "permission_id"
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "GET": ("permissions.read",),
+        "PATCH": ("permissions.write",),
+        "PUT": ("permissions.write",),
+        "DELETE": ("permissions.write",),
+    }
 
     def get_queryset(self):
         return permissions_queryset()
@@ -274,6 +323,12 @@ class PermissionRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDest
 
 
 class RolePermissionsView(APIView):
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "GET": ("roles.read",),
+        "PUT": ("roles.write",),
+    }
+
     def get(self, request, role_id):
         query_string = request.META.get("QUERY_STRING", "")
         cached = read_cached("roles-permissions", str(role_id), query_string)
@@ -295,6 +350,12 @@ class RolePermissionsView(APIView):
 
 
 class RolePermissionDetailView(APIView):
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "POST": ("roles.write",),
+        "DELETE": ("roles.write",),
+    }
+
     def post(self, request, role_id, permission_id):
         add_role_permission(role_id=role_id, permission_id=permission_id)
         return Response(status=status.HTTP_201_CREATED)

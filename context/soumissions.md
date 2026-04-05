@@ -3,10 +3,10 @@
 ## Architecture
 
 - **Stack:** Python, Django, Django REST Framework
-- **Database:** PostgreSQL
-- **Cache/Rate-Limiting:** Redis
+- **Database:** PostgreSQL (shared infrastructure - `soumissions_db`)
+- **Cache/Rate-Limiting:** Redis (shared infrastructure - DB index 9)
 - **Security:** Zero-Trust, RBAC, End-to-End Encryption (E2EE)
-- **Deployment:** Dockerized local stacks
+- **Deployment:** Dockerized (Django API only; PostgreSQL & Redis are shared)
 
 ## Database Schema (`soumissions` app)
 
