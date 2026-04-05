@@ -46,21 +46,3 @@ class Soumission(models.Model):
 
     def __str__(self):
         return f"Soumission #{self.id_soumission} - AO #{self.id_appel_offre}"
-
-class Evaluation(models.Model):
-    id_evaluation = models.AutoField(primary_key=True)
-    id_soumission = models.ForeignKey(Soumission, on_delete=models.CASCADE, related_name='evaluations')
-    id_comission = models.IntegerField(help_text="ID of the Commission via Appels Service")
-    id_membre = models.IntegerField(help_text="ID of the Commission Member")
-    
-    note = models.FloatField(help_text="Score out of 100")
-    commentaires = models.TextField(null=True, blank=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'evaluations'
-        unique_together = ('id_soumission', 'id_membre')
-
-    def __str__(self):
-        return f"Eval #{self.id_evaluation} - Comm #{self.id_comission}"

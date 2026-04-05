@@ -6,7 +6,8 @@ from rest_framework import status
 from django.contrib.auth.models import User
 from soumissions_app.models import Soumission, SoumissionStatut
 from soumissions_app.permissions import CanOpenBids, IsCommissionMember
-from unittest.mock import patch
+from soumissions_app.services.crypto_service import CryptoService
+from unittest.mock import patch, MagicMock
 
 DOCUMENTS_SERVICE_URL = "http://localhost:8003/api/documents/"
 
@@ -57,13 +58,18 @@ def test_cross_service_upload_and_decrypt(api_client):
     assert soum.statut == SoumissionStatut.SOUMIS
     
     # 3. Trigger Open Bids
-    with patch.object(CanOpenBids, 'has_permission', return_value=True):
-        with patch.object(IsCommissionMember, 'has_permission', return_value=True):
-            # To fetch the actual file from MinIO, our view normally mocks this part, but let's just 
-            # make sure the endpoint runs successfully which indicates DB state transitioned properly.
-            open_resp = api_client.post(f'/api/soumissions/55/open-bids/')
-            assert open_resp.status_code == status.HTTP_200_OK
-            
-            soum.refresh_from_db()
-            assert soum.statut == SoumissionStatut.EN_EVALUATION
-            assert soum.montant_financier is not None # Decrypted successfully
+    mock_key = MagicMock()
+    with patch.object(CanOpenBids, 'has_permission', return_value=True), \
+         patch.object(IsCommissionMember, 'has_permission', return_value=True), \
+         patch('soumissions_app.views.fetch_appel_private_key', return_value=b'fake-pem'), \
+         patch('soumissions_app.views.load_pem_private_key', return_value=mock_key), \
+         patch.object(CryptoService, 'decrypt_aes_key', return_value=b'fake-aes-key'), \
+         patch('soumissions_app.views.download_encrypted_file', return_value=b'encrypted-data'), \
+         patch.object(CryptoService, 'decrypt_financial_offer', return_value=b'decrypted-pdf'), \
+         patch.object(CryptoService, 'extract_montant', return_value=1500000.00):
+        open_resp = api_client.post(f'/api/soumissions/55/open-bids/')
+        assert open_resp.status_code == status.HTTP_200_OK
+        
+        soum.refresh_from_db()
+        assert soum.statut == SoumissionStatut.EN_EVALUATION
+        assert soum.montant_financier is not None  # Decrypted successfully
