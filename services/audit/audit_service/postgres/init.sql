@@ -1,2 +1,0 @@
-CREATE DATABASE ledger;
-CREATE DATABASE read_db;

@@ -1,6 +1,0 @@
-Django>=4.2
-djangorestframework>=3.14
-psycopg2-binary>=2.9
-django-filter>=23.0
-django-redis>=5.4.0
-redis>=5.0.0
