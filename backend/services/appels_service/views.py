@@ -1,4 +1,5 @@
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -7,6 +8,7 @@ from rest_framework.views import APIView
 from .serializers import (
     AppelOffresCreateSerializer,
     AppelOffresSerializer,
+    AppelOffresSuiviSerializer,
     AppelOffresUpdateSerializer,
     DocumentsAppelSerializer,
 )
@@ -22,6 +24,10 @@ from .services.appels import (
     action_ouvrir_plis,
     action_annuler,
     appels_by_service_queryset,
+    is_appel_watched_by_user,
+    list_watched_appels_for_user,
+    unwatch_appel_for_user,
+    watch_appel_for_user,
 )
 from .services.health import check_readiness
 
@@ -88,7 +94,14 @@ class AppelOffresListCreateView(CachedListMixin, ListCreateAPIView):
     cache_namespace = "appels-offres"
 
     def get_queryset(self):
-        return appels_offres_queryset()
+        statut = self.request.query_params.get("statut", "").strip() or None
+        search = self.request.query_params.get("search", "").strip() or None
+        service_id_raw = self.request.query_params.get("service_id")
+        try:
+            service_id = int(service_id_raw) if service_id_raw not in (None, "") else None
+        except ValueError:
+            service_id = None
+        return appels_offres_queryset(statut=statut, service_id=service_id, search=search)
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -201,3 +214,38 @@ class ServiceContractantAppelsView(CachedListMixin, ListCreateAPIView):
         if response.status_code == status.HTTP_200_OK:
             write_cached(response.data, namespace, "list", query_string)
         return response
+
+
+def _assert_user_scope(request, user_id):
+    auth_user_id = getattr(request.user, "id_utilisateur", None)
+    if auth_user_id is not None and int(auth_user_id) != int(user_id):
+        raise PermissionDenied("Cannot access another user's watched appels")
+
+
+class UserWatchedAppelsView(APIView):
+    def get(self, request, user_id):
+        _assert_user_scope(request, user_id)
+        watched = list_watched_appels_for_user(user_id)
+        payload = AppelOffresSuiviSerializer(watched, many=True).data
+        return Response(payload)
+
+
+class UserWatchedAppelDetailView(APIView):
+    def get(self, request, user_id, appel_id):
+        _assert_user_scope(request, user_id)
+        watched = is_appel_watched_by_user(appel_id=appel_id, user_id=user_id)
+        return Response({"is_watched": watched})
+
+    def post(self, request, user_id, appel_id):
+        _assert_user_scope(request, user_id)
+        watched_link, created = watch_appel_for_user(appel_id=appel_id, user_id=user_id)
+        bump_cache_version()
+        payload = AppelOffresSuiviSerializer(watched_link).data
+        status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response(payload, status=status_code)
+
+    def delete(self, request, user_id, appel_id):
+        _assert_user_scope(request, user_id)
+        unwatch_appel_for_user(appel_id=appel_id, user_id=user_id)
+        bump_cache_version()
+        return Response(status=status.HTTP_204_NO_CONTENT)

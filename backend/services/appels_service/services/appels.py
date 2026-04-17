@@ -1,6 +1,7 @@
 from rest_framework.exceptions import NotFound, ValidationError
+from django.db.models import Q
 
-from appels_service.models import AppelOffres, DocumentsAppel
+from appels_service.models import AppelOffres, AppelOffresSuivi, DocumentsAppel
 
 
 # ── Valid statut transitions ──────────────────────────────────────────
@@ -32,8 +33,19 @@ _TRANSITIONS = {
 # ── Querysets ─────────────────────────────────────────────────────────
 
 
-def appels_offres_queryset():
-    return AppelOffres.objects.order_by("-created_at")
+def appels_offres_queryset(statut=None, service_id=None, search=None):
+    queryset = AppelOffres.objects.order_by("-created_at")
+    if statut:
+        queryset = queryset.filter(statut=statut)
+    if service_id is not None:
+        queryset = queryset.filter(id_service_contractant=service_id)
+    if search:
+        queryset = queryset.filter(
+            Q(reference__icontains=search)
+            | Q(titre__icontains=search)
+            | Q(description__icontains=search)
+        )
+    return queryset
 
 
 def appels_by_service_queryset(service_id):
@@ -108,3 +120,32 @@ def add_document_to_appel(appel_id, document_id):
 def remove_document_from_appel(appel_id, document_id):
     link = get_document_link_or_404(appel_id, document_id)
     link.delete()
+
+
+# ── Suivis utilisateur ───────────────────────────────────────────────
+
+
+def list_watched_appels_for_user(user_id):
+    return AppelOffresSuivi.objects.filter(id_utilisateur=user_id).order_by("-created_at")
+
+
+def is_appel_watched_by_user(appel_id, user_id):
+    appel = get_appel_or_404(appel_id)
+    return AppelOffresSuivi.objects.filter(id_appel_offres=appel, id_utilisateur=user_id).exists()
+
+
+def watch_appel_for_user(appel_id, user_id):
+    appel = get_appel_or_404(appel_id)
+    return AppelOffresSuivi.objects.get_or_create(
+        id_appel_offres=appel,
+        id_utilisateur=user_id,
+    )
+
+
+def unwatch_appel_for_user(appel_id, user_id):
+    appel = get_appel_or_404(appel_id)
+    deleted, _ = AppelOffresSuivi.objects.filter(
+        id_appel_offres=appel,
+        id_utilisateur=user_id,
+    ).delete()
+    return deleted > 0

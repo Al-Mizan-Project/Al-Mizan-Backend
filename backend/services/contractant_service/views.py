@@ -1,6 +1,5 @@
 from rest_framework import status
 from rest_framework.generics import (
-    CreateAPIView,
     ListCreateAPIView,
     RetrieveUpdateDestroyAPIView,
 )
@@ -226,12 +225,16 @@ class CommissionInterneMembreDetailView(APIView):
 # ── Service Contractant ──────────────────────────────────────────────
 
 
-class ServiceContractantCreateView(CreateAPIView):
+class ServiceContractantListCreateView(CachedListMixin, ListCreateAPIView):
     cache_namespace = "services-contractants"
-    serializer_class = ServiceContractantCreateSerializer
 
     def get_queryset(self):
         return services_contractants_queryset()
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return ServiceContractantCreateSerializer
+        return ServiceContractantSerializer
 
     def perform_create(self, serializer):
         serializer.save()

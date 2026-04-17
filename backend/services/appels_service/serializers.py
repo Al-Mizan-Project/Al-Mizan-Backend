@@ -3,7 +3,7 @@ from rest_framework import serializers
 import requests
 from shared.permissions import internal_service_headers
 
-from .models import AppelOffres, DocumentsAppel
+from .models import AppelOffres, AppelOffresSuivi, DocumentsAppel
 
 
 def _validate_service_contractant(value):
@@ -55,12 +55,20 @@ class AppelOffresSerializer(serializers.ModelSerializer):
             "titre",
             "description",
             "type_procedure",
+            "wilaya",
             "montant_estime",
             "date_publication",
             "date_limite_soumission",
             "date_ouverture_plis",
             "poids_technique",
             "poids_financier",
+            "required_docs_admin",
+            "required_docs_tech",
+            "required_docs_fin",
+            "minimum_revenue_da",
+            "qualification_category",
+            "minimum_experience_years",
+            "participation_conditions",
             "statut",
             "created_at",
             "updated_at",
@@ -78,12 +86,20 @@ class AppelOffresCreateSerializer(serializers.ModelSerializer):
             "titre",
             "description",
             "type_procedure",
+            "wilaya",
             "montant_estime",
             "date_publication",
             "date_limite_soumission",
             "date_ouverture_plis",
             "poids_technique",
             "poids_financier",
+            "required_docs_admin",
+            "required_docs_tech",
+            "required_docs_fin",
+            "minimum_revenue_da",
+            "qualification_category",
+            "minimum_experience_years",
+            "participation_conditions",
             "statut",
             "created_at",
             "updated_at",
@@ -103,12 +119,20 @@ class AppelOffresUpdateSerializer(serializers.ModelSerializer):
             "titre",
             "description",
             "type_procedure",
+            "wilaya",
             "montant_estime",
             "date_publication",
             "date_limite_soumission",
             "date_ouverture_plis",
             "poids_technique",
             "poids_financier",
+            "required_docs_admin",
+            "required_docs_tech",
+            "required_docs_fin",
+            "minimum_revenue_da",
+            "qualification_category",
+            "minimum_experience_years",
+            "participation_conditions",
         ]
 
     def validate_id_service_contractant(self, value):
@@ -125,3 +149,12 @@ class DocumentsAppelSerializer(serializers.ModelSerializer):
         model = DocumentsAppel
         fields = ["id", "id_document", "id_appel_offres"]
         read_only_fields = ["id", "id_appel_offres"]
+
+
+class AppelOffresSuiviSerializer(serializers.ModelSerializer):
+    id_appel_offres = serializers.IntegerField(source="id_appel_offres_id", read_only=True)
+
+    class Meta:
+        model = AppelOffresSuivi
+        fields = ["id", "id_appel_offres", "id_utilisateur", "created_at"]
+        read_only_fields = ["id", "created_at"]

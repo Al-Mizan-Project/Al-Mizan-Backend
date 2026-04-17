@@ -10,6 +10,8 @@ from .views import (
     AppelOffresOuvrirPlisView,
     AppelOffresAnnulerView,
     ServiceContractantAppelsView,
+    UserWatchedAppelDetailView,
+    UserWatchedAppelsView,
 )
 
 urlpatterns = [
@@ -26,4 +28,7 @@ urlpatterns = [
     path("appels-offres/<int:appel_id>/documents/<int:document_id>", AppelOffresDocumentDetailView.as_view()),
     # Filter by service contractant
     path("services-contractants/<int:service_id>/appels-offres", ServiceContractantAppelsView.as_view()),
+    # User watched appels
+    path("users/<int:user_id>/appels-offres/suivis", UserWatchedAppelsView.as_view()),
+    path("users/<int:user_id>/appels-offres/<int:appel_id>/suivi", UserWatchedAppelDetailView.as_view()),
 ]
