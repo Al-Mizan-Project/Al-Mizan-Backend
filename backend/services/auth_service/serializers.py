@@ -59,10 +59,11 @@ class PermissionRoleSerializer(serializers.ModelSerializer):
 
 class UtilisateurSerializer(serializers.ModelSerializer):
     id_role = serializers.IntegerField(source="id_role_id", read_only=True)
-
+    
+    
     class Meta:
         model = Utilisateur
-        fields = ["id_utilisateur", "id_role", "id_membre", "email", "created_at", "updated_at"]
+        fields = ["id_utilisateur", "id_role", "id_membre", "email", "is_active", "created_at", "updated_at"]
         read_only_fields = ["id_utilisateur", "created_at", "updated_at"]
 
 
@@ -96,7 +97,7 @@ class UtilisateurUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Utilisateur
-        fields = ["id_role", "id_membre", "email"]
+        fields = ["id_utilisateur", "id_role", "id_membre", "email", "is_active", "created_at", "updated_at"]
 
     def validate_id_membre(self, value):
         return validate_membre_reference(value)
