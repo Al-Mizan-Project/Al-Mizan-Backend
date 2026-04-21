@@ -1,6 +1,8 @@
 from django.urls import path
 
 from .views import (
+    AchatSimpleListCreateView,
+    AchatSimpleRetrieveUpdateDeleteView,
     AppelOffresDocumentDetailView,
     AppelOffresDocumentsView,
     AppelOffresListCreateView,
@@ -10,11 +12,15 @@ from .views import (
     AppelOffresOuvrirPlisView,
     AppelOffresAnnulerView,
     ServiceContractantAppelsView,
+    ServiceContractantAchatsSimplesView,
     UserWatchedAppelDetailView,
     UserWatchedAppelsView,
 )
 
 urlpatterns = [
+    # Achats simples - dedicated endpoints
+    path("achats-simples", AchatSimpleListCreateView.as_view()),
+    path("achats-simples/<int:achat_id>", AchatSimpleRetrieveUpdateDeleteView.as_view()),
     # Appels offres – CRUD
     path("appels-offres", AppelOffresListCreateView.as_view()),
     path("appels-offres/<int:appel_id>", AppelOffresRetrieveUpdateDeleteView.as_view()),
@@ -28,6 +34,7 @@ urlpatterns = [
     path("appels-offres/<int:appel_id>/documents/<int:document_id>", AppelOffresDocumentDetailView.as_view()),
     # Filter by service contractant
     path("services-contractants/<int:service_id>/appels-offres", ServiceContractantAppelsView.as_view()),
+    path("services-contractants/<int:service_id>/achats-simples", ServiceContractantAchatsSimplesView.as_view()),
     # User watched appels
     path("users/<int:user_id>/appels-offres/suivis", UserWatchedAppelsView.as_view()),
     path("users/<int:user_id>/appels-offres/<int:appel_id>/suivi", UserWatchedAppelDetailView.as_view()),

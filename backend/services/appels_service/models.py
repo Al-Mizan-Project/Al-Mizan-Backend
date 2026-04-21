@@ -2,6 +2,16 @@ from django.db import models
 
 
 class AppelOffres(models.Model):
+    TYPE_PRESTATION_CHOICES = [
+        ("travaux", "Travaux"),
+        ("fournitures", "Fournitures"),
+        ("services", "Services"),
+        ("etudes", "Etudes"),
+    ]
+    VISIBILITE_CHOICES = [
+        ("public", "Public"),
+        ("prive", "Prive"),
+    ]
     STATUT_CHOICES = [
         ("brouillon", "Brouillon"),
         ("publie", "Publié"),
@@ -17,7 +27,18 @@ class AppelOffres(models.Model):
     titre = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
     type_procedure = models.CharField(max_length=50)
+    type_prestation = models.CharField(
+        max_length=20,
+        choices=TYPE_PRESTATION_CHOICES,
+        default="travaux",
+    )
+    visibilite = models.CharField(
+        max_length=10,
+        choices=VISIBILITE_CHOICES,
+        default="public",
+    )
     wilaya = models.CharField(max_length=80, blank=True, default="")
+    localisation = models.CharField(max_length=255, blank=True, default="")
     montant_estime = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     date_publication = models.DateTimeField(null=True, blank=True)
     date_limite_soumission = models.DateTimeField(null=True, blank=True)
@@ -56,6 +77,70 @@ class DocumentsAppel(models.Model):
                 name="unique_document_appel",
             ),
         ]
+
+
+class AppelOffresOperateurInvite(models.Model):
+    STATUT_INVITATION_CHOICES = [
+        ("invite", "Invite"),
+        ("a_repondu", "A repondu"),
+        ("retire", "Retire"),
+    ]
+
+    id_appel_offres = models.ForeignKey(
+        AppelOffres,
+        on_delete=models.CASCADE,
+        db_column="id_appel_offres",
+        related_name="operateurs_invites",
+    )
+    id_operateur_economique = models.IntegerField(db_index=True)
+    statut_invitation = models.CharField(
+        max_length=30,
+        choices=STATUT_INVITATION_CHOICES,
+        default="invite",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "appels_offres_operateurs_invites"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["id_appel_offres", "id_operateur_economique"],
+                name="unique_appel_operateur_invite",
+            ),
+        ]
+
+
+class AchatSimple(models.Model):
+    TYPE_PRESTATION_CHOICES = AppelOffres.TYPE_PRESTATION_CHOICES
+    STATUT_CHOICES = [
+        ("brouillon", "Brouillon"),
+        ("valide", "Valide"),
+        ("engage", "Engage"),
+        ("annule", "Annule"),
+    ]
+
+    id_achat_simple = models.AutoField(primary_key=True)
+    id_service_contractant = models.IntegerField(db_index=True)
+    reference = models.CharField(max_length=80, unique=True)
+    objet = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    type_prestation = models.CharField(
+        max_length=20,
+        choices=TYPE_PRESTATION_CHOICES,
+        default="fournitures",
+    )
+    wilaya = models.CharField(max_length=80, blank=True, default="")
+    localisation = models.CharField(max_length=255, blank=True, default="")
+    montant_estime = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    id_operateur_economique = models.IntegerField(null=True, blank=True, db_index=True)
+    date_demande = models.DateTimeField(null=True, blank=True)
+    statut = models.CharField(max_length=30, choices=STATUT_CHOICES, default="brouillon")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "achats_simples"
 
 
 class AppelOffresSuivi(models.Model):

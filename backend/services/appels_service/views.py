@@ -6,12 +6,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .serializers import (
+    AchatSimpleCreateSerializer,
+    AchatSimpleSerializer,
+    AchatSimpleUpdateSerializer,
     AppelOffresCreateSerializer,
     AppelOffresSerializer,
     AppelOffresSuiviSerializer,
     AppelOffresUpdateSerializer,
     DocumentsAppelSerializer,
 )
+from .services.achats_simples import achats_simples_by_service_queryset, achats_simples_queryset
 from .services.cache import bump_cache_version, read_cached, write_cached
 from .services.appels import (
     appels_offres_queryset,
@@ -135,6 +139,51 @@ class AppelOffresRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDes
         bump_cache_version()
 
 
+class AchatSimpleListCreateView(CachedListMixin, ListCreateAPIView):
+    cache_namespace = "achats-simples"
+
+    def get_queryset(self):
+        statut = self.request.query_params.get("statut", "").strip() or None
+        search = self.request.query_params.get("search", "").strip() or None
+        service_id_raw = self.request.query_params.get("service_id")
+        try:
+            service_id = int(service_id_raw) if service_id_raw not in (None, "") else None
+        except ValueError:
+            service_id = None
+        return achats_simples_queryset(statut=statut, service_id=service_id, search=search)
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return AchatSimpleCreateSerializer
+        return AchatSimpleSerializer
+
+    def perform_create(self, serializer):
+        serializer.save()
+        bump_cache_version()
+
+
+class AchatSimpleRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDestroyAPIView):
+    cache_namespace = "achats-simples"
+    lookup_field = "id_achat_simple"
+    lookup_url_kwarg = "achat_id"
+
+    def get_queryset(self):
+        return achats_simples_queryset()
+
+    def get_serializer_class(self):
+        if self.request.method in {"PATCH", "PUT"}:
+            return AchatSimpleUpdateSerializer
+        return AchatSimpleSerializer
+
+    def perform_update(self, serializer):
+        serializer.save()
+        bump_cache_version()
+
+    def perform_destroy(self, instance):
+        instance.delete()
+        bump_cache_version()
+
+
 # ── Appel workflow actions ────────────────────────────────────────────
 
 
@@ -207,6 +256,26 @@ class ServiceContractantAppelsView(CachedListMixin, ListCreateAPIView):
     def list(self, request, *args, **kwargs):
         query_string = request.META.get("QUERY_STRING", "")
         namespace = f"service-appels-{kwargs['service_id']}"
+        cached = read_cached(namespace, "list", query_string)
+        if cached is not None:
+            return Response(cached)
+        response = super(CachedListMixin, self).list(request, *args, **kwargs)
+        if response.status_code == status.HTTP_200_OK:
+            write_cached(response.data, namespace, "list", query_string)
+        return response
+
+
+class ServiceContractantAchatsSimplesView(CachedListMixin, ListCreateAPIView):
+    cache_namespace = "service-achats-simples"
+    serializer_class = AchatSimpleSerializer
+    http_method_names = ["get", "head", "options"]
+
+    def get_queryset(self):
+        return achats_simples_by_service_queryset(self.kwargs["service_id"])
+
+    def list(self, request, *args, **kwargs):
+        query_string = request.META.get("QUERY_STRING", "")
+        namespace = f"service-achats-simples-{kwargs['service_id']}"
         cached = read_cached(namespace, "list", query_string)
         if cached is not None:
             return Response(cached)

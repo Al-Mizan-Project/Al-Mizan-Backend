@@ -34,7 +34,7 @@ _TRANSITIONS = {
 
 
 def appels_offres_queryset(statut=None, service_id=None, search=None):
-    queryset = AppelOffres.objects.order_by("-created_at")
+    queryset = AppelOffres.objects.prefetch_related("operateurs_invites").order_by("-created_at")
     if statut:
         queryset = queryset.filter(statut=statut)
     if service_id is not None:
@@ -49,7 +49,11 @@ def appels_offres_queryset(statut=None, service_id=None, search=None):
 
 
 def appels_by_service_queryset(service_id):
-    return AppelOffres.objects.filter(id_service_contractant=service_id).order_by("-created_at")
+    return (
+        AppelOffres.objects.prefetch_related("operateurs_invites")
+        .filter(id_service_contractant=service_id)
+        .order_by("-created_at")
+    )
 
 
 # ── Lookups ───────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
+from appels_service.models import AppelOffres, AppelOffresSuivi
 from auth_service.models import Utilisateur
 from notifications_service.models import Notification
 
@@ -20,6 +21,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         user = self._resolve_user(options.get("user_id"), options.get("user_email"))
         count = max(1, int(options["count"]))
+        linked_appels = self._select_appels_for_notifications(user_id=user.id_utilisateur, count=count)
 
         if options["flush"]:
             deleted, _ = Notification.objects.filter(utilisateur_id=user.id_utilisateur).delete()
@@ -30,35 +32,26 @@ class Command(BaseCommand):
             {
                 "type_notification": "alerte",
                 "titre": "Date limite proche",
-                "message": "Un appel d'offres arrive a echeance dans 48 heures.",
+                "message": "Date limite proche pour {reference}.",
                 "priorite": "haute",
                 "categorie": "rappel",
-                "entite_liee_type": "appel_offre",
-                "entite_liee_id": 1,
-                "statut": "envoyee",
-                "read_at": None,
+                "read": False,
             },
             {
                 "type_notification": "information",
                 "titre": "Nouveau document publie",
-                "message": "Un addendum est disponible sur un appel d'offres suivi.",
+                "message": "Un document a ete publie pour {reference}.",
                 "priorite": "normale",
                 "categorie": "document",
-                "entite_liee_type": "document",
-                "entite_liee_id": 101,
-                "statut": "envoyee",
-                "read_at": None,
+                "read": False,
             },
             {
                 "type_notification": "attribution",
                 "titre": "Marche attribue",
-                "message": "Le resultat de la consultation AO-2026-001 est disponible.",
+                "message": "Le resultat de la consultation {reference} est disponible.",
                 "priorite": "normale",
                 "categorie": "attribution",
-                "entite_liee_type": "appel_offre",
-                "entite_liee_id": 1,
-                "statut": "lue",
-                "read_at": now,
+                "read": True,
             },
         ]
 
@@ -66,19 +59,22 @@ class Command(BaseCommand):
         updated = 0
         for idx in range(count):
             template = templates[idx % len(templates)]
+            appel = linked_appels[idx]
             suffix = idx + 1
-            titre = f"{template['titre']} #{suffix}"
+            reference = appel.reference or f"AO-{appel.id_appel_offres}"
+            titre = f"{template['titre']} - {reference} #{suffix}"
+            is_read = bool(template["read"])
             defaults = {
                 "utilisateur_id": user.id_utilisateur,
                 "type_notification": template["type_notification"],
-                "message": template["message"],
+                "message": template["message"].format(reference=reference),
                 "priorite": template["priorite"],
                 "categorie": template["categorie"],
-                "entite_liee_type": template["entite_liee_type"],
-                "entite_liee_id": template["entite_liee_id"],
-                "statut": template["statut"],
+                "entite_liee_type": "appel_offre",
+                "entite_liee_id": appel.id_appel_offres,
+                "statut": "lue" if is_read else "envoyee",
                 "sent_at": now,
-                "read_at": template["read_at"],
+                "read_at": now if is_read else None,
             }
 
             notification, was_created = Notification.objects.update_or_create(
@@ -98,10 +94,32 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 (
                     f"Notifications seed completed. Created={created}, Updated={updated}, "
-                    f"User={user.id_utilisateur} ({user.email})"
+                    f"User={user.id_utilisateur} ({user.email}), "
+                    f"LinkedAppels={sorted({a.id_appel_offres for a in linked_appels})}"
                 )
             )
         )
+
+    def _select_appels_for_notifications(self, user_id, count):
+        watched_ids = list(
+            AppelOffresSuivi.objects.filter(id_utilisateur=user_id)
+            .order_by("id")
+            .values_list("id_appel_offres_id", flat=True)
+        )
+
+        watched_appels = list(
+            AppelOffres.objects.filter(id_appel_offres__in=watched_ids).order_by("id_appel_offres")
+        )
+        remaining_appels = list(
+            AppelOffres.objects.exclude(id_appel_offres__in=watched_ids).order_by("id_appel_offres")
+        )
+        candidates = watched_appels + remaining_appels
+
+        if not candidates:
+            raise CommandError("No appels found. Run seed_appels before seed_notifications.")
+
+        # Ensure deterministic count even when requested notifications > available appels.
+        return [candidates[idx % len(candidates)] for idx in range(count)]
 
     def _resolve_user(self, user_id, email):
         if user_id is not None:

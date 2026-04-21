@@ -108,6 +108,24 @@ def _parse_date(value) -> Optional[datetime]:
     return None
 
 
+def _threshold_candidates_for_appel(appel: Dict) -> List[Tuple[str, Decimal]]:
+    """
+    Resolve threshold candidates using new AO fields first,
+    with fallback to legacy behavior.
+    """
+    type_prestation = str(appel.get("type_prestation", "")).strip().lower()
+    if type_prestation == "travaux":
+        return [("travaux", SEUILS_REGLEMENTAIRES["travaux"])]
+    if type_prestation in {"fournitures", "services", "etudes"}:
+        return [
+            ("fournitures_services", SEUILS_REGLEMENTAIRES["fournitures_services"]),
+        ]
+
+    # Legacy fallback: if type_prestation is unavailable,
+    # preserve previous detection scope.
+    return list(SEUILS_REGLEMENTAIRES.items())
+
+
 # ---------------------------------------------------------------------------
 # Detection algorithms
 # ---------------------------------------------------------------------------
@@ -125,9 +143,12 @@ def _detect_threshold_proximity(appels: List[Dict]) -> List[Dict]:
             continue
 
         type_procedure = str(appel.get("type_procedure", "")).lower()
+        type_prestation = str(appel.get("type_prestation", "")).lower()
+        visibilite = str(appel.get("visibilite", "")).lower()
+        localisation = appel.get("localisation") or appel.get("wilaya") or "non renseignee"
         id_appel = appel.get("id_appel_offre") or appel.get("id_appel_offres")
 
-        for threshold_name, threshold_value in SEUILS_REGLEMENTAIRES.items():
+        for threshold_name, threshold_value in _threshold_candidates_for_appel(appel):
             ratio = montant / threshold_value
             if THRESHOLD_PROXIMITY_RATIO <= ratio < Decimal("1.0"):
                 anomalies.append({
@@ -140,6 +161,9 @@ def _detect_threshold_proximity(appels: List[Dict]) -> List[Dict]:
                         f"du seuil réglementaire '{threshold_name}' "
                         f"({threshold_value:,.2f} DA). Ratio: {ratio * 100:.1f}%. "
                         f"Procédure utilisée: '{type_procedure}'. "
+                        f"Type prestation: '{type_prestation or 'inconnu'}'. "
+                        f"Visibilité: '{visibilite or 'inconnue'}'. "
+                        f"Localisation: '{localisation}'. "
                         f"Vérifier que le besoin n'a pas été artificiellement réduit."
                     ),
                 })
@@ -385,6 +409,9 @@ def detect_saucissonnage(
         - montant_estime: Decimal/str
         - date_publication: str/datetime
         - type_procedure: str
+        - type_prestation: str (optional)
+        - visibilite: str (optional)
+        - wilaya/localisation: str (optional)
         - id_attributaire: int (optional, for vendor analysis)
     
     service_contractant_id : int, optional
