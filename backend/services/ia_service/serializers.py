@@ -41,7 +41,8 @@ class DetecterSaucissonnageInputSerializer(serializers.Serializer):
         help_text=(
             "List of appel d'offres data to analyze. Each dict should include: "
             "id_appel_offre, id_service_contractant, titre, description, "
-            "montant_estime, date_publication, type_procedure"
+            "montant_estime, date_publication, type_procedure, "
+            "and may include type_prestation, visibilite, wilaya/localisation"
         ),
     )
     id_service_contractant = serializers.IntegerField(

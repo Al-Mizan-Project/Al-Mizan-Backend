@@ -84,6 +84,38 @@ If you change those values, recreate the backend:
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --force-recreate backend nginx
 ```
 
+## Dev Seed Data
+
+You can now seed a coherent test dataset (acteurs, auth users, roles/permissions, contractant, appels, watched appels, soumissions, notifications)
+with one command.
+
+Local run:
+
+```bash
+cd backend
+sh scripts/seed_dev_data.sh --flush
+```
+
+Docker run:
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec backend sh -c "cd /app && sh scripts/seed_dev_data.sh --flush"
+```
+
+Optional flags:
+
+- `--with-documents` to also run `seed_documents` (requires MinIO ready)
+- `--soumissions-count 8` to customize soumissions volume
+- `--notifications-count 10` to customize notifications volume
+- `--watched-count 4` to customize watched appels seeded for the contractant user
+- `--legacy-contractant-email ""` to disable legacy contractant compatibility user
+
+Default test credentials created by the seed flow:
+
+- Admin: `a@a.dz` / `admin1234`
+- Contractant (primary): `c@a.dz` / `test1234`
+- Contractant (legacy compatibility): `contractant.demo@almizan.local` / `ContractantPass123!`
+
 ## Current Stack
 
 - `backend`: Django + Gunicorn/Uvicorn
