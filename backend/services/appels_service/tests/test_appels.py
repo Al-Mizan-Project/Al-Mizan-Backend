@@ -1,5 +1,7 @@
 import json
+from django.conf import settings
 from django.test import TestCase, override_settings
+from django.core.cache import cache
 
 from appels_service.models import AchatSimple, AppelOffres, DocumentsAppel
 
@@ -24,9 +26,16 @@ def make_appel(**kwargs):
     return AppelOffres.objects.create(**defaults)
 
 
-@override_settings(CONTRACTANT_SERVICE_URL="", ACTEURS_SERVICE_URL="")
+@override_settings(
+    CONTRACTANT_SERVICE_URL="",
+    ACTEURS_SERVICE_URL="",
+    INTERNAL_SERVICE_TOKEN="test-internal-token",
+)
 class AppelsServiceTestCase(TestCase):
-    pass
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.client.defaults["HTTP_X_INTERNAL_SERVICE_TOKEN"] = settings.INTERNAL_SERVICE_TOKEN
 
 
 # List
@@ -134,7 +143,7 @@ class AppelOffresPrivateVisibilityTest(AppelsServiceTestCase):
             "visibilite": "prive",
         })
         self.assertEqual(response.status_code, 400)
-        self.assertIn("operateurs_invites", response.json())
+        self.assertIn("operateurs_invites", response.json().get("error", {}).get("details", {}))
 
     def test_create_private_with_invited_operators(self):
         response = self._post({
@@ -169,12 +178,13 @@ class AppelOffresPrivateVisibilityTest(AppelsServiceTestCase):
             "operateurs_invites": [11, 12],
         })
         self.assertEqual(response.status_code, 400)
-        self.assertIn("operateurs_invites", response.json())
+        self.assertIn("operateurs_invites", response.json().get("error", {}).get("details", {}))
 
 
 # Retrieve
 class AppelOffresRetrieveTest(AppelsServiceTestCase):
     def setUp(self):
+        super().setUp()
         self.appel = make_appel(reference="AO-RTV-001")
 
     def test_retrieve_existing(self):
@@ -190,6 +200,7 @@ class AppelOffresRetrieveTest(AppelsServiceTestCase):
 # Update
 class AppelOffresUpdateTest(AppelsServiceTestCase):
     def setUp(self):
+        super().setUp()
         self.appel = make_appel(reference="AO-UPD-001")
 
     def test_patch_titre(self):
@@ -302,6 +313,7 @@ class AppelOffresAnnulerTest(AppelsServiceTestCase):
 # Documents
 class AppelOffresDocumentsTest(AppelsServiceTestCase):
     def setUp(self):
+        super().setUp()
         self.appel = make_appel(reference="AO-DOC-001")
 
     def test_list_documents_empty(self):
@@ -358,6 +370,7 @@ class AppelOffresDocumentsTest(AppelsServiceTestCase):
 # Filter by service contractant
 class ServiceContractantAppelsTest(AppelsServiceTestCase):
     def setUp(self):
+        super().setUp()
         make_appel(reference="AO-SVC-001", id_service_contractant=1)
         make_appel(reference="AO-SVC-002", id_service_contractant=1)
         make_appel(reference="AO-SVC-003", id_service_contractant=2)
