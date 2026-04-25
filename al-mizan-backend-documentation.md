@@ -107,7 +107,12 @@
 - `PATCH /organisations/{organisation_id}`
 - `DELETE /organisations/{organisation_id}`
 - `GET /organisations/{organisation_id}/membres`
-- `GET /services-contractants`
+- `GET /acteurs/services-contractants`
+- `POST /acteurs/services-contractants`
+- `GET /acteurs/services-contractants/{service_id}`
+- `PATCH /acteurs/services-contractants/{service_id}`
+- `DELETE /acteurs/services-contractants/{service_id}`
+- `GET /acteurs/services-contractants/{service_id}/membres`
 - `GET /operateurs-economiques`
 - `POST /operateurs-economiques`
 - `GET /operateurs-economiques/{operateur_id}`
@@ -176,6 +181,7 @@
 - `POST /commissions-internes/{commission_interne_id}/membres/{membre_id}`
 - `DELETE /commissions-internes/{commission_interne_id}/membres/{membre_id}`
 - `GET /services-contractants/{service_id}/commissions`
+- `GET /services-contractants`
 - `POST /services-contractants`
 - `GET /services-contractants/{service_id}`
 - `PATCH /services-contractants/{service_id}`
@@ -200,12 +206,20 @@
 - `titre` - varchar(255)
 - `description` - text
 - `type_procedure` - varchar(50)
+- `wilaya` - varchar(80)
 - `montant_estime` - decimal
 - `date_publication` - datetime
 - `date_limite_soumission` - datetime
 - `date_ouverture_plis` - datetime
 - `poids_technique` - int
 - `poids_financier` - int
+- `required_docs_admin` - json
+- `required_docs_tech` - json
+- `required_docs_fin` - json
+- `minimum_revenue_da` - int
+- `qualification_category` - varchar(120)
+- `minimum_experience_years` - int
+- `participation_conditions` - json
 - `statut` - varchar(30)
 - `created_at` - datetime
 - `updated_at` - datetime
@@ -213,6 +227,12 @@
 ### `documents_appel`
 - `id_document` - int, FK
 - `id_appel_offres` - int, FK
+
+### `appels_offres_suivis`
+- `id` - bigint, PK
+- `id_appel_offres` - int, FK
+- `id_utilisateur` - int
+- `created_at` - datetime
 
 ## Endpoints
 - `GET /appels-offres`
@@ -228,6 +248,10 @@
 - `POST /appels-offres/{appel_id}/documents/{document_id}`
 - `DELETE /appels-offres/{appel_id}/documents/{document_id}`
 - `GET /services-contractants/{service_id}/appels-offres`
+- `GET /users/{user_id}/appels-offres/suivis`
+- `GET /users/{user_id}/appels-offres/{appel_id}/suivi`
+- `POST /users/{user_id}/appels-offres/{appel_id}/suivi`
+- `DELETE /users/{user_id}/appels-offres/{appel_id}/suivi`
 
 ---
 
@@ -289,12 +313,12 @@
 - `GET /soumissions/{soumission_id}`
 - `PATCH /soumissions/{soumission_id}`
 - `DELETE /soumissions/{soumission_id}`
-- `POST /soumissions/{soumission_id}/finaliser`
+- `POST /soumissions/{id_appel_offre}/open-bids`
+- `GET /soumissions/{soumission_id}/evaluate`
+- `POST /soumissions/{soumission_id}/evaluate`
 - `POST /soumissions/{soumission_id}/retirer`
-- `POST /soumissions/{soumission_id}/verifier-conformite`
-- `GET /soumissions/{soumission_id}/documents`
-- `POST /soumissions/{soumission_id}/documents/{document_id}`
-- `DELETE /soumissions/{soumission_id}/documents/{document_id}`
+- `POST /soumissions/{soumission_id}/terminer-evaluation`
+- `PATCH /soumissions/{soumission_id}/conformite`
 - `GET /appels-offres/{appel_id}/soumissions`
 - `GET /operateurs-economiques/{operateur_id}/soumissions`
 

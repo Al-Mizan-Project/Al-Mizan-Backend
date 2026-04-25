@@ -1,68 +1,116 @@
 """
 Saucissonnage (Market Splitting) Detection Engine.
+====================================================
 
-"Saucissonnage" is a practice where a service contractant (contracting authority)
-artificially splits a single procurement need into multiple smaller contracts
-to stay below regulatory thresholds that would require more rigorous 
-procurement procedures (e.g., avoiding an open tender by splitting into 
-multiple "gré à gré" or restricted contracts).
+CONTEXTE MÉTIER
+---------------
+Le « saucissonnage » consiste, pour un service contractant, à fractionner
+artificiellement un besoin unique en plusieurs petits marchés afin de rester
+sous les seuils réglementaires qui imposeraient une procédure plus rigoureuse
+(p.ex. éviter un appel d'offres ouvert en émettant 3 consultations).
 
-This is explicitly prohibited by Article 7 of Loi 23-12 which states:
-"Il est interdit de scinder les besoins à l'effet de les soustraire aux 
-procédures... les seuils fixés par voie réglementaire."
+Cette pratique est explicitement interdite par l'**Article 7 de la Loi 23-12** :
 
-Detection algorithms:
-- Temporal clustering: Similar contracts awarded in rapid succession
-- Amount threshold analysis: Multiple contracts just below thresholds
-- Subject similarity: Contracts with similar descriptions from same entity
-- Vendor analysis: Same vendor receiving multiple small contracts
-- Cumulative threshold analysis: Sum of related contracts exceeds thresholds
+    « Il est interdit de scinder les besoins à l'effet de les soustraire
+      aux procédures... aux seuils fixés par voie réglementaire. »
+
+OBJECTIF DU MODULE
+------------------
+Fournir une fonction pure ``detect_saucissonnage(appels, service_contractant_id=None)``
+qui prend une liste d'appels d'offres (sous forme de dicts) et renvoie :
+
+    {
+        "anomalies": [...],   # liste plate d'anomalies détectées
+        "summary":   {...},   # synthèse + score de risque + recommandation
+    }
+
+Le module est **pur Python** (pas de dépendance Django/DRF). Il est appelé
+depuis ``ia_service/views.py`` (endpoints ``/ia/saucissonnage/detecter`` et
+``/ia/saucissonnage/detecter-auto``) et peut aussi être appelé depuis un job
+Celery, un script de batch ou des tests unitaires.
+
+ALGORITHMES IMPLÉMENTÉS (4 signaux indépendants)
+------------------------------------------------
+1. **Proximité de seuil**       — un appel dont le montant est juste sous un
+   seuil (≥ 85 % du seuil applicable selon le type_prestation).
+2. **Clustering temporel**      — plusieurs appels similaires d'un même
+   service contractant publiés dans une fenêtre courte (90 j).
+3. **Cumul dépassant un seuil** — N appels chacun sous le seuil mais dont la
+   somme dépasse le seuil applicable (signal le plus fort = saucissonnage avéré).
+4. **Même fournisseur**         — un même attributaire remporte plusieurs
+   marchés du même service contractant (collusion possible côté demande).
+
+ARCHITECTURE INTERNE
+--------------------
+- Section 1 : constantes (seuils, fenêtres temporelles, ratios).
+- Section 2 : helpers (normalisation texte, parsing montants/dates, similarité).
+- Section 3 : primitive de **clustering déterministe** (union-find) qui
+  regroupe les appels d'un même service contractant ayant le même
+  ``type_prestation`` et un sujet sémantiquement proche, dans une fenêtre
+  d'un an. C'est la base partagée par les détecteurs 2 et 3.
+- Section 4 : les 4 détecteurs (purs : ils prennent des dicts et renvoient
+  des anomalies, sans toucher à la base).
+- Section 5 : orchestrateur, dédoublonnage, génération du résumé et
+  recommandation textuelle.
 """
+from __future__ import annotations
+
 import logging
 import re
 import unicodedata
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Regulatory thresholds from Loi 23-12 (in DZD - Algerian Dinar)
-# These are the thresholds above which specific procedures are mandatory
-# ---------------------------------------------------------------------------
-SEUILS_REGLEMENTAIRES = {
-    # Fournitures & services — Seuil appel d'offres
-    "fournitures_services": Decimal("12_000_000"),
-    # Travaux — Seuil appel d'offres  
-    "travaux": Decimal("25_000_000"),
-    # Consultation simple
-    "consultation_simple_fournitures": Decimal("6_000_000"),
-    "consultation_simple_travaux": Decimal("15_000_000"),
+
+# =============================================================================
+# 1. CONSTANTES
+# =============================================================================
+# Seuils réglementaires de la Loi 23-12 (en DZD).
+# Au-dessus de ces seuils, des procédures plus contraignantes sont imposées,
+# c'est donc PRÉCISÉMENT ces lignes que les fraudeurs essaient de ne pas
+# franchir en saucissonnant.
+SEUILS_APPEL_OFFRES = {
+    "fournitures_services": Decimal("12000000"),
+    "travaux":              Decimal("25000000"),
 }
+SEUILS_CONSULTATION = {
+    "consultation_simple_fournitures": Decimal("6000000"),
+    "consultation_simple_travaux":     Decimal("15000000"),
+}
+# Vue agrégée pour compatibilité ascendante (anciens callers / tests).
+SEUILS_REGLEMENTAIRES: Dict[str, Decimal] = {**SEUILS_APPEL_OFFRES, **SEUILS_CONSULTATION}
 
-# Analysis windows
-TEMPORAL_WINDOW_DAYS = 90         # 3 months window for temporal clustering
-ANNUAL_WINDOW_DAYS = 365          # 1 year for cumulative analysis
-THRESHOLD_PROXIMITY_RATIO = Decimal("0.85")  # Flag if amount > 85% of threshold
-MIN_CONTRACTS_FOR_DETECTION = 2   # Minimum contracts to suspect splitting
+# Fenêtres d'analyse
+TEMPORAL_WINDOW_DAYS = 90    # cluster temporel rapproché (signal #2)
+ANNUAL_WINDOW_DAYS   = 365   # fenêtre annuelle pour le cumul (signal #3)
 
-# Text similarity
-STOP_WORDS_FR = {
+# Seuils de déclenchement
+THRESHOLD_PROXIMITY_RATIO   = Decimal("0.85")  # signal #1 : ≥ 85 % du seuil
+SIMILARITY_THRESHOLD        = 0.30             # Jaccard mini pour clusterer
+MIN_CONTRACTS_FOR_DETECTION = 2                # nb mini d'appels pour cluster
+MIN_VENDOR_REPETITION       = 3                # nb mini pour signal #4
+
+# Mots vides FR + termes trop génériques en marchés publics
+STOP_WORDS_FR: Set[str] = {
     "le", "la", "les", "de", "du", "des", "un", "une", "et", "ou", "en",
     "a", "au", "aux", "ce", "ces", "cette", "pour", "par", "sur", "dans",
     "avec", "son", "sa", "ses", "nos", "vos", "leur", "leurs", "qui", "que",
-    "dont", "est", "sont", "sera", "seront", "été", "être",
+    "dont", "est", "sont", "sera", "seront", "ete", "etre",
+    # bruit du domaine
     "marche", "public", "contrat", "acquisition", "fourniture", "prestation",
+    "lot", "tranche", "phase",
 }
 
 
-# ---------------------------------------------------------------------------
-# Text processing utilities
-# ---------------------------------------------------------------------------
-def _normalize_text(text: str) -> str:
-    """Normalize text for comparison: remove accents, lowercase, strip."""
+# =============================================================================
+# 2. HELPERS
+# =============================================================================
+def _normalize_text(text: Any) -> str:
+    """Minuscules + suppression accents + suppression ponctuation."""
     text = unicodedata.normalize("NFKD", str(text or ""))
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
     text = text.lower()
@@ -70,68 +118,206 @@ def _normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _extract_keywords(text: str) -> Set[str]:
-    """Extract meaningful keywords from text, ignoring stop words."""
-    normalized = _normalize_text(text)
-    words = normalized.split()
-    return {w for w in words if len(w) > 2 and w not in STOP_WORDS_FR}
+def _extract_keywords(text: Any) -> Set[str]:
+    """Tokens significatifs (>2 lettres, hors stop-words)."""
+    return {
+        w for w in _normalize_text(text).split()
+        if len(w) > 2 and w not in STOP_WORDS_FR
+    }
 
 
-def _jaccard_similarity(set_a: Set[str], set_b: Set[str]) -> float:
-    """Calculate Jaccard similarity between two sets."""
-    if not set_a and not set_b:
+def _jaccard_similarity(a: Set[str], b: Set[str]) -> float:
+    if not a or not b:
         return 0.0
-    intersection = len(set_a & set_b)
-    union = len(set_a | set_b)
-    return intersection / union if union > 0 else 0.0
+    inter = len(a & b)
+    union = len(a | b)
+    return inter / union if union else 0.0
 
 
-def _safe_decimal(value) -> Optional[Decimal]:
-    """Safely convert a value to Decimal."""
+def _safe_decimal(value: Any) -> Optional[Decimal]:
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
         return None
 
 
-def _parse_date(value) -> Optional[datetime]:
-    """Parse a date from string or datetime."""
+def _parse_date(value: Any) -> Optional[datetime]:
     if isinstance(value, datetime):
         return value
     if not value:
         return None
+    raw = str(value)[:19]
     for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y"):
         try:
-            return datetime.strptime(str(value)[:19], fmt)
+            return datetime.strptime(raw, fmt)
         except (ValueError, TypeError):
             continue
     return None
 
 
-# ---------------------------------------------------------------------------
-# Detection algorithms
-# ---------------------------------------------------------------------------
+def _appel_id(appel: Dict) -> Any:
+    """Tolère les deux conventions de nommage de la PK."""
+    return appel.get("id_appel_offre") or appel.get("id_appel_offres")
+
+
+def _normalized_type_prestation(appel: Dict) -> str:
+    """Renvoie 'travaux' | 'fournitures_services' | 'inconnu'."""
+    tp = str(appel.get("type_prestation", "")).strip().lower()
+    if tp == "travaux":
+        return "travaux"
+    if tp in {"fournitures", "services", "etudes"}:
+        return "fournitures_services"
+    return "inconnu"
+
+
+def _threshold_for_appel(appel: Dict) -> List[Tuple[str, Decimal]]:
+    """
+    Renvoie la liste des seuils applicables à *cet* appel.
+    Si le ``type_prestation`` est connu, on ne renvoie QUE les seuils pertinents
+    (évite les faux positifs où un appel travaux serait comparé au seuil
+    fournitures). En fallback (type inconnu), on renvoie tous les seuils
+    pour préserver l'ancien comportement.
+    """
+    kind = _normalized_type_prestation(appel)
+    if kind == "travaux":
+        return [
+            ("consultation_simple_travaux", SEUILS_CONSULTATION["consultation_simple_travaux"]),
+            ("travaux",                     SEUILS_APPEL_OFFRES["travaux"]),
+        ]
+    if kind == "fournitures_services":
+        return [
+            ("consultation_simple_fournitures", SEUILS_CONSULTATION["consultation_simple_fournitures"]),
+            ("fournitures_services",            SEUILS_APPEL_OFFRES["fournitures_services"]),
+        ]
+    return list(SEUILS_REGLEMENTAIRES.items())
+
+
+# =============================================================================
+# 3. CLUSTERING DÉTERMINISTE (Union-Find)
+# =============================================================================
+# Un « cluster » = ensemble d'appels d'un même service contractant qui
+# partagent (a) le même type_prestation, (b) un sujet sémantiquement proche
+# (Jaccard >= SIMILARITY_THRESHOLD), (c) une fenêtre temporelle d'un an.
+#
+# Pourquoi union-find plutôt que first-fit ?
+#   - First-fit dépend de l'ordre d'itération et "absorbe" des appels en
+#     élargissant continuellement le set de mots-clés (drift).
+#   - Union-find sur un graphe d'arêtes (similarity >= seuil) donne des
+#     composantes connexes stables et explicables.
+# -----------------------------------------------------------------------------
+
+class _UnionFind:
+    """Petit DSU pour grouper des indices d'appels."""
+
+    def __init__(self, size: int) -> None:
+        self.parent = list(range(size))
+
+    def find(self, x: int) -> int:
+        while self.parent[x] != x:
+            self.parent[x] = self.parent[self.parent[x]]
+            x = self.parent[x]
+        return x
+
+    def union(self, a: int, b: int) -> None:
+        ra, rb = self.find(a), self.find(b)
+        if ra != rb:
+            self.parent[rb] = ra
+
+
+def _cluster_similar_appels(
+    appels: List[Dict],
+    *,
+    window_days: int = ANNUAL_WINDOW_DAYS,
+    similarity_threshold: float = SIMILARITY_THRESHOLD,
+) -> List[List[Dict]]:
+    """
+    Regroupe ``appels`` en composantes connexes selon le critère décrit ci-dessus.
+
+    On ne crée une arête entre deux appels (i, j) que si :
+      * même ``id_service_contractant``
+      * même ``type_prestation`` normalisé (ou les deux 'inconnu')
+      * écart de dates <= ``window_days`` (si les deux dates sont disponibles)
+      * Jaccard(mots-clés_i, mots-clés_j) >= ``similarity_threshold``
+
+    Renvoie la liste des clusters de taille >= MIN_CONTRACTS_FOR_DETECTION.
+    """
+    n = len(appels)
+    if n < MIN_CONTRACTS_FOR_DETECTION:
+        return []
+
+    # Pré-calculs
+    keywords:  List[Set[str]]            = []
+    services:  List[Optional[int]]       = []
+    types:     List[str]                 = []
+    dates:     List[Optional[datetime]]  = []
+    for a in appels:
+        keywords.append(_extract_keywords(f"{a.get('titre', '')} {a.get('description', '')}"))
+        sid = a.get("id_service_contractant")
+        services.append(int(sid) if sid is not None else None)
+        types.append(_normalized_type_prestation(a))
+        dates.append(_parse_date(a.get("date_publication")))
+
+    uf = _UnionFind(n)
+    for i in range(n):
+        if services[i] is None or not keywords[i]:
+            continue
+        for j in range(i + 1, n):
+            if services[j] != services[i]:
+                continue
+            if types[i] != types[j]:
+                continue
+            if dates[i] and dates[j]:
+                if abs((dates[i] - dates[j]).days) > window_days:
+                    continue
+            sim = _jaccard_similarity(keywords[i], keywords[j])
+            if sim >= similarity_threshold:
+                uf.union(i, j)
+
+    # Reconstruire les clusters
+    buckets: Dict[int, List[int]] = defaultdict(list)
+    for i in range(n):
+        if services[i] is None or not keywords[i]:
+            continue
+        buckets[uf.find(i)].append(i)
+
+    return [
+        [appels[i] for i in idx_list]
+        for idx_list in buckets.values()
+        if len(idx_list) >= MIN_CONTRACTS_FOR_DETECTION
+    ]
+
+
+# =============================================================================
+# 4. DÉTECTEURS
+# =============================================================================
+# Chaque détecteur est une fonction PURE (List[Dict] -> List[Dict]).
+# Aucun ne touche à la base de données ; ils renvoient juste des anomalies
+# que l'orchestrateur dédoublonne et que la vue persiste.
+# -----------------------------------------------------------------------------
+
 def _detect_threshold_proximity(appels: List[Dict]) -> List[Dict]:
     """
-    Detect contracts whose amounts are suspiciously close to regulatory 
-    thresholds — a sign that the amount was deliberately kept below 
-    the threshold to avoid stricter procurement procedures.
+    Signal #1 — Un appel dont le montant estimé est anormalement proche d'un
+    seuil applicable (entre 85 % et 100 % du seuil). C'est l'indice qu'on a
+    « rogné » le besoin pour rester sous le seuil.
     """
-    anomalies = []
-
+    anomalies: List[Dict] = []
     for appel in appels:
         montant = _safe_decimal(appel.get("montant_estime"))
         if montant is None or montant <= 0:
             continue
 
         type_procedure = str(appel.get("type_procedure", "")).lower()
-        id_appel = appel.get("id_appel_offre") or appel.get("id_appel_offres")
+        type_prestation = str(appel.get("type_prestation", "")).lower()
+        visibilite     = str(appel.get("visibilite", "")).lower()
+        localisation   = appel.get("localisation") or appel.get("wilaya") or "non renseignee"
+        aid            = _appel_id(appel)
 
-        for threshold_name, threshold_value in SEUILS_REGLEMENTAIRES.items():
+        for threshold_name, threshold_value in _threshold_for_appel(appel):
             ratio = montant / threshold_value
             if THRESHOLD_PROXIMITY_RATIO <= ratio < Decimal("1.0"):
                 anomalies.append({
-                    "id_appel_offre": id_appel,
+                    "id_appel_offre": aid,
                     "type_anomalie": "SAUCISSONNAGE_PROXIMITE_SEUIL",
                     "niveau_severite": "MOYEN",
                     "score_confiance": Decimal("0.70"),
@@ -140,222 +326,156 @@ def _detect_threshold_proximity(appels: List[Dict]) -> List[Dict]:
                         f"du seuil réglementaire '{threshold_name}' "
                         f"({threshold_value:,.2f} DA). Ratio: {ratio * 100:.1f}%. "
                         f"Procédure utilisée: '{type_procedure}'. "
+                        f"Type prestation: '{type_prestation or 'inconnu'}'. "
+                        f"Visibilité: '{visibilite or 'inconnue'}'. "
+                        f"Localisation: '{localisation}'. "
                         f"Vérifier que le besoin n'a pas été artificiellement réduit."
                     ),
                 })
+                # Ne pas re-flagger le même appel pour les autres seuils du
+                # même type ; seul le plus pertinent suffit.
+                break
 
     return anomalies
 
 
-def _detect_temporal_clustering(appels: List[Dict], window_days: int = TEMPORAL_WINDOW_DAYS) -> List[Dict]:
+def _detect_temporal_clustering(appels: List[Dict]) -> List[Dict]:
     """
-    Detect contracts from the same service contractant that are 
-    published within a short time window and have similar subjects.
+    Signal #2 — Plusieurs appels similaires d'un même service contractant
+    publiés en moins de ``TEMPORAL_WINDOW_DAYS`` jours.
+
+    On part des clusters annuels puis on filtre ceux dont la fenêtre
+    temporelle (max - min) tient dans ``TEMPORAL_WINDOW_DAYS``. Une seule
+    anomalie est produite par appel impliqué (pas une par paire).
     """
-    anomalies = []
+    anomalies: List[Dict] = []
+    clusters = _cluster_similar_appels(appels)
 
-    # Group by service contractant
-    by_service: Dict[int, List[Dict]] = defaultdict(list)
-    for appel in appels:
-        service_id = appel.get("id_service_contractant")
-        if service_id is not None:
-            by_service[int(service_id)].append(appel)
-
-    for service_id, service_appels in by_service.items():
-        if len(service_appels) < MIN_CONTRACTS_FOR_DETECTION:
+    for cluster in clusters:
+        dated = [(_parse_date(a.get("date_publication")), a) for a in cluster]
+        dated = [(d, a) for d, a in dated if d is not None]
+        if len(dated) < MIN_CONTRACTS_FOR_DETECTION:
+            continue
+        span = (max(d for d, _ in dated) - min(d for d, _ in dated)).days
+        if span > TEMPORAL_WINDOW_DAYS:
             continue
 
-        # Sort by publication date
-        dated_appels = []
-        for appel in service_appels:
-            date = _parse_date(appel.get("date_publication"))
-            if date:
-                dated_appels.append((date, appel))
-        dated_appels.sort(key=lambda x: x[0])
+        service_id   = cluster[0].get("id_service_contractant")
+        cluster_ids  = [_appel_id(a) for a in cluster]
+        total_montant = sum(
+            (_safe_decimal(a.get("montant_estime")) or Decimal("0")) for a in cluster
+        )
 
-        # Sliding window analysis
-        for i, (date_i, appel_i) in enumerate(dated_appels):
-            cluster = [(date_i, appel_i)]
-            keywords_i = _extract_keywords(
-                f"{appel_i.get('titre', '')} {appel_i.get('description', '')}"
-            )
-
-            for j in range(i + 1, len(dated_appels)):
-                date_j, appel_j = dated_appels[j]
-                if (date_j - date_i).days > window_days:
-                    break
-
-                keywords_j = _extract_keywords(
-                    f"{appel_j.get('titre', '')} {appel_j.get('description', '')}"
-                )
-                similarity = _jaccard_similarity(keywords_i, keywords_j)
-
-                if similarity > 0.3:  # 30% keyword overlap
-                    cluster.append((date_j, appel_j))
-
-            if len(cluster) >= MIN_CONTRACTS_FOR_DETECTION:
-                cluster_ids = [
-                    a.get("id_appel_offre") or a.get("id_appel_offres")
-                    for _, a in cluster
-                ]
-                total_montant = sum(
-                    _safe_decimal(a.get("montant_estime")) or Decimal("0")
-                    for _, a in cluster
-                )
-
-                for _, appel in cluster:
-                    aid = appel.get("id_appel_offre") or appel.get("id_appel_offres")
-                    anomalies.append({
-                        "id_appel_offre": aid,
-                        "type_anomalie": "SAUCISSONNAGE_TEMPOREL",
-                        "niveau_severite": "ELEVEE",
-                        "score_confiance": Decimal("0.85"),
-                        "details": (
-                            f"Cluster temporel détecté: {len(cluster)} appels d'offres "
-                            f"similaires du même service contractant (#{service_id}) "
-                            f"publiés en moins de {window_days} jours. "
-                            f"Montant cumulé: {total_montant:,.2f} DA. "
-                            f"Appels concernés: {cluster_ids}."
-                        ),
-                        "appels_impliques": cluster_ids,
-                    })
+        for appel in cluster:
+            anomalies.append({
+                "id_appel_offre": _appel_id(appel),
+                "type_anomalie": "SAUCISSONNAGE_TEMPOREL",
+                "niveau_severite": "ELEVEE",
+                "score_confiance": Decimal("0.85"),
+                "details": (
+                    f"Cluster temporel détecté: {len(cluster)} appels d'offres "
+                    f"similaires du service contractant #{service_id} "
+                    f"publiés sur {span} jours (≤ {TEMPORAL_WINDOW_DAYS}). "
+                    f"Montant cumulé: {total_montant:,.2f} DA. "
+                    f"Appels concernés: {cluster_ids}."
+                ),
+                "appels_impliques": cluster_ids,
+            })
 
     return anomalies
 
 
 def _detect_cumulative_threshold_breach(appels: List[Dict]) -> List[Dict]:
     """
-    Detect when multiple smaller contracts from the same service contractant,
-    with similar subjects, cumulatively exceed a regulatory threshold.
-    This is the core saucissonnage pattern.
+    Signal #3 — **Cœur du saucissonnage**.
+
+    Pour chaque cluster annuel d'appels similaires d'un même service
+    contractant et de même ``type_prestation`` :
+      * si chaque montant individuel est sous un seuil applicable
+      * et que la somme des montants dépasse ce même seuil
+    => violation probable de l'Article 7 de la Loi 23-12.
     """
-    anomalies = []
+    anomalies: List[Dict] = []
+    clusters = _cluster_similar_appels(appels)
 
-    # Group by service contractant
-    by_service: Dict[int, List[Dict]] = defaultdict(list)
-    for appel in appels:
-        service_id = appel.get("id_service_contractant")
-        if service_id is not None:
-            by_service[int(service_id)].append(appel)
-
-    for service_id, service_appels in by_service.items():
-        if len(service_appels) < MIN_CONTRACTS_FOR_DETECTION:
+    for cluster in clusters:
+        montants = [m for m in (_safe_decimal(a.get("montant_estime")) for a in cluster) if m]
+        if len(montants) < MIN_CONTRACTS_FOR_DETECTION:
             continue
 
-        # Group similar appels by semantic keyword overlap instead of strict exact signature.
-        # This catches "lot 1/2/3" naming variants that share the same procurement subject.
-        clusters: List[Dict[str, Any]] = []
-        for appel in service_appels:
-            keywords = _extract_keywords(
-                f"{appel.get('titre', '')} {appel.get('description', '')}"
-            )
-            placed = False
-            for cluster in clusters:
-                similarity = _jaccard_similarity(keywords, cluster["keywords"])
-                if similarity >= 0.3:
-                    cluster["appels"].append(appel)
-                    cluster["keywords"] = cluster["keywords"] | keywords
-                    placed = True
-                    break
+        total = sum(montants, Decimal("0"))
+        # Tous les appels du cluster ont le même type_prestation grâce à
+        # _cluster_similar_appels, donc on peut se baser sur le premier.
+        applicable_thresholds = _threshold_for_appel(cluster[0])
 
-            if not placed:
-                clusters.append({"keywords": keywords, "appels": [appel]})
-
-        subject_groups: Dict[str, List[Dict]] = {
-            f"cluster_{idx}": cluster["appels"]
-            for idx, cluster in enumerate(clusters)
-        }
-
-        for subject_key, group in subject_groups.items():
-            if len(group) < MIN_CONTRACTS_FOR_DETECTION:
+        for threshold_name, threshold_value in applicable_thresholds:
+            all_below       = all(m < threshold_value for m in montants)
+            cumulative_over = total >= threshold_value
+            if not (all_below and cumulative_over):
                 continue
 
-            total_montant = Decimal("0")
-            individual_montants = []
-            for appel in group:
-                m = _safe_decimal(appel.get("montant_estime"))
-                if m:
-                    total_montant += m
-                    individual_montants.append(m)
-
-            if not individual_montants:
-                continue
-
-            # Check if each individual amount is below a threshold
-            # but the cumulative total exceeds it
-            for threshold_name, threshold_value in SEUILS_REGLEMENTAIRES.items():
-                all_below = all(m < threshold_value for m in individual_montants)
-                cumulative_above = total_montant >= threshold_value
-
-                if all_below and cumulative_above:
-                    group_ids = [
-                        a.get("id_appel_offre") or a.get("id_appel_offres")
-                        for a in group
-                    ]
-                    for appel in group:
-                        aid = appel.get("id_appel_offre") or appel.get("id_appel_offres")
-                        anomalies.append({
-                            "id_appel_offre": aid,
-                            "type_anomalie": "SAUCISSONNAGE_CUMUL_SEUIL",
-                            "niveau_severite": "CRITIQUE",
-                            "score_confiance": Decimal("0.95"),
-                            "details": (
-                                f"SAUCISSONNAGE DÉTECTÉ: {len(group)} marchés similaires "
-                                f"du service contractant #{service_id} sont chacun en "
-                                f"dessous du seuil '{threshold_name}' "
-                                f"({threshold_value:,.2f} DA), mais leur montant cumulé "
-                                f"({total_montant:,.2f} DA) dépasse ce seuil. "
-                                f"Montants individuels: "
-                                f"{[f'{m:,.2f}' for m in individual_montants]}. "
-                                f"Violation probable de l'Article 7 de la Loi 23-12."
-                            ),
-                            "appels_impliques": group_ids,
-                        })
+            service_id  = cluster[0].get("id_service_contractant")
+            cluster_ids = [_appel_id(a) for a in cluster]
+            for appel in cluster:
+                anomalies.append({
+                    "id_appel_offre": _appel_id(appel),
+                    "type_anomalie": "SAUCISSONNAGE_CUMUL_SEUIL",
+                    "niveau_severite": "CRITIQUE",
+                    "score_confiance": Decimal("0.95"),
+                    "details": (
+                        f"SAUCISSONNAGE DÉTECTÉ: {len(cluster)} marchés similaires "
+                        f"du service contractant #{service_id} sont chacun en "
+                        f"dessous du seuil '{threshold_name}' "
+                        f"({threshold_value:,.2f} DA), mais leur montant cumulé "
+                        f"({total:,.2f} DA) dépasse ce seuil. "
+                        f"Montants individuels: "
+                        f"{[f'{m:,.2f}' for m in montants]}. "
+                        f"Violation probable de l'Article 7 de la Loi 23-12."
+                    ),
+                    "appels_impliques": cluster_ids,
+                })
+            # Une seule anomalie par cluster, sur le seuil le plus bas qui matche.
+            break
 
     return anomalies
 
 
 def _detect_same_vendor_splitting(appels: List[Dict]) -> List[Dict]:
     """
-    Detect when the same vendor wins multiple small contracts from 
-    the same service contractant — possible coordinated splitting.
-    
-    Requires 'id_attributaire' (winning vendor) in appel data.
+    Signal #4 — Le même opérateur économique remporte plusieurs marchés du
+    même service contractant. Suppose que l'attributaire est connu via le
+    champ ``id_attributaire`` (souvent fourni en post-attribution).
     """
-    anomalies = []
-
-    # Group by (service_contractant, attributaire)
+    anomalies: List[Dict] = []
     by_pair: Dict[Tuple[int, int], List[Dict]] = defaultdict(list)
     for appel in appels:
-        service_id = appel.get("id_service_contractant")
-        vendor_id = appel.get("id_attributaire")
-        if service_id is not None and vendor_id is not None:
-            by_pair[(int(service_id), int(vendor_id))].append(appel)
-
-    for (service_id, vendor_id), vendor_appels in by_pair.items():
-        if len(vendor_appels) < MIN_CONTRACTS_FOR_DETECTION + 1:
+        sid = appel.get("id_service_contractant")
+        vid = appel.get("id_attributaire")
+        if sid is None or vid is None:
+            continue
+        try:
+            by_pair[(int(sid), int(vid))].append(appel)
+        except (TypeError, ValueError):
             continue
 
-        total_montant = sum(
-            _safe_decimal(a.get("montant_estime")) or Decimal("0")
+    for (service_id, vendor_id), vendor_appels in by_pair.items():
+        if len(vendor_appels) < MIN_VENDOR_REPETITION:
+            continue
+        total = sum(
+            (_safe_decimal(a.get("montant_estime")) or Decimal("0"))
             for a in vendor_appels
         )
-        group_ids = [
-            a.get("id_appel_offre") or a.get("id_appel_offres")
-            for a in vendor_appels
-        ]
-
+        group_ids = [_appel_id(a) for a in vendor_appels]
         for appel in vendor_appels:
-            aid = appel.get("id_appel_offre") or appel.get("id_appel_offres")
             anomalies.append({
-                "id_appel_offre": aid,
+                "id_appel_offre": _appel_id(appel),
                 "type_anomalie": "SAUCISSONNAGE_MEME_FOURNISSEUR",
                 "niveau_severite": "ELEVEE",
                 "score_confiance": Decimal("0.80"),
                 "details": (
                     f"L'opérateur économique #{vendor_id} a obtenu "
                     f"{len(vendor_appels)} marchés du même service contractant "
-                    f"(#{service_id}). Montant cumulé: {total_montant:,.2f} DA. "
+                    f"(#{service_id}). Montant cumulé: {total:,.2f} DA. "
                     f"Appels concernés: {group_ids}."
                 ),
                 "appels_impliques": group_ids,
@@ -364,37 +484,36 @@ def _detect_same_vendor_splitting(appels: List[Dict]) -> List[Dict]:
     return anomalies
 
 
-# ---------------------------------------------------------------------------
-# Main saucissonnage detection orchestrator
-# ---------------------------------------------------------------------------
+# =============================================================================
+# 5. ORCHESTRATEUR + RÉSUMÉ
+# =============================================================================
 def detect_saucissonnage(
     appels: List[Dict],
     service_contractant_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    Main entry point for saucissonnage detection.
-    
-    Parameters:
-    -----------
-    appels : list of dict
-        List of appels d'offres to analyze. Each should contain:
-        - id_appel_offre / id_appel_offres: int
-        - id_service_contractant: int
-        - titre: str
-        - description: str (optional)
-        - montant_estime: Decimal/str
-        - date_publication: str/datetime
-        - type_procedure: str
-        - id_attributaire: int (optional, for vendor analysis)
-    
+    Point d'entrée principal du module.
+
+    Parameters
+    ----------
+    appels : list[dict]
+        Liste d'appels d'offres. Chaque dict peut contenir :
+          - id_appel_offre / id_appel_offres
+          - id_service_contractant
+          - titre, description
+          - montant_estime (Decimal/str)
+          - date_publication (datetime/str)
+          - type_procedure, type_prestation
+          - visibilite, wilaya/localisation
+          - id_attributaire (optionnel, signal #4)
+
     service_contractant_id : int, optional
-        If provided, only analyze appels from this specific service.
-    
-    Returns:
-    --------
-    dict with:
-        - anomalies: list of detected anomalies
-        - summary: analysis summary
+        Si fourni, n'analyse que les appels de ce service.
+
+    Returns
+    -------
+    dict
+        ``{"anomalies": [...], "summary": {...}}``
     """
     if service_contractant_id is not None:
         appels = [
@@ -408,84 +527,84 @@ def detect_saucissonnage(
             "summary": {
                 "total_anomalies": 0,
                 "appels_analyses": 0,
+                "appels_affectes": 0,
+                "repartition_par_type": {},
+                "repartition_par_severite": {},
                 "score_risque_saucissonnage": 0,
                 "niveau_risque": "AUCUN",
+                "recommandation": _get_saucissonnage_recommendation("AUCUN"),
             },
         }
 
     all_anomalies: List[Dict] = []
-
-    # 1. Threshold proximity analysis
     all_anomalies.extend(_detect_threshold_proximity(appels))
-
-    # 2. Temporal clustering analysis
     all_anomalies.extend(_detect_temporal_clustering(appels))
-
-    # 3. Cumulative threshold breach (core saucissonnage)
     all_anomalies.extend(_detect_cumulative_threshold_breach(appels))
-
-    # 4. Same vendor splitting
     all_anomalies.extend(_detect_same_vendor_splitting(appels))
 
-    # Deduplicate
     all_anomalies = _deduplicate_saucissonnage_anomalies(all_anomalies)
-
-    # Generate summary
     summary = _generate_saucissonnage_summary(all_anomalies, len(appels))
 
     logger.info(
-        "Saucissonnage analysis completed: %d anomalies across %d appels",
-        len(all_anomalies),
-        len(appels),
+        "Saucissonnage analysis completed: %d anomalies across %d appels (risk=%s)",
+        len(all_anomalies), len(appels), summary["niveau_risque"],
     )
-
-    return {
-        "anomalies": all_anomalies,
-        "summary": summary,
-    }
+    return {"anomalies": all_anomalies, "summary": summary}
 
 
-def _deduplicate_saucissonnage_anomalies(anomalies: List[Dict]) -> List[Dict]:
-    """Remove duplicate anomalies."""
+def _deduplicate_saucissonnage_anomalies(anomalies: Iterable[Dict]) -> List[Dict]:
+    """Garde la meilleure (score le plus élevé) anomalie par (appel, type)."""
     seen: Dict[Tuple, Dict] = {}
     for anomaly in anomalies:
         key = (anomaly.get("id_appel_offre"), anomaly["type_anomalie"])
         existing = seen.get(key)
-        if existing is None:
-            seen[key] = anomaly
-        elif anomaly["score_confiance"] > existing["score_confiance"]:
+        if existing is None or anomaly["score_confiance"] > existing["score_confiance"]:
             seen[key] = anomaly
     return list(seen.values())
 
 
-def _generate_saucissonnage_summary(anomalies: List[Dict], appels_count: int) -> Dict[str, Any]:
-    """Generate a summary report for saucissonnage analysis."""
+# Pondération de gravité utilisée pour le score de risque global.
+_SEVERITY_WEIGHTS = {"CRITIQUE": 4, "ELEVEE": 3, "MOYEN": 2, "FAIBLE": 1}
+
+
+def _generate_saucissonnage_summary(
+    anomalies: List[Dict],
+    appels_count: int,
+) -> Dict[str, Any]:
+    """
+    Construit la synthèse + le score de risque (0-100).
+
+    Le score est calculé sur la base de la pire anomalie par appel :
+        score = (somme des poids max par appel) / (appels_count * poids_max) * 100
+    Ce calcul reflète mieux la réalité (un même appel peut être touché par
+    plusieurs détecteurs, mais on ne le compte qu'une fois au pire niveau).
+    """
     by_type: Dict[str, int] = defaultdict(int)
     by_severity: Dict[str, int] = defaultdict(int)
-    affected_appels: set = set()
+    worst_per_appel: Dict[Any, int] = {}
 
     for a in anomalies:
         by_type[a["type_anomalie"]] += 1
         by_severity[a["niveau_severite"]] += 1
-        if a.get("id_appel_offre"):
-            affected_appels.add(a["id_appel_offre"])
+        aid = a.get("id_appel_offre")
+        weight = _SEVERITY_WEIGHTS.get(a["niveau_severite"], 1)
+        if aid is not None and weight > worst_per_appel.get(aid, 0):
+            worst_per_appel[aid] = weight
 
-    # Critical risk if cumulative threshold breach detected
-    has_cumul = by_type.get("SAUCISSONNAGE_CUMUL_SEUIL", 0) > 0
+    affected_appels = set(worst_per_appel.keys())
+    has_cumul    = by_type.get("SAUCISSONNAGE_CUMUL_SEUIL", 0) > 0
     has_temporal = by_type.get("SAUCISSONNAGE_TEMPOREL", 0) > 0
 
-    severity_weights = {"CRITIQUE": 4, "ELEVEE": 3, "MOYEN": 2, "FAIBLE": 1}
-    weighted_score = sum(
-        severity_weights.get(a["niveau_severite"], 1) * float(a["score_confiance"])
-        for a in anomalies
-    )
-    max_possible = appels_count * 4 * 1.0 if appels_count > 0 else 1
-    risk_score = min(100, int((weighted_score / max_possible) * 100))
+    if appels_count > 0:
+        max_possible = appels_count * max(_SEVERITY_WEIGHTS.values())
+        risk_score = int(sum(worst_per_appel.values()) / max_possible * 100)
+    else:
+        risk_score = 0
 
     if has_cumul:
         risk_level = "CRITIQUE"
         risk_score = max(risk_score, 80)
-    elif has_temporal and len(anomalies) > 3:
+    elif has_temporal and len(affected_appels) > 3:
         risk_level = "ELEVE"
         risk_score = max(risk_score, 50)
     elif risk_score >= 40:
@@ -503,14 +622,14 @@ def _generate_saucissonnage_summary(anomalies: List[Dict], appels_count: int) ->
         "appels_affectes": len(affected_appels),
         "repartition_par_type": dict(by_type),
         "repartition_par_severite": dict(by_severity),
-        "score_risque_saucissonnage": risk_score,
+        "score_risque_saucissonnage": min(100, risk_score),
         "niveau_risque": risk_level,
         "recommandation": _get_saucissonnage_recommendation(risk_level),
     }
 
 
 def _get_saucissonnage_recommendation(risk_level: str) -> str:
-    """Return actionable recommendation for saucissonnage risk."""
+    """Recommandation actionnable selon le niveau de risque."""
     recommendations = {
         "CRITIQUE": (
             "ALERTE CRITIQUE - SAUCISSONNAGE PROBABLE: Des marchés ont été "

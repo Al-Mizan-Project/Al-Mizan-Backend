@@ -1,9 +1,16 @@
-from django.core.management.base import BaseCommand
-from documents_service.models import Document
-from soumissions_app.models import Soumission, SoumissionStatut
+from decimal import Decimal
 import json
 
-TEST_SOUMISSIONNAIRE_ID = 1
+from django.core.management.base import BaseCommand, CommandError
+
+from appels_service.models import AppelOffres
+from auth_service.models import Role, Utilisateur
+from documents_service.models import Document
+from soumissions_app.models import Soumission, SoumissionStatut
+
+
+DEFAULT_SEED_EMAIL = "c@a.dz"
+DEFAULT_SEED_PASSWORD = "test1234"
 
 
 def _rapport_soumis():
@@ -12,42 +19,23 @@ def _rapport_soumis():
 
 def _rapport_en_ouverture():
     return json.dumps({
-        "accuse": {
-            "date": "2026-03-22 10:15",
-            "numero": "ACC-2026-0201",
-        },
+        "accuse": {"date": "2026-03-22 10:15", "numero": "ACC-2026-0201"},
     })
 
 
 def _rapport_en_evaluation():
     return json.dumps({
-        "accuse": {
-            "date": "2026-02-15 09:00",
-            "numero": "ACC-2026-0101",
-        },
-        "ouverture": {
-            "date": "2026-03-10 14:00",
-            "nb_offres": 8,
-        },
-        "evaluation": {
-            "date_debut": "2026-03-12",
-        },
+        "accuse": {"date": "2026-02-15 09:00", "numero": "ACC-2026-0101"},
+        "ouverture": {"date": "2026-03-10 14:00", "nb_offres": 8},
+        "evaluation": {"date_debut": "2026-03-12"},
     })
 
 
 def _rapport_attribue():
     return json.dumps({
-        "accuse": {
-            "date": "2026-01-20 08:30",
-            "numero": "ACC-2026-0301",
-        },
-        "ouverture": {
-            "date": "2026-02-15 10:00",
-            "nb_offres": 6,
-        },
-        "evaluation": {
-            "date_debut": "2026-02-18",
-        },
+        "accuse": {"date": "2026-01-20 08:30", "numero": "ACC-2026-0301"},
+        "ouverture": {"date": "2026-02-15 10:00", "nb_offres": 6},
+        "evaluation": {"date_debut": "2026-02-18"},
         "resultat": {
             "score_technique": 52,
             "max_technique": 60,
@@ -56,25 +44,17 @@ def _rapport_attribue():
             "rang": 1,
             "nb_offres": 6,
             "fin_recours": "2026-05-20",
-            "attribution_date": "Après le 2026-05-20",
-            "contact_service": "Direction de l'éducation — Alger",
+            "attribution_date": "Apres le 2026-05-20",
+            "contact_service": "Direction de l'education - Alger",
         },
     })
 
 
 def _rapport_non_retenu():
     return json.dumps({
-        "accuse": {
-            "date": "2026-01-18 11:00",
-            "numero": "ACC-2026-0401",
-        },
-        "ouverture": {
-            "date": "2026-02-10 09:30",
-            "nb_offres": 5,
-        },
-        "evaluation": {
-            "date_debut": "2026-02-12",
-        },
+        "accuse": {"date": "2026-01-18 11:00", "numero": "ACC-2026-0401"},
+        "ouverture": {"date": "2026-02-10 09:30", "nb_offres": 5},
+        "evaluation": {"date_debut": "2026-02-12"},
         "resultat": {
             "score_technique": 38,
             "max_technique": 60,
@@ -82,7 +62,10 @@ def _rapport_non_retenu():
             "max_financier": 40,
             "rang": 3,
             "nb_offres": 5,
-            "motif_rejet": "Offre technique insuffisante — capacités références non conformes au cahier des charges",
+            "motif_rejet": (
+                "Offre technique insuffisante - references non conformes au "
+                "cahier des charges"
+            ),
             "expire_recours": "2026-05-10",
             "jours_restants": 7,
         },
@@ -91,91 +74,163 @@ def _rapport_non_retenu():
 
 def _rapport_infructueux():
     return json.dumps({
-        "accuse": {
-            "date": "2026-02-01 09:00",
-            "numero": "ACC-2026-0501",
-        },
-        "ouverture": {
-            "date": "2026-03-01 14:30",
-            "nb_offres": 3,
-        },
-        "evaluation": {
-            "date_debut": "2026-03-05",
-        },
+        "accuse": {"date": "2026-02-01 09:00", "numero": "ACC-2026-0501"},
+        "ouverture": {"date": "2026-03-01 14:30", "nb_offres": 3},
+        "evaluation": {"date_debut": "2026-03-05"},
         "resultat": {
-            "motif": "Aucune offre conforme reçue — les trois soumissions présentaient "
-                     "des non-conformités substantielles au cahier des charges",
+            "motif": (
+                "Aucune offre conforme recue - les soumissions presentaient "
+                "des non-conformites substantielles"
+            ),
         },
     })
 
 
 def _rapport_evalu_terminee():
     return json.dumps({
-        "accuse": {
-            "date": "2026-01-10 08:45",
-            "numero": "ACC-2026-0601",
-        },
-        "ouverture": {
-            "date": "2026-02-05 10:00",
-            "nb_offres": 7,
-        },
-        "evaluation": {
-            "date_debut": "2026-02-08",
-        },
+        "accuse": {"date": "2026-01-10 08:45", "numero": "ACC-2026-0601"},
+        "ouverture": {"date": "2026-02-05 10:00", "nb_offres": 7},
+        "evaluation": {"date_debut": "2026-02-08"},
     })
 
 
-AO_METADATA = {
-    1: ("AO-2026-001", "Construction d'un complexe scolaire — Alger"),
-    2: ("AO-2026-002", "Réhabilitation de la route nationale RN5 — Blida"),
-    3: ("AO-2026-003", "Équipement laboratoire universitaire — Oran"),
-    4: ("AO-2026-004", "Fourniture mobilier de bureau — Direction régionale Sétif"),
-    5: ("AO-2026-005", "Modernisation réseau fibre optique — Constantine"),
-    6: ("AO-2026-006", "Acquisition de matériel informatique — DGSN"),
-    7: ("AO-2026-007", "Aménagement espaces verts — Annaba"),
-}
-
-
 SEED_RECORDS = [
-    (1, SoumissionStatut.SOUMIS, None, _rapport_soumis),
-    (2, SoumissionStatut.EN_OUVERTURE, 18_500_000.00, _rapport_en_ouverture),
-    (3, SoumissionStatut.EN_EVALUATION, 15_200_000.00, _rapport_en_evaluation),
-    (4, SoumissionStatut.ATTRIBUE, 9_800_000.00, _rapport_attribue),
-    (5, SoumissionStatut.NON_RETENU, 12_000_000.00, _rapport_non_retenu),
-    (6, SoumissionStatut.INFRUCTUEUX, None, _rapport_infructueux),
-    (7, SoumissionStatut.EVALU_TERMINEE, 7_400_000.00, _rapport_evalu_terminee),
+    (SoumissionStatut.SOUMIS, None, _rapport_soumis),
+    (SoumissionStatut.EN_OUVERTURE, Decimal("18500000.00"), _rapport_en_ouverture),
+    (SoumissionStatut.EN_EVALUATION, Decimal("15200000.00"), _rapport_en_evaluation),
+    (SoumissionStatut.ATTRIBUE, Decimal("9800000.00"), _rapport_attribue),
+    (SoumissionStatut.NON_RETENU, Decimal("12000000.00"), _rapport_non_retenu),
+    (SoumissionStatut.INFRUCTUEUX, None, _rapport_infructueux),
+    (SoumissionStatut.EVALU_TERMINEE, Decimal("7400000.00"), _rapport_evalu_terminee),
 ]
 
 
 class Command(BaseCommand):
-    help = 'Seed one soumission per status so every screen can be tested'
+    help = "Generate deterministic test data for soumissions and mobile recours flows"
 
-    def handle(self, *args, **kwargs):
-        self.stdout.write(self.style.WARNING('Deleting existing soumissions...'))
-        Soumission.objects.all().delete()
-        document_ids = list(
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--flush",
+            action="store_true",
+            help="Delete all soumissions before seeding",
+        )
+        parser.add_argument(
+            "--soumissionnaire-id",
+            type=int,
+            default=None,
+            help="Use an existing auth user id as soumissionnaire",
+        )
+        parser.add_argument(
+            "--count",
+            type=int,
+            default=len(SEED_RECORDS),
+            help="Number of soumissions to seed",
+        )
+
+    def handle(self, *args, **options):
+        flush = options["flush"]
+        count = max(1, int(options["count"]))
+
+        if flush:
+            deleted, _ = Soumission.objects.all().delete()
+            self.stdout.write(self.style.WARNING(f"Deleted {deleted} existing soumission rows."))
+
+        soumissionnaire = self._resolve_soumissionnaire(options.get("soumissionnaire_id"))
+        appel_ids = self._resolve_appel_ids(count)
+        document_ids = self._operator_document_ids(soumissionnaire.id_utilisateur)
+
+        created = 0
+        updated = 0
+        for idx, appel_id in enumerate(appel_ids, start=1):
+            statut, montant, rapport_fn = SEED_RECORDS[(idx - 1) % len(SEED_RECORDS)]
+            rapport = rapport_fn() if rapport_fn else None
+
+            payload = {
+                "offre_financiere_chiffree_url": (
+                    f"http://minio/almizan-documents/"
+                    f"seed-soumission-{soumissionnaire.id_utilisateur}-{appel_id}.pdf.enc"
+                ),
+                "cle_dechiffrement_hash": (
+                    f"seed_encrypted_aes_key_{soumissionnaire.id_utilisateur}_{appel_id}"
+                ),
+                "document_ids": document_ids,
+                "statut": statut,
+                "montant_financier": montant,
+                "conformite_statut": "CONFORME" if idx % 2 == 0 else "A_VERIFIER",
+                "conformite_rapport": rapport,
+            }
+
+            soumission, was_created = Soumission.objects.update_or_create(
+                id_appel_offre=appel_id,
+                id_soumissionnaire=soumissionnaire.id_utilisateur,
+                defaults=payload,
+            )
+
+            if was_created:
+                created += 1
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"Created soumission #{soumission.id_soumission} "
+                        f"for AO {appel_id} ({statut})"
+                    )
+                )
+            else:
+                updated += 1
+                self.stdout.write(
+                    f"Updated soumission #{soumission.id_soumission} "
+                    f"for AO {appel_id} ({statut})"
+                )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                (
+                    f"Soumissions seed completed. Created={created}, Updated={updated}, "
+                    f"Soumissionnaire={soumissionnaire.id_utilisateur} ({soumissionnaire.email}), "
+                    f"Documents={document_ids}"
+                )
+            )
+        )
+
+    def _resolve_soumissionnaire(self, explicit_user_id):
+        if explicit_user_id is not None:
+            user = Utilisateur.objects.filter(id_utilisateur=explicit_user_id).first()
+            if not user:
+                raise CommandError(f"No Utilisateur found with id {explicit_user_id}")
+            return user
+
+        existing = Utilisateur.objects.select_related("id_role").order_by("id_utilisateur").first()
+        if existing:
+            return existing
+
+        role, _ = Role.objects.get_or_create(nom_role="admin")
+        user = Utilisateur.objects.filter(email=DEFAULT_SEED_EMAIL).first()
+        if not user:
+            user = Utilisateur(id_role=role, id_membre=1, email=DEFAULT_SEED_EMAIL)
+            user.set_password(DEFAULT_SEED_PASSWORD)
+            user.save()
+            self.stdout.write(self.style.SUCCESS(f"Created fallback seed user {DEFAULT_SEED_EMAIL}"))
+        return user
+
+    def _resolve_appel_ids(self, count):
+        appel_ids = list(
+            AppelOffres.objects.order_by("id_appel_offres")
+            .values_list("id_appel_offres", flat=True)[:count]
+        )
+        if appel_ids:
+            return appel_ids
+
+        self.stdout.write(
+            self.style.WARNING(
+                "No appels-offres found; using synthetic appel ids. "
+                "Run seed_appels first for fully linked test data."
+            )
+        )
+        return [100 + i for i in range(1, count + 1)]
+
+    def _operator_document_ids(self, operator_id):
+        return list(
             Document.objects.filter(
-                id_operateur_economique=TEST_SOUMISSIONNAIRE_ID,
+                id_operateur_economique=operator_id,
                 related_type="soumission",
             ).values_list("id_document", flat=True)[:2]
         )
-
-        for ao_id, statut, montant, rapport_fn in SEED_RECORDS:
-            rapport = rapport_fn() if rapport_fn else None
-            Soumission.objects.create(
-                id_appel_offre=ao_id,
-                id_soumissionnaire=TEST_SOUMISSIONNAIRE_ID,
-                offre_financiere_chiffree_url=f'http://minio/dev-bucket/ao{ao_id}.pdf.enc',
-                cle_dechiffrement_hash=f'fake_aes_key_ao{ao_id}',
-                document_ids=document_ids,
-                statut=statut,
-                montant_financier=montant,
-                conformite_rapport=rapport,
-            )
-            ref_ao, titre_ao = AO_METADATA.get(ao_id, (f"AO-{ao_id}", ""))
-            self.stdout.write(f'  {ref_ao} | {statut:<16} | {titre_ao}')
-
-        self.stdout.write(self.style.SUCCESS(
-            f'\nDone - {len(SEED_RECORDS)} soumissions seeded for '
-            f'id_soumissionnaire={TEST_SOUMISSIONNAIRE_ID}'
-        ))

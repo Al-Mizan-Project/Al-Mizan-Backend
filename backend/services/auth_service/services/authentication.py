@@ -18,6 +18,7 @@ from auth_service.serializers import (
 
 
 def authenticate_user(email, password):
+    email = (email or "").strip().lower()
     user = Utilisateur.objects.select_related("id_role").filter(email=email).first()
     if not user or not check_password(password, user.password):
         raise AuthenticationFailed("Invalid credentials")

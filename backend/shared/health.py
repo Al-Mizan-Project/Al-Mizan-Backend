@@ -1,6 +1,5 @@
 from django.core.cache import cache
 from django.db import connections
-from django.db.utils import OperationalError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -12,7 +11,7 @@ def _check_database(alias):
             cursor.execute("SELECT 1")
             cursor.fetchone()
         return True
-    except OperationalError:
+    except Exception:
         return False
 
 
