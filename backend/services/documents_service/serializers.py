@@ -5,7 +5,7 @@ class DocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
         fields = [
-            'id_document', 'related_type', 'nom', 'type_document', 
+            'id_document', 'related_type', 'id_operateur_economique', 'nom', 'type_document',
             'storage_url', 'hash_sha256', 'taille_fichier', 'is_encrypted', 
             'ia_verif_statut', 'ia_verif_details', 'uploaded_at', 'visible_after'
         ]
@@ -19,6 +19,7 @@ class DocumentUploadSerializer(serializers.Serializer):
         allow_empty=False
     )
     related_type = serializers.CharField(max_length=50, required=True)
+    id_operateur_economique = serializers.IntegerField(required=False, allow_null=True, default=None)
     is_encrypted = serializers.BooleanField(default=False)
     visible_after = serializers.DateTimeField(required=False, allow_null=True)
 
