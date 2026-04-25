@@ -1,87 +1,127 @@
 # Al-Mizan Backend
 
-Each service owns its runtime, database, Redis, and PgBouncer, and can be deployed on the same machine or on separate hosts.
+Django backend for Al-Mizan.
 
-## Services
+Runtime flow:
 
-- `services/auth`: authentication, users, roles, permissions, JWT flows.
-- `services/acteurs`: membres domain service.
-- `gateway`: optional edge reverse proxy routing `/auth/` and `/acteurs/`...
+`Client -> Nginx -> Django -> logical service -> Postgres/Redis`
 
-## Architecture
+Optional background work:
 
-Each service runs as an isolated stack:
+`Django -> Celery -> Redis -> worker`
 
-- Django API (ASGI: Gunicorn + Uvicorn worker)
-- PostgreSQL
-- PgBouncer (connection pooling)
-- Redis (cache + rate counters)
-- NGINX (service-local ingress)
+## Structure
 
-Gateway is a separate stack and is optional. Services can be called directly without gateway.
-
-## Deployment Models
-
-### 1) Independent service deployment
-
-Run each service from its own directory:
-
-```bash
-cd services/auth && docker compose up --build
-cd services/acteurs && docker compose up --build
+```text
+.
+├── backend/                      # Django backend
+├── deploy/                       # Main Docker Compose stack + env files
+├── gateway/                      # Nginx gateway config
+├── al-mizan-backend-documentation.md
+└── README.md
 ```
 
-Each service is self-contained and can run without the other.
+## Run
 
-### 2) With gateway
+1. Create `deploy/.env` from `deploy/.env.example`.
+
+2. Start the backend stack:
 
 ```bash
-cd gateway && docker compose up --build
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
 ```
 
-Gateway forwards:
+3. Open the app:
 
-- `/auth/*` -> auth upstream
-- `/acteurs/*` -> acteurs upstream
+- API base: `http://127.0.0.1:8080`
+- Swagger UI: `http://127.0.0.1:8080/docs/swagger/`
+- ReDoc: `http://127.0.0.1:8080/docs/redoc/`
+- OpenAPI schema: `http://127.0.0.1:8080/openapi.json`
 
-### 3) Distributed SOA (multi-host)
+## Useful Commands
 
-Set `.env` values per environment:
+Start or rebuild:
 
-- `gateway/.env`
-  - `AUTH_UPSTREAM=auth.company.internal:80`
-  - `ACTEURS_UPSTREAM=acteurs.company.internal:80`
-- `services/auth/.env`
-  - `MEMBRES_SERVICE_URL=http://acteurs.company.internal`
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
+```
 
-No code changes are required to move between environments.
+Recreate backend and nginx:
 
-## Environment and Operations
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --force-recreate backend nginx
+```
 
-Primary env files:
+View logs:
 
-- `services/auth/.env`
-- `services/acteurs/.env`
-- `gateway/.env`
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml logs -f backend nginx
+```
 
-Key controls:
+Stop the stack:
 
-- Runtime: `GUNICORN_WORKERS`, `GUNICORN_TIMEOUT`
-- Security: `DJANGO_ENV`, `DEBUG`, `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`
-- Database: `DATABASE_URL` or `DB_*`, `CONN_MAX_AGE`
-- Cache and throttling: `REDIS_URL`, `CACHE_TTL`, `THROTTLE_*`
-- Gateway routing/tuning: `AUTH_UPSTREAM`, `ACTEURS_UPSTREAM`, timeout and keepalive variables
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml down
+```
 
-## Health and API Discovery
+## Initial Admin
 
-Each service exposes:
+The first admin account is bootstrapped from `deploy/.env` on backend startup.
 
-- `GET /health`
-- `GET /ready` (checks DB + Redis)
-- `GET /openapi.json`
+Required variables:
 
-Detailed endpoint usage is documented in:
+```env
+INITIAL_ADMIN_ENABLED=true
+INITIAL_ADMIN_EMAIL=admin@example.com
+INITIAL_ADMIN_PASSWORD=StrongPassword123!
+INITIAL_ADMIN_ROLE=admin
+INITIAL_ADMIN_MEMBRE_ID=1
+```
 
-- `services/auth/ENDPOINTS.md`
-- `services/acteurs/ENDPOINTS.md`
+If you change those values, recreate the backend:
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --force-recreate backend nginx
+```
+
+## Dev Seed Data
+
+You can now seed a coherent test dataset (acteurs, auth users, roles/permissions, contractant, appels, watched appels, soumissions, notifications)
+with one command.
+
+Local run:
+
+```bash
+cd backend
+sh scripts/seed_dev_data.sh --flush
+```
+
+Docker run:
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec backend sh -c "cd /app && sh scripts/seed_dev_data.sh --flush"
+```
+
+Optional flags:
+
+- `--with-documents` to also run `seed_documents` (requires MinIO ready)
+- `--soumissions-count 8` to customize soumissions volume
+- `--notifications-count 10` to customize notifications volume
+- `--watched-count 4` to customize watched appels seeded for the contractant user
+- `--legacy-contractant-email ""` to disable legacy contractant compatibility user
+
+Default test credentials created by the seed flow:
+
+- Admin: `a@a.dz` / `admin1234`
+- Contractant (primary): `c@a.dz` / `test1234`
+- Contractant (legacy compatibility): `contractant.demo@almizan.local` / `ContractantPass123!`
+
+## Current Stack
+
+- `backend`: Django + Gunicorn/Uvicorn
+- `nginx`: public entrypoint
+- `postgres`: main database
+- `redis`: cache, throttling, broker
+- `minio`: object storage
+- `celery`: optional worker profile
 
