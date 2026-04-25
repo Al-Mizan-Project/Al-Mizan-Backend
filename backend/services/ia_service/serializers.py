@@ -2,7 +2,6 @@ from rest_framework import serializers
 
 from .models import DetectionAnomalieIA
 
-
 class DetectionAnomalieIASerializer(serializers.ModelSerializer):
     class Meta:
         model = DetectionAnomalieIA
@@ -124,3 +123,103 @@ class AnomalySummarySerializer(serializers.Serializer):
     score_risque_saucissonnage = serializers.IntegerField(required=False)
     niveau_risque = serializers.CharField()
     recommandation = serializers.CharField()
+
+
+"""
+Serializers pour le module d'aide à la rédaction du CDC.
+À ajouter dans ia_service/serializers.py (ou fusionner avec le fichier existant).
+"""
+
+from rest_framework import serializers
+
+
+# ---------------------------------------------------------------------------
+# Serializers de réponse (sortie)
+# ---------------------------------------------------------------------------
+
+class AlerteCritiqueSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    type = serializers.ChoiceField(choices=[
+        "terme_discriminant",
+        "clause_restrictive",
+        "critere_disproportionne",
+        "donnee_manquante",
+        "violation_loi",
+    ])
+    niveau = serializers.ChoiceField(choices=["critique", "attention", "info"])
+    extrait = serializers.CharField()
+    article_loi = serializers.CharField()
+    message = serializers.CharField()
+    suggestion = serializers.CharField()
+
+
+class AnalyseSectionSerializer(serializers.Serializer):
+    section = serializers.ChoiceField(choices=[
+        "objet_marche",
+        "specifications_techniques",
+        "criteres_eligibilite",
+        "criteres_evaluation",
+        "conditions_execution",
+        "clauses_administratives",
+        "protection_donnees",
+    ])
+    statut = serializers.ChoiceField(choices=[
+        "present_conforme",
+        "present_attention",
+        "present_non_conforme",
+        "absent",
+    ])
+    commentaire = serializers.CharField()
+
+
+class SuggestionAmeliorationSerializer(serializers.Serializer):
+    priorite = serializers.ChoiceField(choices=["haute", "moyenne", "faible"])
+    titre = serializers.CharField()
+    description = serializers.CharField()
+
+
+class PipelineMetaSerializer(serializers.Serializer):
+    id_document = serializers.IntegerField()
+    ocr_engine = serializers.CharField()
+    char_count = serializers.IntegerField()
+    ocr_used = serializers.BooleanField()
+
+
+class AideRedactionResponseSerializer(serializers.Serializer):
+    score_conformite = serializers.IntegerField(min_value=0, max_value=100)
+    resume_general = serializers.CharField()
+    alertes_critiques = AlerteCritiqueSerializer(many=True)
+    analyse_sections = AnalyseSectionSerializer(many=True)
+    suggestions_amelioration = SuggestionAmeliorationSerializer(many=True)
+    needs_human_validation = serializers.BooleanField()
+    _source = serializers.CharField(required=False)
+    _pipeline = PipelineMetaSerializer(required=False)
+
+
+# ---------------------------------------------------------------------------
+# Serializers de requête (entrée)
+# ---------------------------------------------------------------------------
+
+class AideRedactionRequestSerializer(serializers.Serializer):
+    # Contexte de l'appel (envoyé directement par le frontend/service appelant)
+    type_procedure = serializers.CharField()
+    type_prestation = serializers.CharField()
+    montant_estime = serializers.FloatField(required=False, allow_null=True)
+    wilaya = serializers.CharField(required=False, default="")
+    poids_technique = serializers.IntegerField(default=50)
+    poids_financier = serializers.IntegerField(default=50)
+    qualification_category = serializers.CharField(required=False, default="")
+    minimum_experience_years = serializers.IntegerField(default=0)
+    minimum_revenue_da = serializers.IntegerField(default=0)
+    participation_conditions = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
+    required_docs_admin = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
+    required_docs_tech = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
+
+    # Le document CDC en binaire
+    fichier_cdc = serializers.FileField()

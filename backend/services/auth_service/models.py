@@ -4,7 +4,7 @@ from django.db import models
 
 class Role(models.Model):
     id_role = models.AutoField(primary_key=True)
-    nom_role = models.CharField(max_length=20, unique=True)
+    nom_role = models.CharField(max_length=100, unique=True)
 
     class Meta:
         db_table = "role"
@@ -12,7 +12,7 @@ class Role(models.Model):
 
 class Permission(models.Model):
     id_permission = models.AutoField(primary_key=True)
-    nom_permission = models.CharField(max_length=20, unique=True)
+    nom_permission = models.CharField(max_length=100, unique=True)
 
     class Meta:
         db_table = "permission"
@@ -51,7 +51,7 @@ class UtilisateurManager(BaseUserManager):
 class Utilisateur(AbstractBaseUser):
     id_utilisateur = models.AutoField(primary_key=True)
     id_role = models.ForeignKey(Role, on_delete=models.PROTECT, db_column="id_role", related_name="utilisateurs")
-    id_membre = models.IntegerField(db_index=True)
+    id_membre = models.UUIDField(db_index=True)
     email = models.EmailField(unique=True, max_length=255)
     password = models.CharField(max_length=255, db_column="password_hash")
     created_at = models.DateTimeField(auto_now_add=True)
