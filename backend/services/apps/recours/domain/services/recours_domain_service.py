@@ -22,5 +22,5 @@ class RecoursDomainService:
             raise UnauthorizedAction("L'opérateur n'est pas propriétaire de la soumission")
 
     def verifier_soumission_rejetee(self, soumission: dict):
-        if soumission.get("statut") != "REJETEE":
+        if soumission.get("statut") not in ["REJETEE", "REJETE", "NON_RETENU"]:
             raise UnauthorizedAction("La soumission n'est pas rejetée")

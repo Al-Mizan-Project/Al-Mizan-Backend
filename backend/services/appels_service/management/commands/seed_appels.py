@@ -6,8 +6,11 @@ Usage:
     python manage.py seed_appels --flush      # drop all existing data first
 """
 from django.core.management.base import BaseCommand
+from django.core.management.color import no_style
+from django.db import connection
 from django.db import transaction
 from django.utils import timezone
+from datetime import timedelta
 
 from appels_service.models import AppelOffres, DocumentsAppel
 
@@ -97,9 +100,17 @@ class Command(BaseCommand):
         if options["flush"]:
             DocumentsAppel.objects.all().delete()
             AppelOffres.objects.all().delete()
+            sequence_sql = connection.ops.sequence_reset_sql(
+                no_style(),
+                [AppelOffres, DocumentsAppel],
+            )
+            with connection.cursor() as cursor:
+                for sql in sequence_sql:
+                    cursor.execute(sql)
             self.stdout.write(self.style.WARNING("Flushed all appels data."))
 
         now = timezone.now()
+        future_deadline = now + timedelta(days=30)
         appel_objects = []
         for data in APPELS:
             obj, created = AppelOffres.objects.get_or_create(
@@ -107,7 +118,7 @@ class Command(BaseCommand):
                 defaults={
                     **data,
                     "date_publication": now if data["statut"] != "brouillon" else None,
-                    "date_limite_soumission": now if data["statut"] not in ("brouillon",) else None,
+                    "date_limite_soumission": future_deadline if data["statut"] not in ("brouillon",) else None,
                     "date_ouverture_plis": now if data["statut"] in ("plis_ouverts",) else None,
                 },
             )

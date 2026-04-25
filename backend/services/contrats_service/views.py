@@ -277,3 +277,13 @@ class SoumissionContratView(ProtectedAPIView):
         if not contrat:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(ContratSerializer(contrat).data)
+
+
+class SoumissionValidationsView(ProtectedAPIView):
+    """GET /soumissions/{soumission_id}/validations"""
+
+    def get(self, request, soumission_id):
+        validations = Validation.objects.filter(
+            id_soumission=soumission_id
+        ).order_by("-updated_at")
+        return Response(ValidationSerializer(validations, many=True).data)
