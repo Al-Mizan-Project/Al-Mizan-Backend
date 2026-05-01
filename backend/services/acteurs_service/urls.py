@@ -5,10 +5,14 @@ from .views import (
     CreerCommissionExterneView, ListCommissionExterneView,
     CreerTutelleView, ListTutelleView,
     ListOperateurEconomiqueView,
-    CreerResponsableView, CreateMembreByResponsableView, ListMembresOrganisationView
+    CreerResponsableView, CreateMembreByResponsableView, ListMembresOrganisationView , SoumettreDemandeOperateurView
 )
 
 urlpatterns = [
+    # ==========================================
+    # 0. INSCRIPTION OPÉRATEUR ÉCONOMIQUE (Public)
+    # ==========================================
+    path('demandes/soumettre/', SoumettreDemandeOperateurView.as_view(), name='soumettre-demande-operateur'),
     # ==========================================
     # 1. GESTION DES DEMANDES (Opérateurs Économiques)
     # ==========================================

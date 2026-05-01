@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from django.conf import settings
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-from .models import Membre ,OperateurEconomique , StatutDemande ,DemandeOperateur ,Organisation, ServiceContractant, CommissionExterne, Tutelle, TypeEntite
+from .models import Membre ,OperateurEconomique ,DemandeDocument , StatutDemande ,DemandeOperateur ,Organisation, ServiceContractant, CommissionExterne, Tutelle, TypeEntite
 from .serializers import OrganisationCreateSerializer
 from .serializers import DemandeOperateurSerializer
 from .serializers import DemandeOperateurDetailSerializer , MembreListSerializer
@@ -452,3 +452,119 @@ class ListOperateurEconomiqueView(ListAPIView):
         return Organisation.objects.filter(
             type_entite=TypeEntite.OPERATEUR_ECONOMIQUE
         ).order_by('-created_at')
+        
+
+class SoumettreDemandeOperateurView(APIView):
+    """
+    Endpoint: POST /api/acteurs/demandes/soumettre/
+    Description: Permet à un opérateur économique de soumettre une demande d'inscription.
+    
+    Flow:
+      1. Valider les données du formulaire
+      2. Uploader chaque fichier vers le service Document
+      3. Créer la DemandeOperateur en base
+      4. Créer les DemandeDocument (liens entre demande et IDs du service Document)
+    
+    Format: multipart/form-data (car on envoie des fichiers)
+    Permissions: Publique (pas de token requis, c'est une inscription)
+    """
+
+    def post(self, request, *args, **kwargs):
+        from .serializers import SoumettreDemandeSerializer
+
+        serializer = SoumettreDemandeSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+
+        # Mapping : nom du champ formulaire → TypeDocument (choix du modèle)
+        FICHIERS_MAPPING = {
+            'doc_registre_commerce': TypeDocument.REGISTRE_COMMERCE,
+            'doc_nif':               TypeDocument.NIF,
+            'doc_cnas_casnos':       TypeDocument.CNAS_CASNOS,
+            'doc_non_faillite':      TypeDocument.NON_FAILLITE,
+        }
+
+        base_url = getattr(settings, 'DOCUMENTS_SERVICE_URL', 'http://127.0.0.1:8001')
+        upload_url = f"{base_url}/api/documents/upload/"
+
+        # Étape 1 : Uploader tous les fichiers vers le service Document
+        # On collecte les résultats avant d'écrire en base (fail-fast)
+        documents_uploades = []  # Liste de dicts { 'type_document': ..., 'document_id': ... }
+
+        for champ, type_document in FICHIERS_MAPPING.items():
+            fichier = data[champ]
+            try:
+                response = requests.post(
+                    upload_url,
+                    files={'file': (fichier.name, fichier, fichier.content_type)},
+                )
+            except requests.exceptions.RequestException as e:
+                return Response(
+                    {"erreur": f"Le service Document est injoignable : {str(e)}"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+
+            if response.status_code not in (200, 201):
+                return Response(
+                    {
+                        "erreur": f"Échec de l'upload du document '{type_document}'.",
+                        "detail": response.text,
+                    },
+                    status=status.HTTP_502_BAD_GATEWAY
+                )
+
+            # On récupère l'ID assigné par le service Document
+            # On suppose que le service renvoie { "id_document": 42, ... }
+            document_id = response.json().get('id_document')
+            if not document_id:
+                return Response(
+                    {"erreur": f"Le service Document n'a pas renvoyé d'id_document pour '{type_document}'."},
+                    status=status.HTTP_502_BAD_GATEWAY
+                )
+
+            documents_uploades.append({
+                'type_document': type_document,
+                'document_id':   document_id,
+            })
+
+        # Étape 2 : Tout est uploadé → on écrit en base de manière atomique
+        try:
+            with transaction.atomic():
+                # Créer la demande principale
+                demande = DemandeOperateur.objects.create(
+                    nom_organisation      = data['nom_organisation'],
+                    email_contact         = data['email_contact'],
+                    telephone             = data['telephone'],
+                    nif                   = data['nif'],
+                    num_registre_commerce = data['num_registre_commerce'],
+                    # statut = EN_ATTENTE par défaut (défini dans le modèle)
+                )
+
+                # Créer les liens DemandeDocument
+                DemandeDocument.objects.bulk_create([
+                    DemandeDocument(
+                        demande       = demande,
+                        document_id   = doc['document_id'],
+                        type_document = doc['type_document'],
+                    )
+                    for doc in documents_uploades
+                ])
+
+        except Exception as e:
+            # Note : les fichiers sont déjà uploadés dans le service Document.
+            # Dans une architecture robuste, il faudrait les supprimer ici (compensating transaction).
+            return Response(
+                {"erreur": f"Erreur lors de l'enregistrement en base : {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        return Response(
+            {
+                "message": "Votre demande a été soumise avec succès. Elle est en attente de validation par l'administrateur.",
+                "demande_id": str(demande.id),
+                "statut":     demande.statut,
+            },
+            status=status.HTTP_201_CREATED
+        )

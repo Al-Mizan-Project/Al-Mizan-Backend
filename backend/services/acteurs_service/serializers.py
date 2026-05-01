@@ -120,3 +120,21 @@ class OrganisationListSerializer(serializers.ModelSerializer):
         if resp:
             return f"{resp.prenom} {resp.nom}"
         return "Non assigné"
+    
+
+class SoumettreDemandeSerializer(serializers.Serializer):
+    """
+    Serializer pour la soumission d'une demande d'inscription par un opérateur économique.
+    Les documents sont envoyés comme fichiers multipart.
+    """
+    nom_organisation = serializers.CharField(max_length=255)
+    email_contact    = serializers.EmailField()
+    telephone        = serializers.CharField(max_length=50)
+    nif              = serializers.CharField(max_length=50)
+    num_registre_commerce = serializers.CharField(max_length=100)
+
+    # Les 4 documents obligatoires (fichiers uploadés)
+    doc_registre_commerce = serializers.FileField()
+    doc_nif               = serializers.FileField()
+    doc_cnas_casnos       = serializers.FileField()
+    doc_non_faillite      = serializers.FileField()
