@@ -5,7 +5,7 @@ from .views import (
     CreerCommissionExterneView, ListCommissionExterneView,
     CreerTutelleView, ListTutelleView,
     ListOperateurEconomiqueView,
-    CreerResponsableView, CreateMembreByResponsableView, ListMembresOrganisationView , SoumettreDemandeOperateurView
+    CreerResponsableView, CreateMembreByResponsableView, MembreDetailView ,ListMembresOrganisationView , SoumettreDemandeOperateurView
 )
 
 urlpatterns = [
@@ -41,6 +41,9 @@ urlpatterns = [
     # ==========================================
     # 3. GESTION DES MEMBRES & RESPONSABLES
     # ==========================================
+    # Avoir Les Infos d'un membre
+    path('membres/<uuid:id_membre>/', MembreDetailView.as_view(), name='detail-membre'),
+]
     # Création du responsable principal (Par l'Admin)
     path('organisations/<uuid:org_id>/responsable/', CreerResponsableView.as_view(), name='creer-responsable-organisation'),
     

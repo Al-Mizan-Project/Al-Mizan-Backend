@@ -138,3 +138,37 @@ class SoumettreDemandeSerializer(serializers.Serializer):
     doc_nif               = serializers.FileField()
     doc_cnas_casnos       = serializers.FileField()
     doc_non_faillite      = serializers.FileField()
+    
+    
+
+class OrganisationDetailForMembreSerializer(serializers.ModelSerializer):
+    # Ce champ permet de récupérer le libellé lisible ("Service Contractant" au lieu de "SERVICE_CONTRACTANT")
+    type_entite_display = serializers.CharField(source='get_type_entite_display', read_only=True)
+
+    class Meta:
+        model = Organisation
+        fields = [
+            'id_organisation', 
+            'nom_officiel', 
+            'type_entite', 
+            'type_entite_display', 
+            'adresse_siege', 
+            'email_contact'
+        ]
+
+class MembreDetailSerializer(serializers.ModelSerializer):
+    # On imbrique le serializer de l'organisation créé juste au-dessus
+    organisation = OrganisationDetailForMembreSerializer(read_only=True)
+
+    class Meta:
+        model = Membre
+        fields = [
+            'id_membre',
+            'nom',
+            'prenom',
+            'telephone',
+            'fonction',
+            'created_at',
+            'updated_at',
+            'organisation' # Inclut toutes les infos de l'entité et son type
+        ]

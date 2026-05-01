@@ -7,8 +7,8 @@ from rest_framework.response import Response
 from django.conf import settings
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-from .models import Membre ,OperateurEconomique ,DemandeDocument , StatutDemande ,DemandeOperateur ,Organisation, ServiceContractant, CommissionExterne, Tutelle, TypeEntite
-from .serializers import OrganisationCreateSerializer
+from .models import Membre ,OperateurEconomique , TypeDocument ,DemandeDocument, DemandeOperateur, StatutDemande ,DemandeOperateur ,Organisation, ServiceContractant, CommissionExterne, Tutelle, TypeEntite
+from .serializers import OrganisationCreateSerializer , MembreDetailSerializer
 from .serializers import DemandeOperateurSerializer
 from .serializers import DemandeOperateurDetailSerializer , MembreListSerializer
 from .serializers import CreateResponsableSerializer , MembreCreateByResponsableSerializer
@@ -568,3 +568,18 @@ class SoumettreDemandeOperateurView(APIView):
             },
             status=status.HTTP_201_CREATED
         )
+        
+class MembreDetailView(generics.RetrieveAPIView):
+    """
+    Endpoint: GET /api/acteurs/membres/{id_membre}/
+    Description: Récupère les détails d'un membre spécifique et les infos de son organisation.
+    """
+    # L'utilisation de select_related permet d'optimiser la requête SQL (évite le problème N+1)
+    queryset = Membre.objects.select_related('organisation').all()
+    serializer_class = MembreDetailSerializer
+    
+    # On précise à DRF que l'ID dans l'URL correspond au champ 'id_membre' dans le modèle
+    lookup_field = 'id_membre' 
+
+    # Décommente cette ligne si tu veux que seul un utilisateur connecté puisse voir ces infos
+    # permission_classes = [IsAuthenticated]
