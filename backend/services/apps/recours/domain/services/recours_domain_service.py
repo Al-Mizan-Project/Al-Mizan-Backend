@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from apps.recours.domain.exceptions import (
     DuplicateRecours,
     DeadlineExceeded,

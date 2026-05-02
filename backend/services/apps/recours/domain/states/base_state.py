@@ -1,6 +1,5 @@
 from apps.recours.domain.exceptions import InvalidStateTransition
 
-
 class RecoursState:
 
     def instruire(self, recours):

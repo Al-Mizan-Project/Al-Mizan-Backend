@@ -3,34 +3,52 @@ from rest_framework import serializers
 from .models import DetectionAnomalieIA
 
 class DetectionAnomalieIASerializer(serializers.ModelSerializer):
+    """Full model serializer — used internally; API responses use custom shapes."""
+
+    id_anomalie_ia = serializers.IntegerField(
+        source="id_detection_anomalie_ia", read_only=True
+    )
+
     class Meta:
         model = DetectionAnomalieIA
-        fields = "__all__"
+        fields = [
+            "id_anomalie_ia",
+            "id_soumission",
+            "id_appel_offre",
+            "type_anomalie",
+            "niveau_severite",
+            "score_confiance",
+            "details",
+            "statut_examen",
+            "date_detection",
+            "commentaire_examen",
+            "date_examen",
+            "soumissions_impliquees",
+            "appels_impliques",
+        ]
 
 
+# ---------------------------------------------------------------------------
+# Input serializers — anomaly detection
+# ---------------------------------------------------------------------------
 class DetecterAnomaliesInputSerializer(serializers.Serializer):
-    """Input for manual anomaly detection with soumission data provided."""
+    """
+    POST /ia/anomalies/detecter
+    { "id_soumission": 45, "id_appel_offre": 10 }
+    The view fetches full soumission + appel data from internal services.
+    """
+    id_soumission = serializers.IntegerField()
     id_appel_offre = serializers.IntegerField()
-    soumissions = serializers.ListField(child=serializers.DictField(), required=False)
-    montant_estime = serializers.DecimalField(
-        max_digits=15, decimal_places=2, required=False,
-        help_text="Estimated budget for relative anomaly scoring",
-    )
-    historical_wins = serializers.ListField(
-        child=serializers.DictField(), required=False,
-        help_text="Historical winning data for bid rotation detection",
-    )
 
 
 class DetecterAnomaliesAutoInputSerializer(serializers.Serializer):
     """
-    Input for automatic anomaly detection. 
-    The IA service will fetch soumission data from the soumissions service.
+    POST /ia/anomalies/detecter-auto
+    { "id_appel_offre": 10 }
+    The view fetches all soumissions + appel data automatically.
     """
     id_appel_offre = serializers.IntegerField()
-    montant_estime = serializers.DecimalField(
-        max_digits=15, decimal_places=2, required=False,
-    )
+
 
 
 class DetecterSaucissonnageInputSerializer(serializers.Serializer):
@@ -78,8 +96,12 @@ class StatutExamenPatchSerializer(serializers.Serializer):
 
 
 class VerifierConformiteInputSerializer(serializers.Serializer):
-    required_documents = serializers.ListField(child=serializers.CharField(max_length=100), required=False)
-    provided_documents = serializers.ListField(child=serializers.DictField(), required=False)
+    required_documents = serializers.ListField(
+        child=serializers.CharField(max_length=100), required=False
+    )
+    provided_documents = serializers.ListField(
+        child=serializers.DictField(), required=False
+    )
 
 
 class VerifierConformiteAutomatiqueInputSerializer(serializers.Serializer):

@@ -1,156 +1,381 @@
 from decimal import Decimal
-
+from unittest.mock import MagicMock, patch
+ 
 from django.conf import settings
 from django.test import TestCase
 from rest_framework.test import APIClient
-from unittest.mock import MagicMock, patch
-
+ 
 from ia_service.models import DetectionAnomalieIA
 from ia_service.services.anomalies import (
-    detect_price_and_similarity_anomalies,
+    detect_anomalies_appel,
+    detect_anomalies_soumission,
     generate_anomaly_summary,
+    _compute_score_severite,
+    _score_to_niveau,
+    ANOMALY_POINTS,
 )
 from ia_service.services.ocr import extract_document_text, extract_documents_text_parallel
 from ia_service.services.saucissonnage import detect_saucissonnage
-
-
+ 
+ 
 # ===========================================================================
-# Unit Tests — Anomaly Detection Algorithms
+# Helpers
 # ===========================================================================
-class AnomalyDetectionAlgorithmsTests(TestCase):
-    """Test individual anomaly detection algorithms."""
-
-    def test_document_similarity_detected(self):
+def _make_soumission(id_soumission, montant, id_soumissionnaire=None,
+                     date_soumission=None, **kwargs):
+    s = {
+        "id_soumission": id_soumission,
+        "montant_financier": montant,
+    }
+    if id_soumissionnaire is not None:
+        s["id_soumissionnaire"] = id_soumissionnaire
+    if date_soumission is not None:
+        s["date_soumission"] = date_soumission
+    s.update(kwargs)
+    return s
+ 
+ 
+BASE_APPEL = {
+    "montant_estime": "1000000",
+    "date_limite_soumission": "2099-12-31T23:59:59",
+}
+ 
+ 
+# ===========================================================================
+# Unit Tests — individual rule detectors
+# ===========================================================================
+class TestMontantManquant(TestCase):
+    def test_null_montant_after_opening_date(self):
+        """NULL montant_financier after deadline → MONTANT_FINANCIER_MANQUANT."""
+        soumission = {"id_soumission": 1, "montant_financier": None}
+        appel = {
+            "montant_estime": "1000000",
+            "date_limite_soumission": "2000-01-01T00:00:00",  # past
+        }
+        result = detect_anomalies_soumission(soumission, appel, [soumission])
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertIn("MONTANT_FINANCIER_MANQUANT", types)
+ 
+    def test_null_montant_before_opening_does_not_flag(self):
+        """NULL montant_financier before deadline is expected — no anomaly."""
+        soumission = {"id_soumission": 1, "montant_financier": None}
+        appel = {
+            "montant_estime": "1000000",
+            "date_limite_soumission": "2099-12-31T23:59:59",  # future
+        }
+        result = detect_anomalies_soumission(soumission, appel, [soumission])
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertNotIn("MONTANT_FINANCIER_MANQUANT", types)
+ 
+ 
+class TestMontantInvalid(TestCase):
+    def test_zero_montant_flagged(self):
+        soumission = _make_soumission(1, "0")
+        result = detect_anomalies_soumission(soumission, BASE_APPEL, [soumission])
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertIn("MONTANT_INVALID", types)
+ 
+    def test_negative_montant_flagged(self):
+        soumission = _make_soumission(1, "-5000")
+        result = detect_anomalies_soumission(soumission, BASE_APPEL, [soumission])
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertIn("MONTANT_INVALID", types)
+ 
+    def test_valid_positive_montant_not_flagged(self):
+        soumission = _make_soumission(1, "500000")
+        result = detect_anomalies_soumission(soumission, BASE_APPEL, [soumission])
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertNotIn("MONTANT_INVALID", types)
+ 
+ 
+class TestMontantTropEleve(TestCase):
+    def test_ratio_above_3x_flagged(self):
+        """montant = 3 100 000 > 3× 1 000 000 → MONTANT_TROP_ELEVE."""
+        soumission = _make_soumission(1, "3100000")
+        result = detect_anomalies_soumission(soumission, BASE_APPEL, [soumission])
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertIn("MONTANT_TROP_ELEVE", types)
+ 
+    def test_ratio_exactly_3x_not_flagged(self):
+        soumission = _make_soumission(1, "3000000")
+        result = detect_anomalies_soumission(soumission, BASE_APPEL, [soumission])
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertNotIn("MONTANT_TROP_ELEVE", types)
+ 
+ 
+class TestMontantTropBas(TestCase):
+    def test_below_70pct_flagged(self):
+        """montant = 600 000 < 70% of 1 000 000 → MONTANT_TROP_BAS."""
+        soumission = _make_soumission(1, "600000")
+        result = detect_anomalies_soumission(soumission, BASE_APPEL, [soumission])
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertIn("MONTANT_TROP_BAS", types)
+ 
+    def test_exactly_70pct_not_flagged(self):
+        soumission = _make_soumission(1, "700000")
+        result = detect_anomalies_soumission(soumission, BASE_APPEL, [soumission])
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertNotIn("MONTANT_TROP_BAS", types)
+ 
+ 
+class TestSoumissionHorsDelai(TestCase):
+    def test_after_deadline_flagged(self):
+        soumission = _make_soumission(1, "900000",
+                                      date_soumission="2026-05-15T14:32:00")
+        appel = {
+            "montant_estime": "1000000",
+            "date_limite_soumission": "2026-05-10T23:59:00",
+        }
+        result = detect_anomalies_soumission(soumission, appel, [soumission])
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertIn("SOUMISSION_HORS_DELAI", types)
+ 
+    def test_before_deadline_not_flagged(self):
+        soumission = _make_soumission(1, "900000",
+                                      date_soumission="2026-05-09T10:00:00")
+        appel = {
+            "montant_estime": "1000000",
+            "date_limite_soumission": "2026-05-10T23:59:00",
+        }
+        result = detect_anomalies_soumission(soumission, appel, [soumission])
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertNotIn("SOUMISSION_HORS_DELAI", types)
+ 
+ 
+class TestPrixAnormauxIQR(TestCase):
+    """PRIX_ANORMALEMENT_ELEVE / BAS require ≥ 3 soumissions."""
+ 
+    def _run(self, all_soumissions, target_id):
+        target = next(s for s in all_soumissions if s["id_soumission"] == target_id)
+        appel = {"montant_estime": "1000000", "date_limite_soumission": "2099-12-31"}
+        return detect_anomalies_soumission(target, appel, all_soumissions)
+ 
+    def test_high_outlier_flagged(self):
         soumissions = [
-            {"id_soumission": 1, "montant_financier": "100000", "signature_document": "abc123"},
-            {"id_soumission": 2, "montant_financier": "200000", "signature_document": "abc123"},
-            {"id_soumission": 3, "montant_financier": "150000", "signature_document": "xyz789"},
+            _make_soumission(1, "1000000"),
+            _make_soumission(2, "1100000"),
+            _make_soumission(3, "1050000"),
+            _make_soumission(4, "1080000"),
+            _make_soumission(5, "5000000"),  # outlier high
         ]
-        anomalies = detect_price_and_similarity_anomalies(soumissions)
-        doc_sim = [a for a in anomalies if a["type_anomalie"] == "SIMILARITE_DOCUMENTAIRE"]
-        self.assertGreaterEqual(len(doc_sim), 2)
-        # Both soumissions 1 and 2 should be flagged
-        flagged_ids = {a["id_soumission"] for a in doc_sim}
-        self.assertIn(1, flagged_ids)
-        self.assertIn(2, flagged_ids)
-
-    def test_price_similarity_detected(self):
-        """Offers too close to the mean should be flagged."""
+        result = self._run(soumissions, 5)
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertIn("PRIX_ANORMALEMENT_ELEVE", types)
+ 
+    def test_low_outlier_flagged(self):
         soumissions = [
-            {"id_soumission": 1, "montant_financier": "100000.00"},
-            {"id_soumission": 2, "montant_financier": "100200.00"},
-            {"id_soumission": 3, "montant_financier": "100100.00"},
+            _make_soumission(1, "1000000"),
+            _make_soumission(2, "1100000"),
+            _make_soumission(3, "1050000"),
+            _make_soumission(4, "100000"),   # outlier low
         ]
-        anomalies = detect_price_and_similarity_anomalies(soumissions)
-        price_sim = [a for a in anomalies if a["type_anomalie"] == "SIMILARITE_PRIX"]
-        self.assertGreaterEqual(len(price_sim), 1)
-
-    def test_pairwise_proximity_detected(self):
-        """Two offers extremely close in price should trigger bilateral collusion alert."""
+        result = self._run(soumissions, 4)
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertIn("PRIX_ANORMALEMENT_BAS", types)
+ 
+    def test_normal_price_not_flagged(self):
         soumissions = [
-            {"id_soumission": 1, "montant_financier": "500000.00"},
-            {"id_soumission": 2, "montant_financier": "500100.00"},
-            {"id_soumission": 3, "montant_financier": "800000.00"},
+            _make_soumission(1, "1000000"),
+            _make_soumission(2, "1100000"),
+            _make_soumission(3, "1050000"),
         ]
-        anomalies = detect_price_and_similarity_anomalies(soumissions)
-        cluster = [a for a in anomalies if a["type_anomalie"] == "COLLUSION_CLUSTER_PRIX"]
-        self.assertGreaterEqual(len(cluster), 1)
-
-    def test_low_dispersion_detected(self):
-        """Very low CV across all offers should be flagged."""
-        # All offers within 1% of each other
+        result = self._run(soumissions, 1)
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertNotIn("PRIX_ANORMALEMENT_ELEVE", types)
+        self.assertNotIn("PRIX_ANORMALEMENT_BAS", types)
+ 
+    def test_less_than_3_soumissions_no_outlier_check(self):
         soumissions = [
-            {"id_soumission": 1, "montant_financier": "1000000.00"},
-            {"id_soumission": 2, "montant_financier": "1001000.00"},
-            {"id_soumission": 3, "montant_financier": "1000500.00"},
-            {"id_soumission": 4, "montant_financier": "1000200.00"},
+            _make_soumission(1, "1000000"),
+            _make_soumission(2, "9000000"),  # only 2 → no IQR check
         ]
-        anomalies = detect_price_and_similarity_anomalies(soumissions)
-        dispersion = [a for a in anomalies if a["type_anomalie"] == "DISPERSION_ANORMALE"]
-        self.assertGreaterEqual(len(dispersion), 1)
-
-    def test_abnormally_low_price_detected(self):
-        """Statistical outlier (low) should be flagged."""
+        result = self._run(soumissions, 2)
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertNotIn("PRIX_ANORMALEMENT_ELEVE", types)
+ 
+ 
+class TestDispersionAnormale(TestCase):
+    def test_low_cv_flagged(self):
+        """CV < 2% with ≥ 3 soumissions → DISPERSION_ANORMALE."""
         soumissions = [
-            {"id_soumission": 1, "montant_financier": "100000.00"},
-            {"id_soumission": 2, "montant_financier": "110000.00"},
-            {"id_soumission": 3, "montant_financier": "105000.00"},
-            {"id_soumission": 4, "montant_financier": "10000.00"},  # Outlier
+            _make_soumission(1, "1000000"),
+            _make_soumission(2, "1001000"),
+            _make_soumission(3, "1000500"),
+            _make_soumission(4, "1000200"),
         ]
-        anomalies = detect_price_and_similarity_anomalies(soumissions)
-        low = [a for a in anomalies if a["type_anomalie"] == "PRIX_ANORMALEMENT_BAS"]
-        self.assertGreaterEqual(len(low), 1)
-        self.assertEqual(low[0]["id_soumission"], 4)
-
-    def test_abnormally_high_price_detected(self):
-        """Statistical outlier (high) should be flagged as cover bid."""
+        result = detect_anomalies_appel(soumissions, BASE_APPEL)
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertIn("DISPERSION_ANORMALE", types)
+ 
+    def test_high_cv_not_flagged(self):
         soumissions = [
-            {"id_soumission": 1, "montant_financier": "100000.00"},
-            {"id_soumission": 2, "montant_financier": "110000.00"},
-            {"id_soumission": 3, "montant_financier": "105000.00"},
-            {"id_soumission": 4, "montant_financier": "500000.00"},  # Outlier
+            _make_soumission(1, "1000000"),
+            _make_soumission(2, "1300000"),
+            _make_soumission(3, "1600000"),
         ]
-        anomalies = detect_price_and_similarity_anomalies(soumissions)
-        high = [a for a in anomalies if a["type_anomalie"] == "PRIX_ANORMALEMENT_ELEVE"]
-        self.assertGreaterEqual(len(high), 1)
-        self.assertEqual(high[0]["id_soumission"], 4)
-
-    def test_complementary_bids_detected(self):
-        """Cover bid pattern: one low offer + many clustered high offers."""
+        result = detect_anomalies_appel(soumissions, BASE_APPEL)
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertNotIn("DISPERSION_ANORMALE", types)
+ 
+    def test_less_than_3_no_dispersion_check(self):
         soumissions = [
-            {"id_soumission": 1, "montant_financier": "100000.00"},  # Target winner
-            {"id_soumission": 2, "montant_financier": "200000.00"},  # Cover
-            {"id_soumission": 3, "montant_financier": "200500.00"},  # Cover
-            {"id_soumission": 4, "montant_financier": "201000.00"},  # Cover
+            _make_soumission(1, "1000000"),
+            _make_soumission(2, "1001000"),
         ]
-        anomalies = detect_price_and_similarity_anomalies(soumissions)
-        comp = [a for a in anomalies if a["type_anomalie"] == "OFFRES_COMPLEMENTAIRES"]
-        self.assertGreaterEqual(len(comp), 1)
-
-    def test_no_anomalies_for_normal_competition(self):
-        """Well-spread prices should not trigger collusion alerts."""
+        result = detect_anomalies_appel(soumissions, BASE_APPEL)
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertNotIn("DISPERSION_ANORMALE", types)
+ 
+ 
+class TestRotationSoumissionnaires(TestCase):
+    def _historical_wins(self):
+        return [
+            {"id_appel_offre": 1, "id_soumissionnaire": 10, "id_soumission": 100},
+            {"id_appel_offre": 2, "id_soumissionnaire": 20, "id_soumission": 200},
+            {"id_appel_offre": 3, "id_soumissionnaire": 10, "id_soumission": 300},
+            {"id_appel_offre": 4, "id_soumissionnaire": 20, "id_soumission": 400},
+            {"id_appel_offre": 5, "id_soumissionnaire": 10, "id_soumission": 500},
+            {"id_appel_offre": 6, "id_soumissionnaire": 20, "id_soumission": 600},
+        ]
+ 
+    def test_rotation_detected(self):
         soumissions = [
-            {"id_soumission": 1, "montant_financier": "100000.00"},
-            {"id_soumission": 2, "montant_financier": "130000.00"},
-            {"id_soumission": 3, "montant_financier": "160000.00"},
+            _make_soumission(1, "900000", id_soumissionnaire=10),
+            _make_soumission(2, "950000", id_soumissionnaire=20),
         ]
-        anomalies = detect_price_and_similarity_anomalies(soumissions)
-        # Should have no or very few anomalies for healthy competition
-        collusion_types = {"SIMILARITE_PRIX", "COLLUSION_CLUSTER_PRIX", "DISPERSION_ANORMALE"}
-        collusion = [a for a in anomalies if a["type_anomalie"] in collusion_types]
-        self.assertEqual(len(collusion), 0)
-
-    def test_empty_soumissions_returns_empty(self):
-        anomalies = detect_price_and_similarity_anomalies([])
-        self.assertEqual(anomalies, [])
-
-    def test_single_soumission_no_crash(self):
-        soumissions = [{"id_soumission": 1, "montant_financier": "100000"}]
-        anomalies = detect_price_and_similarity_anomalies(soumissions)
-        self.assertIsInstance(anomalies, list)
-
-    def test_anomaly_summary_generation(self):
+        result = detect_anomalies_appel(soumissions, BASE_APPEL,
+                                        historical_wins=self._historical_wins())
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertIn("ROTATION_SOUMISSIONNAIRES", types)
+ 
+    def test_rotation_requires_3_appels(self):
+        """With only 2 historical wins, no rotation alert."""
+        soumissions = [_make_soumission(1, "900000", id_soumissionnaire=10)]
+        wins = [
+            {"id_appel_offre": 1, "id_soumissionnaire": 10, "id_soumission": 100},
+            {"id_appel_offre": 2, "id_soumissionnaire": 20, "id_soumission": 200},
+        ]
+        result = detect_anomalies_appel(soumissions, BASE_APPEL, historical_wins=wins)
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertNotIn("ROTATION_SOUMISSIONNAIRES", types)
+ 
+    def test_no_historical_wins_no_rotation(self):
+        soumissions = [_make_soumission(1, "900000", id_soumissionnaire=10)]
+        result = detect_anomalies_appel(soumissions, BASE_APPEL)
+        types = [a["type_anomalie"] for a in result["anomalies"]]
+        self.assertNotIn("ROTATION_SOUMISSIONNAIRES", types)
+ 
+ 
+# ===========================================================================
+# Unit Tests — Scoring engine
+# ===========================================================================
+class TestScoringEngine(TestCase):
+    def test_score_capped_at_100(self):
         anomalies = [
-            {
-                "id_soumission": 1,
-                "type_anomalie": "SIMILARITE_PRIX",
-                "niveau_severite": "ELEVEE",
-                "score_confiance": Decimal("0.85"),
-                "details": "test",
-            },
-            {
-                "id_soumission": 2,
-                "type_anomalie": "PRIX_ANORMALEMENT_BAS",
-                "niveau_severite": "MOYEN",
-                "score_confiance": Decimal("0.80"),
-                "details": "test",
-            },
+            {"type_anomalie": "MONTANT_FINANCIER_MANQUANT"},  # 20
+            {"type_anomalie": "MONTANT_INVALID"},              # 20
+            {"type_anomalie": "SOUMISSION_HORS_DELAI"},        # 20
+            {"type_anomalie": "ROTATION_SOUMISSIONNAIRES"},    # 20
+            {"type_anomalie": "MONTANT_TROP_ELEVE"},           # 10
+            {"type_anomalie": "MONTANT_TROP_BAS"},             # 10
         ]
-        summary = generate_anomaly_summary(anomalies, 5)
+        score = _compute_score_severite(anomalies)
+        self.assertEqual(score, 100)
+ 
+    def test_score_zero_for_no_anomalies(self):
+        self.assertEqual(_compute_score_severite([]), 0)
+ 
+    def test_niveau_mapping(self):
+        self.assertEqual(_score_to_niveau(0), "FAIBLE")
+        self.assertEqual(_score_to_niveau(20), "FAIBLE")
+        self.assertEqual(_score_to_niveau(21), "MOYEN")
+        self.assertEqual(_score_to_niveau(50), "MOYEN")
+        self.assertEqual(_score_to_niveau(51), "ÉLEVÉ")
+        self.assertEqual(_score_to_niveau(80), "ÉLEVÉ")
+        self.assertEqual(_score_to_niveau(81), "CRITIQUE")
+        self.assertEqual(_score_to_niveau(100), "CRITIQUE")
+ 
+    def test_severity_error_vs_warning(self):
+        soumission = {"id_soumission": 1, "montant_financier": None}
+        appel = {
+            "montant_estime": "1000000",
+            "date_limite_soumission": "2000-01-01T00:00:00",
+        }
+        result = detect_anomalies_soumission(soumission, appel, [soumission])
+        errors = [a for a in result["anomalies"] if a["niveau_severite"] == "ERROR"]
+        self.assertGreaterEqual(len(errors), 1)
+ 
+    def test_score_confiance_in_valid_range(self):
+        soumission = _make_soumission(1, "-100")
+        result = detect_anomalies_soumission(soumission, BASE_APPEL, [soumission])
+        for a in result["anomalies"]:
+            self.assertGreaterEqual(float(a["score_confiance"]), 0.90)
+            self.assertLessEqual(float(a["score_confiance"]), 1.00)
+ 
+ 
+# ===========================================================================
+# Unit Tests — detect_anomalies_appel
+# ===========================================================================
+class TestDetectAnomaliesAppel(TestCase):
+    def test_returns_correct_structure(self):
+        soumissions = [_make_soumission(i, str(1000000 + i * 1000)) for i in range(1, 5)]
+        result = detect_anomalies_appel(soumissions, BASE_APPEL)
+        self.assertIn("anomalies", result)
+        self.assertIn("total_soumissions_analysees", result)
+        self.assertIn("resume_global", result)
+        self.assertEqual(result["total_soumissions_analysees"], 4)
+ 
+    def test_empty_soumissions(self):
+        result = detect_anomalies_appel([], BASE_APPEL)
+        self.assertEqual(result["anomalies"], [])
+        self.assertEqual(result["total_soumissions_analysees"], 0)
+ 
+    def test_all_invalid_amounts_flagged(self):
+        soumissions = [
+            _make_soumission(1, "0"),
+            _make_soumission(2, "-1000"),
+            _make_soumission(3, "500000"),
+        ]
+        result = detect_anomalies_appel(soumissions, BASE_APPEL)
+        types_by_id = {}
+        for a in result["anomalies"]:
+            types_by_id.setdefault(a["id_soumission"], []).append(a["type_anomalie"])
+ 
+        self.assertIn("MONTANT_INVALID", types_by_id.get(1, []))
+        self.assertIn("MONTANT_INVALID", types_by_id.get(2, []))
+        self.assertNotIn("MONTANT_INVALID", types_by_id.get(3, []))
+ 
+ 
+# ===========================================================================
+# Unit Tests — generate_anomaly_summary
+# ===========================================================================
+class TestGenerateAnomalySummary(TestCase):
+    def test_summary_structure(self):
+        anomalies = [
+            {"type_anomalie": "MONTANT_FINANCIER_MANQUANT", "niveau_severite": "ERROR",
+             "score_confiance": 1.0},
+            {"type_anomalie": "PRIX_ANORMALEMENT_BAS", "niveau_severite": "WARNING",
+             "score_confiance": 0.90},
+        ]
+        summary = generate_anomaly_summary(anomalies, soumissions_count=5)
         self.assertEqual(summary["total_anomalies"], 2)
-        self.assertEqual(summary["soumissions_affectees"], 2)
-        self.assertIn("niveau_risque", summary)
+        self.assertEqual(summary["nb_errors"], 1)
+        self.assertEqual(summary["nb_warnings"], 1)
+        self.assertIn("score_severite_global", summary)
+        self.assertIn("niveau_global", summary)
         self.assertIn("recommandation", summary)
+        self.assertIn("repartition_par_type", summary)
+ 
+    def test_score_and_niveau_correct(self):
+        anomalies = [
+            {"type_anomalie": "MONTANT_FINANCIER_MANQUANT", "niveau_severite": "ERROR", "score_confiance": 1.0},
+            {"type_anomalie": "SOUMISSION_HORS_DELAI", "niveau_severite": "ERROR", "score_confiance": 1.0},
+            {"type_anomalie": "ROTATION_SOUMISSIONNAIRES", "niveau_severite": "WARNING", "score_confiance": 0.90},
+        ]
+        summary = generate_anomaly_summary(anomalies, soumissions_count=3)
+        # 20 + 20 + 20 = 60 → ÉLEVÉ
+        self.assertEqual(summary["score_severite_global"], 60)
+        self.assertEqual(summary["niveau_global"], "ÉLEVÉ")
 
 
 class OcrServiceTests(TestCase):
@@ -371,51 +596,75 @@ class SaucissonnageDetectionTests(TestCase):
 class IaServiceApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.authenticate_internal()
+
+    def authenticate_internal(self):
+        self.client.credentials(HTTP_X_INTERNAL_SERVICE_TOKEN=settings.INTERNAL_SERVICE_TOKEN)
 
     def test_health_endpoint(self):
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json().get("status"), "ok")
 
-    def test_detecter_anomalies_creates_records(self):
+    @patch("ia_service.services.integrations.requests.get")
+    def test_detecter_anomalies_creates_records(self, mock_get):
+        def build_json_response(payload, status_code=200):
+            response = MagicMock()
+            response.status_code = status_code
+            response.raise_for_status.return_value = None
+            response.json.return_value = payload
+            return response
+
+        mock_get.side_effect = [
+            build_json_response({"id_soumission": 1, "montant_financier": "100000.00", "signature_document": "abc123"}),
+            build_json_response({"id_appel_offre": 101, "montant_estime": "120000.00"}),
+            build_json_response({
+                "results": [
+                    {"id_soumission": 1, "montant_financier": "100000.00", "signature_document": "abc123"},
+                    {"id_soumission": 2, "montant_financier": "100200.00", "signature_document": "abc123"},
+                ]
+            }),
+        ]
         payload = {
             "id_appel_offre": 101,
-            "soumissions": [
-                {
-                    "id_soumission": 1,
-                    "montant_financier": "100000.00",
-                    "signature_document": "abc123",
-                },
-                {
-                    "id_soumission": 2,
-                    "montant_financier": "100200.00",
-                    "signature_document": "abc123",
-                },
-            ],
+            "id_soumission": 1,
         }
         response = self.client.post("/ia/anomalies/detecter", payload, format="json")
         self.assertEqual(response.status_code, 201)
         data = response.json()
-        self.assertGreaterEqual(data.get("anomalies_detectees", 0), 2)
-        self.assertIn("summary", data)
-        self.assertIn("items", data)
+        self.assertIn("resume", data)
+        self.assertIn("anomalies", data)
 
-    def test_detecter_anomalies_returns_summary(self):
+    @patch("ia_service.services.integrations.requests.get")
+    def test_detecter_anomalies_returns_summary(self, mock_get):
+        def build_json_response(payload, status_code=200):
+            response = MagicMock()
+            response.status_code = status_code
+            response.raise_for_status.return_value = None
+            response.json.return_value = payload
+            return response
+
+        soumissions = [
+            {"id_soumission": 1, "montant_financier": "100000"},
+            {"id_soumission": 2, "montant_financier": "100050"},
+            {"id_soumission": 3, "montant_financier": "100025"},
+        ]
+        mock_get.side_effect = [
+            build_json_response(soumissions[0]),
+            build_json_response({"id_appel_offre": 102, "montant_estime": "120000"}),
+            build_json_response({"results": soumissions}),
+        ]
         payload = {
             "id_appel_offre": 102,
-            "soumissions": [
-                {"id_soumission": 1, "montant_financier": "100000"},
-                {"id_soumission": 2, "montant_financier": "100050"},
-                {"id_soumission": 3, "montant_financier": "100025"},
-            ],
+            "id_soumission": 1,
         }
         response = self.client.post("/ia/anomalies/detecter", payload, format="json")
         self.assertEqual(response.status_code, 201)
         data = response.json()
-        summary = data.get("summary", {})
-        self.assertIn("score_risque_global", summary)
-        self.assertIn("niveau_risque", summary)
-        self.assertIn("recommandation", summary)
+        summary = data.get("resume", {})
+        self.assertIn("score_severite_global", summary)
+        self.assertIn("niveau_global", summary)
+        self.assertIn("total_anomalies", summary)
 
     def test_detecter_saucissonnage_endpoint(self):
         payload = {
@@ -459,41 +708,41 @@ class IaServiceApiTests(TestCase):
         # Create collusion anomaly
         DetectionAnomalieIA.objects.create(
             id_appel_offre=1, id_soumission=1,
-            type_anomalie="SIMILARITE_PRIX",
-            niveau_severite="ELEVEE", score_confiance=Decimal("0.85"),
-            details="test", statut_examen="A_REVOIR",
+            type_anomalie="PRIX_ANORMALEMENT_BAS",
+            niveau_severite="WARNING", score_confiance=Decimal("0.85"),
+            details="test", statut_examen="EN_ATTENTE",
         )
         # Create saucissonnage anomaly
         DetectionAnomalieIA.objects.create(
             id_appel_offre=1,
             type_anomalie="SAUCISSONNAGE_CUMUL_SEUIL",
-            niveau_severite="CRITIQUE", score_confiance=Decimal("0.95"),
-            details="test", statut_examen="A_REVOIR",
+            niveau_severite="WARNING", score_confiance=Decimal("0.95"),
+            details="test", statut_examen="EN_ATTENTE",
         )
 
         # Filter collusion only
         response = self.client.get("/ia/anomalies?categorie=collusion")
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = response.json()["anomalies"]
         for item in data:
             self.assertFalse(item["type_anomalie"].startswith("SAUCISSONNAGE"))
 
         # Filter saucissonnage only
         response = self.client.get("/ia/anomalies?categorie=saucissonnage")
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = response.json()["anomalies"]
         for item in data:
             self.assertTrue(item["type_anomalie"].startswith("SAUCISSONNAGE"))
 
     def test_anomalie_statut_examen_patch_with_comment(self):
         record = DetectionAnomalieIA.objects.create(
             id_appel_offre=1, id_soumission=1,
-            type_anomalie="SIMILARITE_PRIX",
-            niveau_severite="ELEVEE", score_confiance=Decimal("0.85"),
-            details="test", statut_examen="A_REVOIR",
+            type_anomalie="PRIX_ANORMALEMENT_BAS",
+            niveau_severite="WARNING", score_confiance=Decimal("0.85"),
+            details="test", statut_examen="EN_ATTENTE",
         )
         payload = {
-            "statut_examen": "CONFIRMEE",
+            "statut_examen": "VALIDE",
             "commentaire_examen": "Anomalie confirmée après vérification manuelle.",
         }
         response = self.client.patch(
@@ -502,21 +751,21 @@ class IaServiceApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data["statut_examen"], "CONFIRMEE")
+        self.assertEqual(data["statut_examen"], "VALIDE")
         self.assertEqual(data["commentaire_examen"], "Anomalie confirmée après vérification manuelle.")
         self.assertIsNotNone(data["date_examen"])
 
     def test_anomalies_summary_endpoint(self):
         DetectionAnomalieIA.objects.create(
             id_appel_offre=999, id_soumission=1,
-            type_anomalie="SIMILARITE_PRIX",
-            niveau_severite="ELEVEE", score_confiance=Decimal("0.85"),
+            type_anomalie="PRIX_ANORMALEMENT_ELEVE",
+            niveau_severite="WARNING", score_confiance=Decimal("0.85"),
             details="test",
         )
         DetectionAnomalieIA.objects.create(
             id_appel_offre=999, id_soumission=2,
             type_anomalie="PRIX_ANORMALEMENT_BAS",
-            niveau_severite="MOYEN", score_confiance=Decimal("0.80"),
+            niveau_severite="WARNING", score_confiance=Decimal("0.80"),
             details="test",
         )
 
@@ -524,10 +773,10 @@ class IaServiceApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["id_appel_offre"], 999)
-        self.assertEqual(data["total_anomalies"], 2)
-        self.assertIn("score_risque", data)
-        self.assertIn("niveau_risque", data)
-        self.assertIn("anomalies", data)
+        self.assertEqual(data["resume"]["total_anomalies"], 2)
+        self.assertIn("score_severite_global", data["resume"])
+        self.assertIn("niveau_global", data["resume"])
+        self.assertIn("repartition", data)
 
     def test_verifier_conformite_signals_missing_documents(self):
         payload = {
@@ -552,6 +801,7 @@ class IaServiceApiTests(TestCase):
     @patch("ia_service.services.integrations.requests.patch")
     @patch("ia_service.services.integrations.settings.INTERNAL_SERVICE_TOKEN", "ia-internal-token")
     def test_verifier_conformite_triggers_cross_service_patch_calls(self, mock_patch):
+        self.authenticate_internal()
         ok_response = MagicMock()
         ok_response.status_code = 200
         ok_response.raise_for_status.return_value = None
@@ -596,6 +846,7 @@ class IaServiceApiTests(TestCase):
     @patch("ia_service.services.integrations.requests.patch")
     @patch("ia_service.services.integrations.settings.INTERNAL_SERVICE_TOKEN", "ia-internal-token")
     def test_verifier_conformite_partial_document_sync_failure_is_non_blocking(self, mock_patch):
+        self.authenticate_internal()
         ok_response = MagicMock()
         ok_response.status_code = 200
         ok_response.raise_for_status.return_value = None
@@ -628,6 +879,7 @@ class IaServiceApiTests(TestCase):
     @patch("ia_service.services.integrations.requests.get")
     @patch("ia_service.services.integrations.settings.INTERNAL_SERVICE_TOKEN", "ia-internal-token")
     def test_verifier_conformite_auto_fetches_required_and_provided_docs(self, mock_get, mock_patch):
+        self.authenticate_internal()
         def build_json_response(payload, status_code=200):
             response = MagicMock()
             response.status_code = status_code
@@ -682,10 +934,11 @@ class IaServiceApiTests(TestCase):
 
     @patch("ia_service.services.integrations.requests.patch")
     @patch("ia_service.services.integrations.requests.get")
-    @patch("ia_service.views.extract_document_text")
+    @patch("ia_service.views.extract_documents_text_parallel")
     @patch("ia_service.views.fetch_document_binary")
     @patch("ia_service.services.integrations.settings.INTERNAL_SERVICE_TOKEN", "ia-internal-token")
-    def test_verifier_conformite_auto_with_ocr_enabled(self, mock_fetch_binary, mock_extract_text, mock_get, mock_patch):
+    def test_verifier_conformite_auto_with_ocr_enabled(self, mock_fetch_binary, mock_extract_parallel, mock_get, mock_patch):
+        self.authenticate_internal()
         def build_json_response(payload, status_code=200):
             response = MagicMock()
             response.status_code = status_code
@@ -715,7 +968,9 @@ class IaServiceApiTests(TestCase):
         ]
 
         mock_fetch_binary.return_value = {"ok": True, "content": b"binary"}
-        mock_extract_text.return_value = {"text": "registre de commerce", "engine": "tesseract", "used": True}
+        mock_extract_parallel.return_value = [
+            {"text": "registre de commerce", "engine": "tesseract", "used": True}
+        ]
 
         ok_patch = MagicMock()
         ok_patch.status_code = 200
@@ -737,7 +992,7 @@ class IaServiceApiTests(TestCase):
         self.assertEqual(data["analysis_context"]["ocr"]["succeeded"], 1)
 
         mock_fetch_binary.assert_called_once_with(9001)
-        mock_extract_text.assert_called_once()
+        mock_extract_parallel.assert_called_once()
 
     @patch("ia_service.services.integrations.requests.get")
     def test_detecter_anomalies_auto_fetches_soumissions(self, mock_get):
@@ -772,9 +1027,9 @@ class IaServiceApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 201)
         data = response.json()
-        self.assertIn("soumissions_analysees", data)
-        self.assertEqual(data["soumissions_analysees"], 3)
-        self.assertIn("summary", data)
+        self.assertIn("total_soumissions_analysees", data)
+        self.assertEqual(data["total_soumissions_analysees"], 3)
+        self.assertIn("resume_global", data)
 
     @patch("ia_service.services.integrations.requests.get")
     def test_detecter_saucissonnage_auto_fetches_appels(self, mock_get):

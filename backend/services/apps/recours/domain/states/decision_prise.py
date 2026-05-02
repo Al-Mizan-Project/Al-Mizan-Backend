@@ -1,6 +1,5 @@
 from apps.recours.domain.states.base_state import RecoursState
 
-
 class DecisionPriseState(RecoursState):
 
     def accepter(self, recours):
