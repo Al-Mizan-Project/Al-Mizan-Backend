@@ -6,7 +6,18 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+import logging
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+ 
+from .serializers import AideRedactionRequestSerializer, AideRedactionResponseSerializer
+from .services.integrations import fetch_appel_details, fetch_appel_required_document_ids
+from .services.redaction import run_aide_redaction_pipeline
+ 
+logger = logging.getLogger(__name__)
 from .models import DetectionAnomalieIA
 from .serializers import (
     CdcRedigerInputSerializer,
@@ -717,3 +728,87 @@ class CdcReviserView(APIView):
             ensure_ascii=True,
         )
         return Response(result)
+
+
+# ---------------------------------------------------------------------------
+# Helper — construire le contexte appel depuis la réponse du service appels
+# ---------------------------------------------------------------------------
+ 
+def _build_contexte_from_appel_dict(appel: dict) -> dict:
+    """
+    Mappe les champs retournés par fetch_appel_details()
+    vers le dict de contexte attendu par run_aide_redaction_pipeline().
+    Les noms de champs correspondent au modèle AppelOffres du service appels.
+    """
+    montant = appel.get("montant_estime")
+    try:
+        montant = float(montant) if montant is not None else None
+    except (TypeError, ValueError):
+        montant = None
+ 
+    return {
+        "titre": appel.get("titre", ""),
+        "description": appel.get("description", ""),
+        "type_procedure": appel.get("type_procedure", ""),
+        "type_prestation": appel.get("type_prestation", ""),
+        "montant_estime": montant,
+        "wilaya": appel.get("wilaya", ""),
+        "poids_technique": int(appel.get("poids_technique", 50)),
+        "poids_financier": int(appel.get("poids_financier", 50)),
+        "qualification_category": appel.get("qualification_category", ""),
+        "minimum_experience_years": int(appel.get("minimum_experience_years", 0)),
+        "minimum_revenue_da": int(appel.get("minimum_revenue_da", 0)),
+        "participation_conditions": appel.get("participation_conditions") or [],
+        "required_docs_admin": appel.get("required_docs_admin") or [],
+        "required_docs_tech": appel.get("required_docs_tech") or [],
+    }
+ 
+ 
+def _document_belongs_to_appel(id_document: int, id_appel_offres: int) -> bool:
+    """
+    Vérifie que le document CDC est bien lié à l'appel d'offres
+    en interrogeant le service appels.
+    """
+    result = fetch_appel_required_document_ids(id_appel_offres)
+    if not result.get("ok"):
+        # Si le service est indisponible, on laisse passer avec un warning
+        logger.warning(
+            "Cannot verify document ownership for appel=%s (service unavailable): %s",
+            id_appel_offres,
+            result.get("error"),
+        )
+        return True
+    return id_document in result.get("document_ids", [])
+ 
+ 
+# ---------------------------------------------------------------------------
+# Vue principale
+# ---------------------------------------------------------------------------
+class AideRedactionView(APIView):
+    parser_classes = [MultiPartParser, FormParser]  # pour recevoir le fichier
+    permission_classes = [AllowAny]
+    def post(self, request):
+        req_serializer = AideRedactionRequestSerializer(data=request.data)
+        if not req_serializer.is_valid():
+            return Response(
+                {"detail": "Paramètres invalides.", "errors": req_serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        data = req_serializer.validated_data
+        fichier = data.pop("fichier_cdc")
+
+        # Extraire le texte du CDC
+        from .services.ocr import extract_document_text
+        ocr = extract_document_text(fichier.read(), fichier.name)
+
+        # Analyser
+        from .services.redaction import analyse_cdc
+        rapport = analyse_cdc(ocr["text"], contexte_appel=data)
+        rapport["_pipeline"] = {
+            "ocr_engine": ocr["engine"],
+            "char_count": len(ocr["text"]),
+            "ocr_used": ocr["used"],
+        }
+
+        return Response(rapport, status=status.HTTP_200_OK)

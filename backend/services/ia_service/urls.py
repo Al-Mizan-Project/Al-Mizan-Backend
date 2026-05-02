@@ -14,6 +14,7 @@ from .views import (
     DetecterSaucissonnageAutoView,
     DetecterSaucissonnageView,
     VerifierConformiteSoumissionAutoView,
+    AideRedactionView,
     VerifierConformiteSoumissionView,
 )
 
@@ -57,4 +58,9 @@ urlpatterns = [
     # ── Cahier des Charges (CDC) ────────────────────────────────────────
     path("ia/cdc/rediger", CdcRedigerView.as_view(), name="ia_cdc_rediger"),
     path("ia/cdc/reviser", CdcReviserView.as_view(), name="ia_cdc_reviser"),
+    
+    
+    
+    
+    path("aide-redaction/", AideRedactionView.as_view())
 ]
