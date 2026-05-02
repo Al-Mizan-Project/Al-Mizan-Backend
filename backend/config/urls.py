@@ -11,6 +11,7 @@ from soumissions_app.views import (
     SoumissionConformitePatchView,
     SoumissionCreateView,
     SoumissionDetailView,
+    SoumissionDocumentsView,
     SoumissionTerminerEvaluationView,
     SoumissionWithdrawView,
 )
@@ -56,6 +57,7 @@ urlpatterns = [
     path("api/soumissions/", include("soumissions_app.urls")),
     path("soumissions", SoumissionCreateView.as_view()),
     path("soumissions/<int:soumission_id>", SoumissionDetailView.as_view()),
+    path("soumissions/<int:soumission_id>/documents", SoumissionDocumentsView.as_view()),
     path("soumissions/<int:id_appel_offre>/open-bids", OpenBidsView.as_view()),
     path("soumissions/<int:soumission_id>/evaluate", EvaluationCreateView.as_view()),
     path("soumissions/<int:soumission_id>/retirer", SoumissionWithdrawView.as_view()),

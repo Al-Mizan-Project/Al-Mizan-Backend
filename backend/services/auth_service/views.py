@@ -4,7 +4,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenRefreshView
-
+from .services.access_control import user_permission_names
+from .models import Utilisateur
 from .permissions import AuthServicePermission
 from .serializers import (
     ChangePasswordSerializer,
@@ -363,3 +364,40 @@ class RolePermissionDetailView(APIView):
     def delete(self, request, role_id, permission_id):
         remove_role_permission(role_id=role_id, permission_id=permission_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+class InternalRegisterActeurView(APIView):
+    """ POST /internal/users/register """
+    # Idéalement, protéger par un Token de service interne (ex: X-Internal-Service-Token)
+    permission_classes = [] 
+
+    def post(self, request):
+        serializer = InternalActeurRegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response({"message": "Utilisateur créé", "id_utilisateur": user.id_utilisateur}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class InternalSearchUsersView(APIView):
+    """ GET /internal/users/search/?membres_ids=uuid1,uuid2 """
+    permission_classes = []
+
+    def get(self, request):
+        membres_ids_str = request.query_params.get('membres_ids', '')
+        if not membres_ids_str:
+            return Response([], status=status.HTTP_200_OK)
+
+        ids_list = membres_ids_str.split(',')
+        users = Utilisateur.objects.filter(id_membre__in=ids_list).select_related('id_role')
+        
+        result = []
+        for user in users:
+            result.append({
+                "id_membre": str(user.id_membre),
+                "email": user.email,
+                "is_active": user.is_active,
+                "role": user.id_role.nom_role if user.id_role else None,
+                "permissions": user_permission_names(user) # Utilise votre fonction existante !
+            })
+            
+        return Response(result, status=status.HTTP_200_OK)

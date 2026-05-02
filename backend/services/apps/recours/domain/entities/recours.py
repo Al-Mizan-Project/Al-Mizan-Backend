@@ -24,6 +24,10 @@ class Recours:
         date_decision: datetime = None,
         traite_par: int = None,
         version: int = 0,
+        type_recours: str = None,
+        objet: str = "",
+        explications: str = "",
+        document_ids: list = None,
     ):
         self.id_recours = id_recours
         self.id_operateur_economique = id_operateur_economique
@@ -37,6 +41,10 @@ class Recours:
         self.date_decision = date_decision
         self.traite_par = traite_par
         self.version = version
+        self.type_recours = type_recours
+        self.objet = objet
+        self.explications = explications
+        self.document_ids = list(document_ids) if document_ids else []
 
     # -------- STATE RESOLUTION --------
 

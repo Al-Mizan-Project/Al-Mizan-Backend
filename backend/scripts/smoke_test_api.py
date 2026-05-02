@@ -108,7 +108,25 @@ class ApiSmokeRunner:
             body = response.text[:1000]
             fail(f"{method} {path} -> {response.status_code}, expected {sorted(expected)}\n{body}")
         self.record_coverage(method, path)
+        if response.status_code >= 400:
+            self.assert_wrapped_error(response)
         return response
+
+    def assert_wrapped_error(self, response):
+        try:
+            payload = response.json()
+        except ValueError:
+            fail(f"Expected JSON error payload, got: {response.text[:1000]}")
+
+        if not isinstance(payload, dict) or "error" not in payload:
+            fail(f"Expected wrapped error payload, got: {payload}")
+
+        error = payload["error"]
+        if not isinstance(error, dict) or "code" not in error or "message" not in error:
+            fail(f"Expected structured error payload, got: {payload}")
+
+        if response.status_code == 400 and error.get("details") is None and response.request.method == "POST":
+            return
 
     def json(self, method, path, expected, token=None, **kwargs):
         response = self.request(method, path, expected, token=token, **kwargs)
@@ -843,6 +861,9 @@ class ApiSmokeRunner:
     def appels_setup(self):
         base_payload = {
             "id_service_contractant": self.ids["service_id"],
+            "type_prestation": "services",
+            "visibilite": "public",
+            "localisation": "Alger Centre",
             "description": "Smoke appel",
             "type_procedure": "ouverte",
             "montant_estime": "100000.00",
@@ -864,7 +885,13 @@ class ApiSmokeRunner:
             "/appels-offres",
             {201},
             token=self.tokens["admin_access"],
-            json={**base_payload, "reference": f"{PREFIX}-AO-2", "titre": "Appel Cancel"},
+            json={
+                **base_payload,
+                "reference": f"{PREFIX}-AO-2",
+                "titre": "Appel Cancel",
+                "visibilite": "prive",
+                "operateurs_invites": [self.ids["operateur_id"]],
+            },
         )
         appel_withdraw = self.json(
             "POST",
@@ -936,6 +963,57 @@ class ApiSmokeRunner:
             "POST",
             f"/appels-offres/{self.ids['appel_cancel_id']}/annuler",
             {200},
+            token=self.tokens["admin_access"],
+        )
+
+    def achats_setup(self):
+        base_payload = {
+            "id_service_contractant": self.ids["service_id"],
+            "objet": "Achat simple smoke",
+            "description": "Achat simple de test pour valider les routes.",
+            "type_prestation": "services",
+            "wilaya": "Alger",
+            "localisation": "Alger Centre",
+            "montant_estime": "750000.00",
+            "date_demande": NOW.isoformat(),
+            "id_operateur_economique": self.ids["operateur_id"],
+        }
+        achat_main = self.json(
+            "POST",
+            "/achats-simples",
+            {201},
+            token=self.tokens["admin_access"],
+            json={**base_payload, "reference": f"{PREFIX}-AS-1"},
+        )
+        achat_delete = self.json(
+            "POST",
+            "/achats-simples",
+            {201},
+            token=self.tokens["admin_access"],
+            json={**base_payload, "reference": f"{PREFIX}-AS-2", "montant_estime": "125000.00"},
+        )
+        self.ids["achat_id"] = achat_main["id_achat_simple"]
+        self.ids["achat_delete_id"] = achat_delete["id_achat_simple"]
+
+        self.json("GET", "/achats-simples", {200}, token=self.tokens["admin_access"])
+        self.json("GET", f"/achats-simples/{self.ids['achat_id']}", {200}, token=self.tokens["admin_access"])
+        self.json(
+            "PATCH",
+            f"/achats-simples/{self.ids['achat_id']}",
+            {200},
+            token=self.tokens["admin_access"],
+            json={"localisation": "Alger Hydra", "montant_estime": "800000.00"},
+        )
+        self.json(
+            "GET",
+            f"/services-contractants/{self.ids['service_id']}/achats-simples",
+            {200},
+            token=self.tokens["admin_access"],
+        )
+        self.request(
+            "DELETE",
+            f"/achats-simples/{self.ids['achat_delete_id']}",
+            {204},
             token=self.tokens["admin_access"],
         )
 
@@ -2167,6 +2245,31 @@ class ApiSmokeRunner:
             token=self.tokens["admin_access"],
             data={"related_type": "invalid", "is_encrypted": "false"},
         )
+        private_appel = self.request(
+            "POST",
+            "/appels-offres",
+            {400},
+            token=self.tokens["admin_access"],
+            json={
+                "id_service_contractant": self.ids["service_id"],
+                "reference": f"{PREFIX}-AO-INVALID",
+                "titre": "Appel privé invalide",
+                "description": "Should fail without invites",
+                "type_procedure": "ouverte",
+                "type_prestation": "services",
+                "visibilite": "prive",
+                "montant_estime": "99000.00",
+                "date_publication": NOW.isoformat(),
+                "date_limite_soumission": (NOW + timedelta(days=4)).isoformat(),
+                "date_ouverture_plis": NOW.isoformat(),
+                "poids_technique": 60,
+                "poids_financier": 40,
+            },
+        )
+        private_appel_payload = private_appel.json()
+        details = private_appel_payload.get("error", {}).get("details", {})
+        if "operateurs_invites" not in details:
+            fail(f"Expected operateurs_invites validation details, got: {private_appel_payload}")
         self.request(
             "POST",
             "/api/soumissions/",
@@ -2285,6 +2388,7 @@ class ApiSmokeRunner:
             "commission_interne_id": str(self.ids.get("commission_interne_id", 1)),
             "commission_externe_id": str(self.ids.get("commission_externe_id", 1)),
             "appel_id": str(self.ids.get("appel_id", 1)),
+            "achat_id": str(self.ids.get("achat_id", 1)),
             "document_id": str(self.ids.get("document_id", 1)),
             "soumission_id": str(self.ids.get("soumission_id", 1)),
             "evaluation_id": str(self.ids.get("evaluation_id", 1)),
@@ -2380,6 +2484,7 @@ class ApiSmokeRunner:
         self.contractant_setup()
         self.documents_setup()
         self.appels_setup()
+        self.achats_setup()
         self.soumissions_and_evaluations_setup()
         self.contrats_setup()
         self.notifications_setup()

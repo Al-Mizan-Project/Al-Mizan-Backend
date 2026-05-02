@@ -11,6 +11,7 @@ from .views import (
     ContratDocumentsListView,
     ContratDocumentDetailView,
     SoumissionContratView,
+    SoumissionValidationsView,
 )
 
 urlpatterns = [
@@ -31,4 +32,5 @@ urlpatterns = [
 
     # Cross-entity
     path("soumissions/<int:soumission_id>/contrat", SoumissionContratView.as_view()),
+    path("soumissions/<int:soumission_id>/validations", SoumissionValidationsView.as_view()),
 ]

@@ -20,12 +20,24 @@ from auth_service.serializers import (
 def authenticate_user(email, password):
     email = (email or "").strip().lower()
     user = Utilisateur.objects.select_related("id_role").filter(email=email).first()
+    
     if not user or not check_password(password, user.password):
         raise AuthenticationFailed("Invalid credentials")
+        
     refresh = RefreshToken.for_user(user)
     apply_user_claims(refresh, user)
     update_last_login(None, user)
-    return {"access": str(refresh.access_token), "refresh": str(refresh)}
+    
+    # On ajoute les infos de l'utilisateur ici
+    return {
+        "access": str(refresh.access_token), 
+        "refresh": str(refresh),
+        "user": {
+            "email": user.email,
+            "id_membre": str(user.id_membre) if user.id_membre else None,
+            "role": user.id_role.nom_role if user.id_role else None
+        }
+    }
 
 
 def logout_user(raw_refresh):

@@ -180,3 +180,45 @@ def consume_password_reset_token(raw_token):
         return None
     cache.delete(key)
     return int(user_id)
+
+
+class InternalActeurRegisterSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    id_membre = serializers.CharField()
+    role_nom = serializers.CharField() # Le nom du rôle en texte (ex: "SERVICE Contractant")
+    # On accepte une liste de noms de permissions
+    permissions = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
+
+    def validate_role_nom(self, value):
+        try:
+            role = Role.objects.get(nom_role=value)
+            return role
+        except Role.DoesNotExist:
+            raise serializers.ValidationError(f"Le rôle '{value}' n'existe pas dans le service Auth.")
+
+    def create(self, validated_data):
+        role = validated_data.pop('role_nom')
+        permissions_noms = validated_data.pop('permissions', [])
+        
+        with transaction.atomic():
+            # 1. Créer l'utilisateur
+            # Assurez-vous d'utiliser votre méthode de création qui gère le hashage du mot de passe
+            user = Utilisateur(
+                email=validated_data['email'],
+                id_membre=validated_data['id_membre'],
+                id_role=role
+            )
+            user.set_password(validated_data['password'])
+            user.save()
+
+            # 2. Assigner les permissions spécifiques à l'utilisateur (si votre modèle le permet)
+            # Sinon, vous pouvez ignorer cette étape si les permissions viennent uniquement du Rôle
+            if permissions_noms:
+                perms = Permission.objects.filter(nom_permission__in=permissions_noms)
+                # Remplacez "user.permissions.add" par la bonne relation ManyToMany de votre modèle Utilisateur
+                # user.user_permissions.add(*perms) 
+
+        return user
