@@ -21,6 +21,7 @@ class DocumentFilterMixin:
         queryset = Document.objects.all()
         ids = request.query_params.get('ids')
         related_type = request.query_params.get('related_type')
+        id_operateur_economique = request.query_params.get('id_operateur_economique')
         ia_verif_statut = request.query_params.get('ia_verif_statut')
         is_encrypted = request.query_params.get('is_encrypted')
         type_document = request.query_params.get('type_document')
@@ -40,6 +41,8 @@ class DocumentFilterMixin:
         
         if related_type:
             queryset = queryset.filter(related_type=related_type)
+        if id_operateur_economique and id_operateur_economique.isdigit():
+            queryset = queryset.filter(id_operateur_economique=int(id_operateur_economique))
         if ia_verif_statut:
             queryset = queryset.filter(ia_verif_statut=ia_verif_statut)
         if type_document:
@@ -80,6 +83,7 @@ class DocumentUploadView(views.APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         related_type = serializer.validated_data['related_type']
+        id_operateur_economique = serializer.validated_data.get('id_operateur_economique', None)
         is_encrypted = serializer.validated_data.get('is_encrypted', False)
         visible_after = serializer.validated_data.get('visible_after', None)
         
@@ -110,6 +114,7 @@ class DocumentUploadView(views.APIView):
                 # Save metadata to database
                 document = Document.objects.create(
                     related_type=related_type,
+                    id_operateur_economique=id_operateur_economique,
                     nom=original_filename,
                     type_document=extension,
                     storage_url=storage_url,
@@ -274,6 +279,7 @@ class DocumentMetadataPatchView(generics.UpdateAPIView):
     description="Returns a paginated list of documents matching specified search parameters in the database.",
     parameters=[
         OpenApiParameter('related_type', OpenApiTypes.STR, description="Filter by related type"),
+        OpenApiParameter('id_operateur_economique', OpenApiTypes.INT, description="Filter by owner operator"),
         OpenApiParameter('ia_verif_statut', OpenApiTypes.STR, description="Filter by AI Status"),
         OpenApiParameter('type_document', OpenApiTypes.STR, description="Filter by file extension (e.g. pdf)"),
         OpenApiParameter('min_size', OpenApiTypes.INT, description="Minimum size in bytes"),
@@ -286,6 +292,25 @@ class DocumentSearchView(generics.ListAPIView, DocumentFilterMixin):
     
     def get_queryset(self):
         return self.get_filtered_queryset(self.request)
+
+
+class OperateurDocumentsView(views.APIView, DocumentFilterMixin):
+    @extend_schema(
+        summary="List Documents by Operateur Economique",
+        description="Returns all documents owned by a specific operateur economique, with optional filtering.",
+        parameters=[
+            OpenApiParameter('related_type', OpenApiTypes.STR, description="Filter by related type"),
+            OpenApiParameter('type_document', OpenApiTypes.STR, description="Filter by file extension"),
+        ],
+        responses={200: DocumentSerializer(many=True)},
+    )
+    def get(self, request, id_operateur, *args, **kwargs):
+        queryset = self.get_filtered_queryset(request).filter(
+            id_operateur_economique=id_operateur
+        ).order_by("-uploaded_at")
+
+        serializer = DocumentSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 class DocumentDeleteView(views.APIView):
     @extend_schema(

@@ -6,6 +6,8 @@ Usage:
     python manage.py seed_appels --flush      # drop all existing data first
 """
 from django.core.management.base import BaseCommand
+from django.core.management.color import no_style
+from django.db import connection
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
@@ -355,7 +357,7 @@ class Command(BaseCommand):
         if statut == "attribue":
             return {
                 "date_publication": now - timedelta(days=45),
-                "date_limite_soumission": now - timedelta(days=35),
+                "date_limite_soumission": now + timedelta(days=30),
                 "date_ouverture_plis": now - timedelta(days=34),
             }
         return {
@@ -378,6 +380,13 @@ class Command(BaseCommand):
             AppelOffresOperateurInvite.objects.all().delete()
             DocumentsAppel.objects.all().delete()
             AppelOffres.objects.all().delete()
+            sequence_sql = connection.ops.sequence_reset_sql(
+                no_style(),
+                [AppelOffres, DocumentsAppel],
+            )
+            with connection.cursor() as cursor:
+                for sql in sequence_sql:
+                    cursor.execute(sql)
             self.stdout.write(self.style.WARNING("Flushed all appels data."))
 
         now = timezone.now()

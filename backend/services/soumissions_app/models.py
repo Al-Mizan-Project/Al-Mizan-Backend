@@ -5,6 +5,9 @@ class SoumissionStatut(models.TextChoices):
     EN_OUVERTURE = 'EN_OUVERTURE', 'En Ouverture'
     EN_EVALUATION = 'EN_EVALUATION', 'En Évaluation'
     EVALU_TERMINEE = 'EVALU_TERMINEE', 'Évaluation Terminée'
+    ATTRIBUE = 'ATTRIBUE', 'Attribué'
+    NON_RETENU = 'NON_RETENU', 'Non Retenu'
+    INFRUCTUEUX = 'INFRUCTUEUX', 'Infructueux'
     RETRAITE = 'RETRAITE', 'Retraitée'
 
 class Soumission(models.Model):
