@@ -105,6 +105,28 @@ def fetch_appels_by_service_contractant(id_service_contractant: int, params: dic
 # ---------------------------------------------------------------------------
 # Soumissions service integrations
 # ---------------------------------------------------------------------------
+def fetch_soumission_details(id_soumission: int):
+    """Fetch full details for a single soumission."""
+    base = _base_url(settings.SOUMISSIONS_SERVICE_URL)
+    endpoint = f"{base}/api/soumissions/{id_soumission}/"
+
+    try:
+        response = requests.get(
+            endpoint,
+            headers=_internal_headers(),
+            timeout=settings.REMOTE_SERVICE_TIMEOUT,
+        )
+        response.raise_for_status()
+        return {"ok": True, "soumission": response.json()}
+    except Exception as exc:
+        logger.warning(
+            "Failed to fetch soumission details for id=%s: %s",
+            id_soumission,
+            exc,
+        )
+        return {"ok": False, "error": str(exc), "soumission": None}
+
+
 def fetch_soumissions_for_appel(id_appel_offre: int):
     """
     Fetch all soumissions for a given appel d'offres.

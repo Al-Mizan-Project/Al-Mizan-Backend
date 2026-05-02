@@ -9,17 +9,17 @@ class DetectionAnomalieIA(models.Model):
     """
 
     class TypeAnomalie(models.TextChoices):
-        # Collusion-related
-        SIMILARITE_PRIX = "SIMILARITE_PRIX", "Similarité de prix"
-        SIMILARITE_DOCUMENTAIRE = "SIMILARITE_DOCUMENTAIRE", "Similarité documentaire"
-        COLLUSION_CLUSTER_PRIX = "COLLUSION_CLUSTER_PRIX", "Cluster de prix collusoire"
-        ROTATION_SOUMISSIONNAIRES = "ROTATION_SOUMISSIONNAIRES", "Rotation de soumissionnaires"
-        OFFRES_COMPLEMENTAIRES = "OFFRES_COMPLEMENTAIRES", "Offres de couverture"
-        DISPERSION_ANORMALE = "DISPERSION_ANORMALE", "Dispersion anormale des prix"
-        # Statistical outliers
+        # Single-soumission rules
+        MONTANT_FINANCIER_MANQUANT = "MONTANT_FINANCIER_MANQUANT", "Montant financier manquant"
+        MONTANT_INVALID = "MONTANT_INVALID", "Montant invalide"
+        MONTANT_TROP_ELEVE = "MONTANT_TROP_ELEVE", "Montant trop élevé"
+        MONTANT_TROP_BAS = "MONTANT_TROP_BAS", "Montant trop bas"
+        SOUMISSION_HORS_DELAI = "SOUMISSION_HORS_DELAI", "Soumission hors délai"
+        # Statistical outliers (multi-soumission)
         PRIX_ANORMALEMENT_BAS = "PRIX_ANORMALEMENT_BAS", "Prix anormalement bas"
         PRIX_ANORMALEMENT_ELEVE = "PRIX_ANORMALEMENT_ELEVE", "Prix anormalement élevé"
-        BIAIS_NOMBRES_RONDS = "BIAIS_NOMBRES_RONDS", "Biais de nombres ronds"
+        DISPERSION_ANORMALE = "DISPERSION_ANORMALE", "Dispersion anormale des prix"
+        ROTATION_SOUMISSIONNAIRES = "ROTATION_SOUMISSIONNAIRES", "Rotation de soumissionnaires"
         # Saucissonnage
         SAUCISSONNAGE_PROXIMITE_SEUIL = "SAUCISSONNAGE_PROXIMITE_SEUIL", "Proximité de seuil réglementaire"
         SAUCISSONNAGE_TEMPOREL = "SAUCISSONNAGE_TEMPOREL", "Clustering temporel suspect"
@@ -27,17 +27,15 @@ class DetectionAnomalieIA(models.Model):
         SAUCISSONNAGE_MEME_FOURNISSEUR = "SAUCISSONNAGE_MEME_FOURNISSEUR", "Même fournisseur multi-marchés"
 
     class NiveauSeverite(models.TextChoices):
-        CRITIQUE = "CRITIQUE", "Critique"
-        ELEVEE = "ELEVEE", "Élevée"
-        MOYEN = "MOYEN", "Moyen"
-        FAIBLE = "FAIBLE", "Faible"
+        ERROR = "ERROR", "Erreur"
+        WARNING = "WARNING", "Avertissement"
 
     class StatutExamen(models.TextChoices):
-        A_REVOIR = "A_REVOIR", "À revoir"
+        EN_ATTENTE = "EN_ATTENTE", "En attente"
         EN_COURS = "EN_COURS", "En cours d'examen"
-        CONFIRMEE = "CONFIRMEE", "Confirmée"
-        REJETEE = "REJETEE", "Rejetée (faux positif)"
-        SIGNALEE = "SIGNALEE", "Signalée à la tutelle"
+        VALIDE = "VALIDE", "Validé"
+        REJETE = "REJETE", "Rejeté (faux positif)"
+        SIGNALE = "SIGNALE", "Signalé à la tutelle"
 
     id_detection_anomalie_ia = models.AutoField(primary_key=True)
     id_appel_offre = models.IntegerField(db_index=True)
@@ -66,7 +64,7 @@ class DetectionAnomalieIA(models.Model):
     statut_examen = models.CharField(
         max_length=30,
         choices=StatutExamen.choices,
-        default=StatutExamen.A_REVOIR,
+        default=StatutExamen.EN_ATTENTE,
     )
     examiné_par = models.IntegerField(
         null=True,

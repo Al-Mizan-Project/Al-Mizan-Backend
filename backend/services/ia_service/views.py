@@ -15,14 +15,16 @@ from .serializers import (
     DetecterAnomaliesInputSerializer,
     DetecterSaucissonnageAutoInputSerializer,
     DetecterSaucissonnageInputSerializer,
-    DetectionAnomalieIASerializer,
     StatutExamenPatchSerializer,
     VerifierConformiteAutomatiqueInputSerializer,
     VerifierConformiteInputSerializer,
 )
 from .services.anomalies import (
-    detect_price_and_similarity_anomalies,
+    detect_anomalies_appel,
+    detect_anomalies_soumission,
     generate_anomaly_summary,
+    ANOMALY_POINTS,
+    _score_to_niveau,
 )
 from .services.cdc import generate_cdc_draft, revise_cdc_text
 from .services.conformite import (
@@ -37,12 +39,50 @@ from .services.integrations import (
     fetch_appel_required_document_ids,
     fetch_appels_by_service_contractant,
     fetch_documents_metadata,
+    fetch_soumission_details,
     fetch_soumissions_for_appel,
     patch_document_ia_metadata,
     patch_soumission_conformite,
 )
 from .services.ocr import extract_document_text, extract_documents_text_parallel
 from .services.saucissonnage import detect_saucissonnage
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def _serialize_anomaly(record: DetectionAnomalieIA) -> dict:
+    """Serialize a DetectionAnomalieIA record to the documented API shape."""
+    return {
+        "id_anomalie_ia": record.id_detection_anomalie_ia,
+        "id_soumission": record.id_soumission,
+        "type_anomalie": record.type_anomalie,
+        "niveau_severite": record.niveau_severite,
+        "score_confiance": float(record.score_confiance),
+        "details": record.details,
+        "statut_examen": record.statut_examen,
+        "date_detection": record.date_detection.isoformat() if record.date_detection else None,
+    }
+
+
+def _serialize_anomaly_with_appel(record: DetectionAnomalieIA) -> dict:
+    """Serialize including id_appel_offre (for list views)."""
+    data = _serialize_anomaly(record)
+    data["id_appel_offre"] = record.id_appel_offre
+    return data
+
+
+def _create_anomaly_record(id_appel_offre: int, anomaly: dict) -> DetectionAnomalieIA:
+    return DetectionAnomalieIA.objects.create(
+        id_appel_offre=id_appel_offre,
+        id_soumission=anomaly.get("id_soumission"),
+        type_anomalie=anomaly["type_anomalie"],
+        niveau_severite=anomaly["niveau_severite"],
+        score_confiance=anomaly["score_confiance"],
+        details=anomaly["details"],
+        soumissions_impliquees=anomaly.get("soumissions_impliquees"),
+        statut_examen=DetectionAnomalieIA.StatutExamen.EN_ATTENTE,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -77,67 +117,118 @@ class ReadyView(APIView):
 
 
 # ---------------------------------------------------------------------------
-# Anomaly Detection — Collusion & Price-fixing
+# Anomaly Detection — POST /ia/anomalies/detecter
 # ---------------------------------------------------------------------------
 class DetecterAnomaliesView(APIView):
     """
     POST /ia/anomalies/detecter
-    
-    Detect anomalies (collusion, price-fixing, bid manipulation) in 
-    soumissions for a given appel d'offres.
-    
-    Accepts soumission data directly in the request body.
+
+    Request:  { "id_soumission": 45, "id_appel_offre": 10 }
+
+    Fetches the soumission and appel data from internal services,
+    fetches all sibling soumissions for multi-rule analysis,
+    then runs the full detection pipeline.
+
+    Response:
+    {
+      "id_appel_offre": 10,
+      "id_soumission": 45,
+      "resume": {
+        "total_anomalies": 3,
+        "nb_errors": 1,
+        "nb_warnings": 2,
+        "score_severite_global": 65,
+        "niveau_global": "ÉLEVÉ"
+      },
+      "anomalies": [ { "id_anomalie_ia": ..., "type_anomalie": ..., ... } ]
+    }
     """
 
     def post(self, request):
         serializer = DetecterAnomaliesInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        id_soumission = serializer.validated_data["id_soumission"]
         id_appel_offre = serializer.validated_data["id_appel_offre"]
-        soumissions = serializer.validated_data.get("soumissions", [])
-        montant_estime = serializer.validated_data.get("montant_estime")
-        historical_wins = serializer.validated_data.get("historical_wins")
 
-        anomalies = detect_price_and_similarity_anomalies(
-            soumissions,
-            montant_estime=montant_estime,
-            historical_wins=historical_wins,
+        # ── Fetch target soumission ──────────────────────────────────────
+        soumission_sync = fetch_soumission_details(id_soumission)
+        if not soumission_sync.get("ok"):
+            return Response(
+                {
+                    "error": "Impossible de récupérer la soumission depuis le service soumissions",
+                    "details": soumission_sync.get("error", "unknown"),
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        soumission = soumission_sync.get("soumission", {})
+
+        # ── Fetch appel d'offre ──────────────────────────────────────────
+        appel_sync = fetch_appel_details(id_appel_offre)
+        if not appel_sync.get("ok"):
+            return Response(
+                {
+                    "error": "Impossible de récupérer l'appel d'offres",
+                    "details": appel_sync.get("error", "unknown"),
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        appel = appel_sync.get("appel", {})
+
+        # ── Fetch all soumissions for multi-rule analysis ────────────────
+        all_sync = fetch_soumissions_for_appel(id_appel_offre)
+        all_soumissions = all_sync.get("soumissions", [soumission]) if all_sync.get("ok") else [soumission]
+
+        # ── Run detection ────────────────────────────────────────────────
+        result = detect_anomalies_soumission(
+            soumission=soumission,
+            appel=appel,
+            all_soumissions=all_soumissions,
         )
 
-        created = []
-        for anomaly in anomalies:
-            record = DetectionAnomalieIA.objects.create(
-                id_appel_offre=id_appel_offre,
-                id_soumission=anomaly.get("id_soumission"),
-                type_anomalie=anomaly["type_anomalie"],
-                niveau_severite=anomaly["niveau_severite"],
-                score_confiance=anomaly["score_confiance"],
-                details=anomaly["details"],
-                soumissions_impliquees=anomaly.get("soumissions_impliquees"),
-                statut_examen="A_REVOIR",
-            )
-            created.append(record)
+        # ── Persist ─────────────────────────────────────────────────────
+        created = [_create_anomaly_record(id_appel_offre, a) for a in result["anomalies"]]
 
-        summary = generate_anomaly_summary(anomalies, len(soumissions))
-
-        out = DetectionAnomalieIASerializer(created, many=True)
         return Response(
             {
                 "id_appel_offre": id_appel_offre,
-                "anomalies_detectees": len(created),
-                "summary": summary,
-                "items": out.data,
+                "id_soumission": id_soumission,
+                "resume": {
+                    "total_anomalies": result["nb_errors"] + result["nb_warnings"],
+                    "nb_errors": result["nb_errors"],
+                    "nb_warnings": result["nb_warnings"],
+                    "score_severite_global": result["score_severite_global"],
+                    "niveau_global": result["niveau_global"],
+                },
+                "anomalies": [_serialize_anomaly(r) for r in created],
             },
             status=status.HTTP_201_CREATED,
         )
 
 
+# ---------------------------------------------------------------------------
+# Anomaly Detection — POST /ia/anomalies/detecter-auto
+# ---------------------------------------------------------------------------
 class DetecterAnomaliesAutoView(APIView):
     """
     POST /ia/anomalies/detecter-auto
-    
-    Automatically detect anomalies by fetching soumission data from 
-    the soumissions service. Only requires the appel d'offres ID.
+
+    Request:  { "id_appel_offre": 10 }
+
+    Fetches all soumissions + appel data automatically, then runs
+    detection over the entire appel.
+
+    Response:
+    {
+      "id_appel_offre": 10,
+      "total_soumissions_analysees": 12,
+      "resume_global": {
+        "total_anomalies": 18,
+        "score_severite_global": 78,
+        "niveau_global": "CRITIQUE"
+      },
+      "anomalies": [ { "id_anomalie_ia": ..., "id_soumission": ..., ... } ]
+    }
     """
 
     def post(self, request):
@@ -145,9 +236,8 @@ class DetecterAnomaliesAutoView(APIView):
         serializer.is_valid(raise_exception=True)
 
         id_appel_offre = serializer.validated_data["id_appel_offre"]
-        montant_estime = serializer.validated_data.get("montant_estime")
 
-        # Fetch soumissions from the soumissions service
+        # ── Fetch all soumissions ────────────────────────────────────────
         soumissions_sync = fetch_soumissions_for_appel(id_appel_offre)
         if not soumissions_sync.get("ok"):
             return Response(
@@ -163,51 +253,33 @@ class DetecterAnomaliesAutoView(APIView):
             return Response(
                 {
                     "id_appel_offre": id_appel_offre,
-                    "anomalies_detectees": 0,
-                    "message": "Aucune soumission trouvée pour cet appel d'offres",
-                    "items": [],
+                    "total_soumissions_analysees": 0,
+                    "resume_global": {
+                        "total_anomalies": 0,
+                        "score_severite_global": 0,
+                        "niveau_global": "FAIBLE",
+                    },
+                    "anomalies": [],
                 },
                 status=status.HTTP_200_OK,
             )
 
-        # If montant_estime is not provided, try to fetch it from appels service
-        if montant_estime is None:
-            appel_sync = fetch_appel_details(id_appel_offre)
-            if appel_sync.get("ok") and appel_sync.get("appel"):
-                try:
-                    montant_estime = appel_sync["appel"].get("montant_estime")
-                except (AttributeError, KeyError):
-                    pass
+        # ── Fetch appel d'offre ──────────────────────────────────────────
+        appel_sync = fetch_appel_details(id_appel_offre)
+        appel = appel_sync.get("appel", {}) if appel_sync.get("ok") else {}
 
-        anomalies = detect_price_and_similarity_anomalies(
-            soumissions,
-            montant_estime=montant_estime,
-        )
+        # ── Run detection ────────────────────────────────────────────────
+        result = detect_anomalies_appel(soumissions=soumissions, appel=appel)
 
-        created = []
-        for anomaly in anomalies:
-            record = DetectionAnomalieIA.objects.create(
-                id_appel_offre=id_appel_offre,
-                id_soumission=anomaly.get("id_soumission"),
-                type_anomalie=anomaly["type_anomalie"],
-                niveau_severite=anomaly["niveau_severite"],
-                score_confiance=anomaly["score_confiance"],
-                details=anomaly["details"],
-                soumissions_impliquees=anomaly.get("soumissions_impliquees"),
-                statut_examen="A_REVOIR",
-            )
-            created.append(record)
+        # ── Persist ─────────────────────────────────────────────────────
+        created = [_create_anomaly_record(id_appel_offre, a) for a in result["anomalies"]]
 
-        summary = generate_anomaly_summary(anomalies, len(soumissions))
-
-        out = DetectionAnomalieIASerializer(created, many=True)
         return Response(
             {
                 "id_appel_offre": id_appel_offre,
-                "soumissions_analysees": len(soumissions),
-                "anomalies_detectees": len(created),
-                "summary": summary,
-                "items": out.data,
+                "total_soumissions_analysees": result["total_soumissions_analysees"],
+                "resume_global": result["resume_global"],
+                "anomalies": [_serialize_anomaly(r) for r in created],
             },
             status=status.HTTP_201_CREATED,
         )
@@ -247,10 +319,11 @@ class DetecterSaucissonnageView(APIView):
                 score_confiance=anomaly["score_confiance"],
                 details=anomaly["details"],
                 appels_impliques=anomaly.get("appels_impliques"),
-                statut_examen="A_REVOIR",
+                statut_examen=DetectionAnomalieIA.StatutExamen.EN_ATTENTE,
             )
             created.append(record)
 
+        from .serializers import DetectionAnomalieIASerializer
         out = DetectionAnomalieIASerializer(created, many=True)
         return Response(
             {
@@ -319,10 +392,11 @@ class DetecterSaucissonnageAutoView(APIView):
                 score_confiance=anomaly["score_confiance"],
                 details=anomaly["details"],
                 appels_impliques=anomaly.get("appels_impliques"),
-                statut_examen="A_REVOIR",
+                statut_examen=DetectionAnomalieIA.StatutExamen.EN_ATTENTE,
             )
             created.append(record)
 
+        from .serializers import DetectionAnomalieIASerializer
         out = DetectionAnomalieIASerializer(created, many=True)
         return Response(
             {
@@ -340,6 +414,19 @@ class DetecterSaucissonnageAutoView(APIView):
 # Anomaly Listing, Detail, Filtering
 # ---------------------------------------------------------------------------
 class AnomalieListView(APIView):
+    """
+    GET /ia/anomalies
+
+    Query params: id_appel_offre, id_soumission, type_anomalie,
+                  statut_examen, niveau_severite, categorie, page, page_size
+
+    Response:
+    {
+      "page": 1, "page_size": 10, "total": 120,
+      "anomalies": [ { "id_anomalie_ia": ..., "id_appel_offre": ..., ... } ]
+    }
+    """
+
     def get(self, request):
         queryset = DetectionAnomalieIA.objects.all()
 
@@ -348,7 +435,7 @@ class AnomalieListView(APIView):
         type_anomalie = request.query_params.get("type_anomalie")
         statut_examen = request.query_params.get("statut_examen")
         niveau_severite = request.query_params.get("niveau_severite")
-        categorie = request.query_params.get("categorie")  # collusion / saucissonnage
+        categorie = request.query_params.get("categorie")
 
         if id_appel_offre is not None:
             queryset = queryset.filter(id_appel_offre=id_appel_offre)
@@ -365,123 +452,225 @@ class AnomalieListView(APIView):
         elif categorie == "collusion":
             queryset = queryset.exclude(type_anomalie__startswith="SAUCISSONNAGE")
 
-        serializer = DetectionAnomalieIASerializer(queryset, many=True)
-        return Response(serializer.data)
+        # Pagination
+        try:
+            page = max(1, int(request.query_params.get("page", 1)))
+            page_size = max(1, min(100, int(request.query_params.get("page_size", 10))))
+        except (ValueError, TypeError):
+            page, page_size = 1, 10
+
+        total = queryset.count()
+        start = (page - 1) * page_size
+        records = queryset[start: start + page_size]
+
+        return Response({
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "anomalies": [_serialize_anomaly_with_appel(r) for r in records],
+        })
 
 
+# ---------------------------------------------------------------------------
+# GET /ia/anomalies/{anomalie_id}
+# ---------------------------------------------------------------------------
 class AnomalieDetailView(APIView):
+    """
+    GET /ia/anomalies/{anomalie_id}
+
+    Response:
+    {
+      "id_anomalie_ia": 101, "id_soumission": 45, "id_appel_offre": 10,
+      "type_anomalie": "...", "niveau_severite": "WARNING",
+      "score_confiance": 0.92, "details": "...",
+      "statut_examen": "EN_ATTENTE", "date_detection": "..."
+    }
+    """
+
     def get(self, request, anomalie_id):
         try:
-            anomaly = DetectionAnomalieIA.objects.get(id_detection_anomalie_ia=anomalie_id)
+            record = DetectionAnomalieIA.objects.get(id_detection_anomalie_ia=anomalie_id)
         except DetectionAnomalieIA.DoesNotExist:
-            return Response({"error": "Anomalie non trouvee"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Anomalie non trouvée"}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = DetectionAnomalieIASerializer(anomaly)
-        return Response(serializer.data)
+        return Response(_serialize_anomaly_with_appel(record))
 
 
+# ---------------------------------------------------------------------------
+# GET /ia/anomalies/appel/{appel_id}
+# ---------------------------------------------------------------------------
 class AnomalieParAppelView(APIView):
+    """
+    GET /ia/anomalies/appel/{appel_id}
+
+    Response:
+    {
+      "id_appel_offre": 10, "total_anomalies": 8,
+      "anomalies": [ { "id_anomalie_ia": ..., "id_soumission": ..., ... } ]
+    }
+    """
+
     def get(self, request, appel_id):
         queryset = DetectionAnomalieIA.objects.filter(id_appel_offre=appel_id)
 
-        # Apply optional category filter
         categorie = request.query_params.get("categorie")
         if categorie == "saucissonnage":
             queryset = queryset.filter(type_anomalie__startswith="SAUCISSONNAGE")
         elif categorie == "collusion":
             queryset = queryset.exclude(type_anomalie__startswith="SAUCISSONNAGE")
 
-        serializer = DetectionAnomalieIASerializer(queryset, many=True)
-        return Response(serializer.data)
+        records = list(queryset)
+        return Response({
+            "id_appel_offre": appel_id,
+            "total_anomalies": len(records),
+            "anomalies": [
+                {
+                    "id_anomalie_ia": r.id_detection_anomalie_ia,
+                    "id_soumission": r.id_soumission,
+                    "type_anomalie": r.type_anomalie,
+                    "niveau_severite": r.niveau_severite,
+                    "score_confiance": float(r.score_confiance),
+                    "details": r.details,
+                    "statut_examen": r.statut_examen,
+                }
+                for r in records
+            ],
+        })
 
 
+# ---------------------------------------------------------------------------
+# GET /ia/anomalies/appel/{appel_id}/summary
+# ---------------------------------------------------------------------------
+class AnomaliesSummaryView(APIView):
+    """
+    GET /ia/anomalies/appel/{appel_id}/summary
+
+    Response:
+    {
+      "id_appel_offre": 10,
+      "resume": {
+        "total_anomalies": 18, "nb_errors": 5, "nb_warnings": 13,
+        "score_severite_global": 78, "niveau_global": "CRITIQUE"
+      },
+      "repartition": { "PRIX_ANORMALEMENT_ELEVE": 6, ... },
+      "details": "..."
+    }
+    """
+
+    def get(self, request, appel_id):
+        queryset = DetectionAnomalieIA.objects.filter(id_appel_offre=appel_id).exclude(
+            type_anomalie__startswith="SAUCISSONNAGE"
+        )
+        records = list(queryset)
+
+        anomalies_dicts = [
+            {"type_anomalie": r.type_anomalie, "niveau_severite": r.niveau_severite,
+             "score_confiance": float(r.score_confiance)}
+            for r in records
+        ]
+
+        summary = generate_anomaly_summary(anomalies_dicts, soumissions_count=len(records))
+
+        repartition = summary.pop("repartition_par_type", {})
+        summary.pop("repartition_par_severite", None)
+
+        return Response({
+            "id_appel_offre": appel_id,
+            "resume": {
+                "total_anomalies": summary["total_anomalies"],
+                "nb_errors": summary["nb_errors"],
+                "nb_warnings": summary["nb_warnings"],
+                "score_severite_global": summary["score_severite_global"],
+                "niveau_global": summary["niveau_global"],
+            },
+            "repartition": repartition,
+            "details": summary["recommandation"],
+        })
+
+
+# ---------------------------------------------------------------------------
+# GET /ia/anomalies/soumission/{soumission_id}
+# ---------------------------------------------------------------------------
 class AnomalieParSoumissionView(APIView):
+    """
+    GET /ia/anomalies/soumission/{soumission_id}
+
+    Response:
+    {
+      "id_soumission": 45,
+      "anomalies": [ { "id_anomalie_ia": ..., "type_anomalie": ..., ... } ],
+      "total_anomalies": 2
+    }
+    """
+
     def get(self, request, soumission_id):
-        queryset = DetectionAnomalieIA.objects.filter(id_soumission=soumission_id)
-        serializer = DetectionAnomalieIASerializer(queryset, many=True)
-        return Response(serializer.data)
+        records = list(
+            DetectionAnomalieIA.objects.filter(id_soumission=soumission_id)
+        )
+        return Response({
+            "id_soumission": soumission_id,
+            "anomalies": [
+                {
+                    "id_anomalie_ia": r.id_detection_anomalie_ia,
+                    "type_anomalie": r.type_anomalie,
+                    "niveau_severite": r.niveau_severite,
+                    "score_confiance": float(r.score_confiance),
+                    "details": r.details,
+                    "statut_examen": r.statut_examen,
+                }
+                for r in records
+            ],
+            "total_anomalies": len(records),
+        })
 
 
+# ---------------------------------------------------------------------------
+# PATCH /ia/anomalies/{anomalie_id}/statut-examen
+# ---------------------------------------------------------------------------
 class AnomalieStatutExamenPatchView(APIView):
+    """
+    PATCH /ia/anomalies/{anomalie_id}/statut-examen
+
+    Request:  { "statut_examen": "VALIDE", "commentaire": "Anomalie confirmée après vérification" }
+
+    Response:
+    {
+      "id_anomalie_ia": 101, "statut_examen": "VALIDE",
+      "details": "Statut mis à jour : ...",
+      "date_mise_a_jour": "2026-05-02T12:30:00Z"
+    }
+    """
+
     def patch(self, request, anomalie_id):
         serializer = StatutExamenPatchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:
-            anomaly = DetectionAnomalieIA.objects.get(id_detection_anomalie_ia=anomalie_id)
+            record = DetectionAnomalieIA.objects.get(id_detection_anomalie_ia=anomalie_id)
         except DetectionAnomalieIA.DoesNotExist:
-            return Response({"error": "Anomalie non trouvee"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Anomalie non trouvée"}, status=status.HTTP_404_NOT_FOUND)
 
-        anomaly.statut_examen = serializer.validated_data["statut_examen"]
-        anomaly.commentaire_examen = serializer.validated_data.get("commentaire_examen", "")
-        anomaly.date_examen = timezone.now()
+        new_statut = serializer.validated_data["statut_examen"]
+        commentaire = serializer.validated_data.get("commentaire_examen", "")
+        now = timezone.now()
 
-        anomaly.save(update_fields=["statut_examen", "commentaire_examen", "date_examen"])
+        record.statut_examen = new_statut
+        record.commentaire_examen = commentaire
+        record.date_examen = now
+        record.save(update_fields=["statut_examen", "commentaire_examen", "date_examen"])
 
-        out = DetectionAnomalieIASerializer(anomaly)
-        return Response(out.data)
-
-
-class AnomaliesSummaryView(APIView):
-    """
-    GET /ia/anomalies/summary/<appel_id>
-    
-    Get a summary/dashboard view of all anomalies for an appel d'offres.
-    """
-
-    def get(self, request, appel_id):
-        queryset = DetectionAnomalieIA.objects.filter(id_appel_offre=appel_id)
-        anomalies_data = DetectionAnomalieIASerializer(queryset, many=True).data
-
-        # Build summary
-        by_type = {}
-        by_severity = {}
-        affected_soumissions = set()
-
-        for a in anomalies_data:
-            t = a.get("type_anomalie", "UNKNOWN")
-            s = a.get("niveau_severite", "UNKNOWN")
-            by_type[t] = by_type.get(t, 0) + 1
-            by_severity[s] = by_severity.get(s, 0) + 1
-            if a.get("id_soumission"):
-                affected_soumissions.add(a["id_soumission"])
-
-        total = len(anomalies_data)
-        severity_weights = {"CRITIQUE": 4, "ELEVEE": 3, "MOYEN": 2, "FAIBLE": 1}
-        weighted_score = sum(
-            severity_weights.get(a.get("niveau_severite", ""), 1)
-            * float(a.get("score_confiance", 0))
-            for a in anomalies_data
-        )
-
-        max_possible = max(total * 4, 1)
-        risk_score = min(100, int((weighted_score / max_possible) * 100))
-
-        if risk_score >= 70:
-            risk_level = "CRITIQUE"
-        elif risk_score >= 40:
-            risk_level = "ELEVE"
-        elif risk_score >= 20:
-            risk_level = "MOYEN"
-        elif total > 0:
-            risk_level = "FAIBLE"
-        else:
-            risk_level = "AUCUN"
-
-        collusion_count = sum(1 for a in anomalies_data if not a.get("type_anomalie", "").startswith("SAUCISSONNAGE"))
-        saucissonnage_count = sum(1 for a in anomalies_data if a.get("type_anomalie", "").startswith("SAUCISSONNAGE"))
+        statut_label = dict(DetectionAnomalieIA.StatutExamen.choices).get(new_statut, new_statut)
+        details_msg = f"Statut mis à jour : anomalie {statut_label.lower()} par l'analyste."
+        if commentaire:
+            details_msg += f" Commentaire : {commentaire}"
 
         return Response({
-            "id_appel_offre": appel_id,
-            "total_anomalies": total,
-            "soumissions_affectees": len(affected_soumissions),
-            "repartition_par_type": by_type,
-            "repartition_par_severite": by_severity,
-            "anomalies_collusion": collusion_count,
-            "anomalies_saucissonnage": saucissonnage_count,
-            "score_risque": risk_score,
-            "niveau_risque": risk_level,
-            "anomalies": anomalies_data,
+            "id_anomalie_ia": record.id_detection_anomalie_ia,
+            "statut_examen": record.statut_examen,
+            "commentaire_examen": record.commentaire_examen,
+            "date_examen": record.date_examen.isoformat() if record.date_examen else None,
+            "details": details_msg,
+            "date_mise_a_jour": now.isoformat(),
         })
 
 
@@ -591,17 +780,14 @@ class VerifierConformiteSoumissionAutoView(APIView):
         ocr_processed = 0
         ocr_succeeded = 0
         if perform_ocr:
-            # Build lookup by id_document to avoid misalignment when
-            # build_provided_documents_from_metadata() filters out entries.
             original_docs_by_id = {
                 doc.get("id_document"): doc
                 for doc in provided_meta_sync.get("documents", [])
                 if doc.get("id_document") is not None
             }
 
-            # ── Phase 1: Fetch binaries & collect OCR tasks ─────────────
-            ocr_tasks = []          # (index, payload, filename)
-            ocr_task_indices = []   # indices into provided_documents
+            ocr_tasks = []
+            ocr_task_indices = []
 
             for idx, projected_doc in enumerate(provided_documents):
                 doc_id = projected_doc.get("id_document")
@@ -615,11 +801,8 @@ class VerifierConformiteSoumissionAutoView(APIView):
                         ocr_task_indices.append(idx)
 
             ocr_processed = len(ocr_tasks)
-
-            # ── Phase 2: Run OCR in parallel ────────────────────────────
             ocr_results = extract_documents_text_parallel(ocr_tasks)
 
-            # ── Phase 3: Enrich provided_documents with OCR results ─────
             enriched_provided = [{**doc} for doc in provided_documents]
             for task_pos, doc_idx in enumerate(ocr_task_indices):
                 extraction = ocr_results[task_pos]
