@@ -97,6 +97,11 @@ services:
       INITIAL_ADMIN_ROLE: ${INITIAL_ADMIN_ROLE:-admin}
       INITIAL_ADMIN_MEMBRE_ID: ${INITIAL_ADMIN_MEMBRE_ID:-1}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      GROQ_MAX_TOKENS: ${GROQ_MAX_TOKENS:-2000}
+      GROQ_MAX_RETRIES: ${GROQ_MAX_RETRIES:-3}
+      GROQ_RETRY_BASE_DELAY: ${GROQ_RETRY_BASE_DELAY:-5.0}
     depends_on:
       postgres:
         condition: service_healthy

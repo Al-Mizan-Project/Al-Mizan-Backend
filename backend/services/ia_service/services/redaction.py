@@ -1,35 +1,27 @@
 """
-ia_service/services/redaction.py
+ia_service/services/redaction.py  — VERSION GROQ (100% GRATUIT)
 
-Module d'aide à la rédaction des Cahiers des Charges (CDC).
-Analyse le texte extrait du CDC en contexte avec les métadonnées de l'appel d'offres
-et retourne des suggestions structurées basées sur la Loi 23-12 et la Loi 18-07.
+Remplace Gemini par l'API Groq — compatible OpenAI, 100% gratuite.
+Quotas Groq free tier : 14 400 req/jour, 6 000 tokens/min sur LLaMA 3.3 70B.
 
 Configuration via settings.py (chargé depuis .env) :
-    GEMINI_API_KEY            — clé(s) API Google Gemini.
-                                Accepte une seule clé OU une liste séparée par des virgules
-                                pour le pool de clés (ex: "key1,key2,key3").
-    GEMINI_MODEL              — modèle à utiliser (défaut: gemini-2.0-flash)
-    GEMINI_MAX_TOKENS         — tokens max en sortie (défaut: 2000)
-    REMOTE_SERVICE_TIMEOUT_IA — timeout HTTP en secondes (défaut: 60)
-    GEMINI_MAX_RETRIES        — nombre max de tentatives PAR CLÉ en cas de 429 (défaut: 2)
-    GEMINI_RETRY_BASE_DELAY   — délai de base en secondes pour le backoff (défaut: 10)
+    GROQ_API_KEY               — clé API Groq (obtenir sur console.groq.com)
+    GROQ_MODEL                 — modèle à utiliser (défaut: llama-3.3-70b-versatile)
+    GROQ_MAX_TOKENS            — tokens max en sortie (défaut: 2000)
+    REMOTE_SERVICE_TIMEOUT_IA  — timeout HTTP en secondes (défaut: 60)
+    GROQ_MAX_RETRIES           — nombre max de tentatives en cas d'erreur (défaut: 3)
+    GROQ_RETRY_BASE_DELAY      — délai de base en secondes pour le backoff (défaut: 5)
 
-Pool de clés :
-    Avec plusieurs clés, chaque 429 fait basculer vers la clé suivante du pool
-    au lieu d'attendre. Le backoff n'est utilisé qu'une fois toutes les clés épuisées
-    sur un même tour.
-
-    Exemple .env :
-        GEMINI_API_KEY=AIzaSy...clé1,AIzaSy...clé2,AIzaSy...clé3
+Modèles Groq gratuits recommandés :
+    llama-3.3-70b-versatile    → meilleure qualité (recommandé)
+    llama-3.1-8b-instant       → plus rapide, quotas plus larges
+    mixtral-8x7b-32768         → bon contexte long
 """
 
 import json
 import logging
 import time
-from itertools import cycle
-from threading import Lock
-from typing import List, Optional
+from typing import Optional
 
 from django.conf import settings
 
@@ -43,83 +35,34 @@ logger = logging.getLogger(__name__)
 # Configuration — lue depuis Django settings (settings.py → .env)
 # ---------------------------------------------------------------------------
 
-# Pool de clés — initialisé une seule fois au démarrage du processus
-_key_pool: List[str] = []
-_key_cycle = None
-_key_lock = Lock()
+# Seuil en caractères en dessous duquel le CDC est considéré trop court
+MIN_CDC_TEXT_LENGTH = 100
+
+# Troncature du CDC pour rester dans les quotas Groq free tier
+# LLaMA 3.3 70B : 6000 tokens/min — on limite à ~12 000 chars (≈ 3000 tokens)
+MAX_CDC_CHARS = 12_000
+
+# Codes HTTP qui déclenchent un retry
+RETRYABLE_STATUS_CODES = {500, 502, 503, 504}
 
 
-def _init_key_pool() -> None:
-    """
-    Initialise le pool de clés depuis GEMINI_API_KEY.
-    Supporte une clé unique ou plusieurs clés séparées par des virgules.
-    Appelé au premier accès (lazy init thread-safe).
-    """
-    global _key_pool, _key_cycle
-    raw = getattr(settings, "GEMINI_API_KEY", "") or ""
-    keys = [k.strip() for k in raw.split(",") if k.strip()]
-    _key_pool = keys
-    _key_cycle = cycle(keys) if keys else None
-    if len(keys) > 1:
-        logger.info("Gemini key pool initialized with %d keys", len(keys))
-    elif len(keys) == 1:
-        logger.debug("Gemini single key configured")
-    else:
-        logger.error("No GEMINI_API_KEY configured")
+def _get_groq_api_key() -> str:
+    return getattr(settings, "GROQ_API_KEY", "") or ""
 
+def _get_groq_model() -> str:
+    return getattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile")
 
-def _get_next_key() -> Optional[str]:
-    """Retourne la prochaine clé disponible dans le pool (round-robin)."""
-    with _key_lock:
-        if _key_cycle is None:
-            _init_key_pool()
-        if not _key_pool:
-            return None
-        return next(_key_cycle)
-
-
-def _get_all_keys() -> List[str]:
-    """Retourne toutes les clés du pool (pour itérer sur chacune en cas de 429)."""
-    with _key_lock:
-        if _key_cycle is None:
-            _init_key_pool()
-        return list(_key_pool)
-
-
-def _get_gemini_api_key() -> str:
-    """Compatibilité — retourne la première clé du pool."""
-    keys = _get_all_keys()
-    return keys[0] if keys else ""
-
-def _get_gemini_model() -> str:
-    return getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
-
-def _get_gemini_max_tokens() -> int:
-    return int(getattr(settings, "GEMINI_MAX_TOKENS", 2000))
-
-def _get_gemini_api_url() -> str:
-    model = _get_gemini_model()
-    return (
-        f"https://generativelanguage.googleapis.com/v1beta/models"
-        f"/{model}:generateContent"
-    )
+def _get_groq_max_tokens() -> int:
+    return int(getattr(settings, "GROQ_MAX_TOKENS", 2000))
 
 def _get_timeout() -> float:
     return float(getattr(settings, "REMOTE_SERVICE_TIMEOUT_IA", 60.0))
 
 def _get_max_retries() -> int:
-    """Nombre maximum de tentatives PAR CLÉ en cas de 429."""
-    return int(getattr(settings, "GEMINI_MAX_RETRIES", 2))
+    return int(getattr(settings, "GROQ_MAX_RETRIES", 3))
 
 def _get_retry_base_delay() -> float:
-    """Délai de base en secondes pour le backoff exponentiel."""
-    return float(getattr(settings, "GEMINI_RETRY_BASE_DELAY", 10.0))
-
-# Seuil en caractères en dessous duquel le CDC est considéré trop court
-MIN_CDC_TEXT_LENGTH = 100
-
-# Codes HTTP qui déclenchent un retry
-RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+    return float(getattr(settings, "GROQ_RETRY_BASE_DELAY", 5.0))
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +160,7 @@ def _build_user_prompt(texte_cdc: str, contexte_appel: dict) -> str:
     """
     Construit le message utilisateur en injectant le contexte de l'appel d'offres
     et le texte extrait du CDC.
+    Le CDC est tronqué à MAX_CDC_CHARS pour rester dans les quotas Groq free tier.
     """
     type_procedure = contexte_appel.get("type_procedure", "Non spécifié")
     type_prestation = contexte_appel.get("type_prestation", "Non spécifié")
@@ -236,6 +180,15 @@ def _build_user_prompt(texte_cdc: str, contexte_appel: dict) -> str:
         else "  Aucune condition spécifiée"
     )
 
+    # Tronquer le CDC si nécessaire pour rester dans les quotas
+    texte_cdc_tronque = texte_cdc
+    if len(texte_cdc) > MAX_CDC_CHARS:
+        texte_cdc_tronque = texte_cdc[:MAX_CDC_CHARS] + "\n\n[... texte tronqué — analyse partielle ...]"
+        logger.info(
+            "CDC tronqué de %d à %d caractères pour respecter les quotas Groq",
+            len(texte_cdc), MAX_CDC_CHARS
+        )
+
     return f"""
 ## Contexte de l'Appel d'Offres
 
@@ -253,7 +206,7 @@ def _build_user_prompt(texte_cdc: str, contexte_appel: dict) -> str:
 
 ## Texte du Cahier des Charges (CDC)
 
-{texte_cdc}
+{texte_cdc_tronque}
 
 ---
 
@@ -271,54 +224,23 @@ Retourne uniquement le JSON structuré demandé.
 
 
 # ---------------------------------------------------------------------------
-# Calcul du délai de backoff exponentiel avec jitter
+# Parser de la réponse Groq (format OpenAI)
 # ---------------------------------------------------------------------------
 
-def _compute_retry_delay(attempt: int, retry_after_header: Optional[str] = None) -> float:
+def _parse_groq_response(response_json: dict) -> Optional[dict]:
     """
-    Calcule le délai d'attente avant la prochaine tentative.
-
-    Priorité :
-      1. Header Retry-After renvoyé par Gemini (si présent)
-      2. Backoff exponentiel : base * 2^attempt  (ex: 10s, 20s, 40s)
-
-    Args:
-        attempt:            Numéro de la tentative échouée (0-based).
-        retry_after_header: Valeur brute du header HTTP Retry-After (optionnel).
-
-    Returns:
-        Nombre de secondes à attendre.
-    """
-    if retry_after_header:
-        try:
-            return max(1.0, float(retry_after_header))
-        except (ValueError, TypeError):
-            pass
-
-    base = _get_retry_base_delay()
-    delay = base * (2 ** attempt)          # 10s → 20s → 40s
-    return delay
-
-
-# ---------------------------------------------------------------------------
-# Helpers HTTP internes
-# ---------------------------------------------------------------------------
-
-def _parse_gemini_response(response_json: dict) -> Optional[dict]:
-    """
-    Extrait et parse le JSON retourné dans la réponse Gemini.
+    Extrait et parse le JSON retourné dans la réponse Groq (format OpenAI).
     Retourne le dict parsé, ou None si vide / invalide.
     """
-    candidates = response_json.get("candidates", [])
-    if not candidates:
-        logger.warning("Gemini returned no candidates")
+    choices = response_json.get("choices", [])
+    if not choices:
+        logger.warning("Groq returned no choices")
         return None
 
-    parts = candidates[0].get("content", {}).get("parts", [])
-    raw_text = "".join(p.get("text", "") for p in parts).strip()
+    raw_text = choices[0].get("message", {}).get("content", "").strip()
 
     if not raw_text:
-        logger.warning("Gemini returned empty content")
+        logger.warning("Groq returned empty content")
         return None
 
     # Nettoyer les éventuels backticks markdown résiduels
@@ -329,117 +251,25 @@ def _parse_gemini_response(response_json: dict) -> Optional[dict]:
             if not line.strip().startswith("```")
         ).strip()
 
-    return json.loads(raw_text)
-
-
-def _try_single_key(req_module, body: dict, api_key: str, max_retries: int) -> Optional[dict]:
-    """
-    Tente d'appeler Gemini avec une clé précise.
-    Effectue jusqu'à `max_retries` tentatives pour les erreurs transitoires (5xx, timeout).
-    Retourne immédiatement None sur 429 pour laisser la main au pool de clés.
-
-    Returns:
-        dict   → succès
-        None   → 429 (changer de clé) ou échec définitif après retries
-        "hard" → erreur non-retryable (4xx hors 429, ConnectionError, JSON invalide)
-                 signale qu'il ne sert à rien d'essayer d'autres clés
-    """
-    url = f"{_get_gemini_api_url()}?key={api_key}"
-
-    for attempt in range(max_retries):
-        try:
-            logger.debug(
-                "Gemini call — clé …%s, tentative %d/%d",
-                api_key[-6:], attempt + 1, max_retries
-            )
-            response = req_module.post(
-                url,
-                json=body,
-                headers={"Content-Type": "application/json"},
-                timeout=_get_timeout(),
-            )
-
-            # --- 429 : rate limit sur cette clé → on remonte pour changer de clé
-            if response.status_code == 429:
-                retry_after = response.headers.get("Retry-After")
-                logger.warning(
-                    "Rate limit (429) — clé …%s (Retry-After: %s)",
-                    api_key[-6:], retry_after or "non fourni"
-                )
-                return None  # signal "essaie la prochaine clé"
-
-            # --- Erreurs transitoires 5xx → retry avec backoff
-            if response.status_code in {500, 502, 503, 504}:
-                is_last = attempt >= max_retries - 1
-                if is_last:
-                    logger.error(
-                        "Erreur transitoire %d — clé …%s, retries épuisés",
-                        response.status_code, api_key[-6:]
-                    )
-                    return None
-                delay = _compute_retry_delay(attempt)
-                logger.warning(
-                    "Erreur transitoire %d — clé …%s, retry dans %.1fs...",
-                    response.status_code, api_key[-6:], delay
-                )
-                time.sleep(delay)
-                continue
-
-            # --- Autre erreur HTTP non-retryable (400, 401, 403…)
-            if not response.ok:
-                logger.error(
-                    "Gemini HTTP %d (non-retryable) — clé …%s: %s",
-                    response.status_code, api_key[-6:], response.text[:200]
-                )
-                return "hard"  # type: ignore[return-value]
-
-            # --- Succès : parser et retourner
-            return _parse_gemini_response(response.json())
-
-        except req_module.exceptions.Timeout:
-            is_last = attempt >= max_retries - 1
-            if is_last:
-                logger.error("Timeout — clé …%s, retries épuisés", api_key[-6:])
-                return None
-            delay = _compute_retry_delay(attempt)
-            logger.warning(
-                "Timeout — clé …%s, retry dans %.1fs...", api_key[-6:], delay
-            )
-            time.sleep(delay)
-
-        except req_module.exceptions.ConnectionError as exc:
-            logger.error("Erreur réseau — clé …%s: %s", api_key[-6:], exc)
-            return "hard"  # type: ignore[return-value]
-
-        except json.JSONDecodeError as exc:
-            logger.warning("JSON invalide — clé …%s: %s", api_key[-6:], exc)
-            return "hard"  # type: ignore[return-value]
-
-        except Exception as exc:
-            logger.error("Erreur inattendue — clé …%s: %s", api_key[-6:], exc)
-            return "hard"  # type: ignore[return-value]
-
-    return None
+    try:
+        return json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        logger.warning("JSON invalide dans la réponse Groq: %s\nRaw: %s", exc, raw_text[:500])
+        return None
 
 
 # ---------------------------------------------------------------------------
-# Appel à l'API Google Gemini — pool de clés + retry + backoff
+# Appel à l'API Groq avec retry + backoff
 # ---------------------------------------------------------------------------
 
 def _call_llm(user_prompt: str) -> Optional[dict]:
     """
-    Appelle l'API Google Gemini en utilisant le pool de clés configuré.
+    Appelle l'API Groq (compatible OpenAI) avec retry sur les erreurs transitoires.
 
     Stratégie :
-      1. Essaie chaque clé du pool l'une après l'autre en cas de 429.
-      2. Pour chaque clé : jusqu'à GEMINI_MAX_RETRIES tentatives sur les 5xx/timeout.
-      3. Si toutes les clés sont épuisées sur un tour (toutes 429) :
-         attend un délai de backoff puis refait un tour (jusqu'à 2 tours max).
-      4. Si une erreur "hard" (4xx non-429, réseau, JSON) est détectée : abandon immédiat.
-
-    Avec N clés et GEMINI_MAX_RETRIES=2 :
-      - Tentatives max effectives = N × 2 × 2 tours = N×4 appels avant fallback.
-      - Avec 3 clés → jusqu'à 12 tentatives avant d'abandonner.
+      - Sur 429 (rate limit) : attend le délai Retry-After ou backoff exponentiel, puis retry.
+      - Sur 5xx : backoff exponentiel, puis retry.
+      - Sur 4xx autres (401, 400…) : abandon immédiat (erreur de config).
 
     Retourne le dict JSON parsé, ou None si tout a échoué → fallback local déclenché.
     """
@@ -449,73 +279,108 @@ def _call_llm(user_prompt: str) -> Optional[dict]:
         logger.error("requests library not available")
         return None
 
-    all_keys = _get_all_keys()
-    if not all_keys:
-        logger.error("Aucune GEMINI_API_KEY configurée dans Django settings")
+    api_key = _get_groq_api_key()
+    if not api_key:
+        logger.error("Aucune GROQ_API_KEY configurée dans Django settings")
         return None
 
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
     body = {
-        "systemInstruction": {
-            "parts": [{"text": SYSTEM_PROMPT.strip()}]
-        },
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": user_prompt}]
-            }
+        "model": _get_groq_model(),
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT.strip()},
+            {"role": "user", "content": user_prompt},
         ],
-        "generationConfig": {
-            "maxOutputTokens": _get_gemini_max_tokens(),
-            "temperature": 0.1,
-            "responseMimeType": "application/json",
-        },
+        "max_tokens": _get_groq_max_tokens(),
+        "temperature": 0.1,
+        "response_format": {"type": "json_object"},  # Force JSON — pas de backticks
     }
 
-    max_retries_per_key = _get_max_retries()
-    MAX_POOL_ROUNDS = 2  # Nombre de tours sur l'ensemble du pool avant abandon
+    max_retries = _get_max_retries()
+    base_delay = _get_retry_base_delay()
 
-    for pool_round in range(MAX_POOL_ROUNDS):
-        all_rate_limited = True  # Deviendra False si au moins une clé réussit ou échoue autrement
+    for attempt in range(max_retries):
+        try:
+            logger.debug(
+                "Groq API call — modèle %s, tentative %d/%d",
+                _get_groq_model(), attempt + 1, max_retries
+            )
+            response = req.post(url, json=body, headers=headers, timeout=_get_timeout())
 
-        for key_index, api_key in enumerate(all_keys):
-            result = _try_single_key(req, body, api_key, max_retries_per_key)
-
-            if result == "hard":
-                # Erreur non-retryable : inutile d'essayer d'autres clés
-                logger.error("Erreur hard sur clé %d/%d — abandon total", key_index + 1, len(all_keys))
+            # --- 429 : rate limit → attendre puis retry
+            if response.status_code == 429:
+                retry_after = response.headers.get("Retry-After")
+                wait = float(retry_after) if retry_after else base_delay * (2 ** attempt)
+                logger.warning(
+                    "Rate limit Groq (429) — pause %.1fs (tentative %d/%d)...",
+                    wait, attempt + 1, max_retries
+                )
+                if attempt < max_retries - 1:
+                    time.sleep(wait)
+                    continue
+                logger.error("Rate limit Groq — retries épuisés après %d tentatives", max_retries)
                 return None
 
-            if result is not None:
-                # Succès !
-                if len(all_keys) > 1:
-                    logger.info(
-                        "Succès avec clé %d/%d (tour %d)",
-                        key_index + 1, len(all_keys), pool_round + 1
+            # --- Erreurs transitoires 5xx → backoff + retry
+            if response.status_code in RETRYABLE_STATUS_CODES:
+                if attempt < max_retries - 1:
+                    wait = base_delay * (2 ** attempt)
+                    logger.warning(
+                        "Erreur transitoire Groq %d — retry dans %.1fs...",
+                        response.status_code, wait
                     )
-                return result
-
-            # result is None → cette clé a eu un 429 ou des 5xx épuisés
-            # On continue vers la prochaine clé du pool
-            if key_index < len(all_keys) - 1:
-                logger.info(
-                    "Clé %d/%d épuisée — passage à la clé suivante",
-                    key_index + 1, len(all_keys)
+                    time.sleep(wait)
+                    continue
+                logger.error(
+                    "Erreur transitoire Groq %d — retries épuisés", response.status_code
                 )
+                return None
 
-        # Toutes les clés ont eu un 429 sur ce tour
-        if all_rate_limited and pool_round < MAX_POOL_ROUNDS - 1:
-            delay = _compute_retry_delay(pool_round)
-            logger.warning(
-                "Toutes les clés (%d) sont rate-limitées (tour %d/%d). "
-                "Pause de %.1fs avant de réessayer...",
-                len(all_keys), pool_round + 1, MAX_POOL_ROUNDS, delay
-            )
-            time.sleep(delay)
+            # --- Erreur non-retryable (400, 401, 403…) → abandon immédiat
+            if not response.ok:
+                logger.error(
+                    "Groq API HTTP %d (non-retryable): %s",
+                    response.status_code, response.text[:300]
+                )
+                return None
 
-    logger.error(
-        "Pool de %d clé(s) épuisé après %d tour(s) — bascule vers fallback",
-        len(all_keys), MAX_POOL_ROUNDS
-    )
+            # --- Succès : parser et retourner
+            parsed = _parse_groq_response(response.json())
+            if parsed is not None:
+                logger.info(
+                    "Groq API succès — modèle %s, tentative %d/%d",
+                    _get_groq_model(), attempt + 1, max_retries
+                )
+            return parsed
+
+        except req.exceptions.Timeout:
+            if attempt < max_retries - 1:
+                wait = base_delay * (2 ** attempt)
+                logger.warning(
+                    "Timeout Groq — retry dans %.1fs (tentative %d/%d)...",
+                    wait, attempt + 1, max_retries
+                )
+                time.sleep(wait)
+            else:
+                logger.error("Timeout Groq — retries épuisés après %d tentatives", max_retries)
+                return None
+
+        except req.exceptions.ConnectionError as exc:
+            logger.error("Erreur réseau Groq API: %s", exc)
+            return None
+
+        except json.JSONDecodeError as exc:
+            logger.warning("JSON invalide dans la réponse Groq: %s", exc)
+            return None
+
+        except Exception as exc:
+            logger.error("Erreur inattendue Groq API: %s", exc)
+            return None
+
     return None
 
 
@@ -526,7 +391,7 @@ def _call_llm(user_prompt: str) -> Optional[dict]:
 def _local_fallback_analysis(texte_cdc: str, contexte_appel: dict) -> dict:
     """
     Analyse basique sans LLM : utilise revise_cdc_text() de cdc.py comme filet de sécurité.
-    Retourne un rapport minimal si l'API est indisponible.
+    Retourne un rapport minimal si l'API Groq est indisponible.
     """
     revision = revise_cdc_text(texte_cdc)
     alertes = []
@@ -568,7 +433,9 @@ def _local_fallback_analysis(texte_cdc: str, contexte_appel: dict) -> dict:
                 f"Pour un marché de {type_prestation}, le critère financier doit représenter "
                 "au moins 30% selon la Loi 23-12."
             ),
-            "suggestion": f"Augmenter la pondération financière à au moins 30% (actuellement {poids_financier}%).",
+            "suggestion": (
+                f"Augmenter la pondération financière à au moins 30% (actuellement {poids_financier}%)."
+            ),
         })
 
     score = max(0, 100 - len(alertes) * 15)
@@ -618,7 +485,7 @@ def analyse_cdc(texte_cdc: str, contexte_appel: dict) -> dict:
     result = _call_llm(user_prompt)
 
     if result is None:
-        logger.warning("LLM unavailable, falling back to local analysis")
+        logger.warning("LLM Groq indisponible, bascule vers l'analyse locale")
         return _local_fallback_analysis(texte_cdc, contexte_appel)
 
     # Garantir que needs_human_validation est True si score < 70 ou alertes critiques présentes
@@ -629,7 +496,8 @@ def analyse_cdc(texte_cdc: str, contexte_appel: dict) -> dict:
     if result.get("score_conformite", 100) < 70 or critical_alerts:
         result["needs_human_validation"] = True
 
-    result["_source"] = "llm"
+    result["_source"] = "llm_groq"
+    result["_model"] = _get_groq_model()
     return result
 
 
@@ -642,14 +510,14 @@ def run_aide_redaction_pipeline(id_document: int, contexte_appel: dict) -> dict:
     Pipeline complet :
       1. Récupère le binaire du document CDC depuis le service documents
       2. Extrait le texte (OCR ou natif)
-      3. Analyse le CDC avec le LLM
+      3. Analyse le CDC avec Groq LLM
 
     Args:
         id_document:     ID du document CDC dans le service documents.
         contexte_appel:  Dict des champs AppelOffres.
 
     Returns:
-        Dict avec les résultats d'analyse + métadonnées pipeline (ocr_engine, char_count, etc.)
+        Dict avec les résultats d'analyse + métadonnées pipeline.
     """
     # Étape 1 — Récupérer le binaire
     binary_result = fetch_document_binary(id_document)
@@ -668,7 +536,6 @@ def run_aide_redaction_pipeline(id_document: int, contexte_appel: dict) -> dict:
 
     content = binary_result.get("content", b"")
     content_type = binary_result.get("content_type", "")
-
     filename = _infer_filename(id_document, content_type)
 
     # Étape 2 — Extraire le texte
@@ -678,9 +545,7 @@ def run_aide_redaction_pipeline(id_document: int, contexte_appel: dict) -> dict:
 
     logger.info(
         "CDC text extracted for document=%s: %d chars via engine=%s",
-        id_document,
-        len(texte_cdc),
-        ocr_engine,
+        id_document, len(texte_cdc), ocr_engine,
     )
 
     # Étape 3 — Analyser
