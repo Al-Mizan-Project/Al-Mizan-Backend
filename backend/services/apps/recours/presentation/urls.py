@@ -3,6 +3,7 @@ from django.urls import path
 
 from apps.integrations.appels_client import AppelsClient
 from apps.integrations.audit_client import AuditClient
+from apps.integrations.contrats_client import ContratsClient
 from apps.integrations.notification_client import NotificationClient
 from apps.integrations.soumissions_client import SoumissionsClient
 from apps.recours.application.services.recours_service import RecoursService
@@ -28,6 +29,7 @@ def _build_service():
         appels_client=AppelsClient(settings.APPELS_SERVICE_URL, timeout),
         notification_client=NotificationClient(settings.NOTIFICATIONS_SERVICE_URL, timeout),
         audit_client=AuditClient(settings.AUDIT_SERVICE_URL, timeout),
+        contrats_client=ContratsClient(settings.CONTRATS_SERVICE_URL, timeout),
     )
 
 

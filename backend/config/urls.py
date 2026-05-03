@@ -11,6 +11,7 @@ from soumissions_app.views import (
     SoumissionConformitePatchView,
     SoumissionCreateView,
     SoumissionDetailView,
+    SoumissionDocumentsView,
     SoumissionTerminerEvaluationView,
     SoumissionWithdrawView,
 )
@@ -66,6 +67,8 @@ urlpatterns = [
     path("operateurs-economiques/<int:operateur_id>/soumissions", OperateurSoumissionsView.as_view()),
     path("api/operateurs-economiques/<int:operateur_id>/soumissions", OperateurSoumissionsView.as_view()),
     path("api/", include("apps.recours.presentation.urls")),
+    path("api/soumissions/<int:soumission_id>/documents/", SoumissionDocumentsView.as_view()),
+    path("soumissions/<int:soumission_id>/documents", SoumissionDocumentsView.as_view()),
     path("journaux-audit/", include("ledger.urls")),
     path("journaux-audit/", include("readstore.urls")),
     path("journaux-audit/", include("integrity.urls")),

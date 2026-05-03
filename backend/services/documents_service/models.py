@@ -3,6 +3,7 @@ from django.db import models
 class Document(models.Model):
     id_document = models.AutoField(primary_key=True)
     related_type = models.CharField(max_length=50) # ex: appel_offre, soumission, contrat
+    id_operateur_economique = models.IntegerField(null=True, blank=True, db_index=True)  # Owner operator
     nom = models.CharField(max_length=255) # Nom original complet
     type_document = models.CharField(max_length=50) # Extension/MimeType
     storage_url = models.CharField(max_length=500, unique=True) # Chemin d'accès unique dans MinIO (UUID.ext)

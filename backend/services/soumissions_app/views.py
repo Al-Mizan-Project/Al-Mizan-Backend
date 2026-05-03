@@ -15,6 +15,7 @@ from .services.crypto_service import CryptoService
 from .services.integrations import (
     validate_appel_offre,
     validate_document_ids,
+    fetch_documents_by_ids,
     fetch_evaluations_for_soumission,
     create_evaluation,
     fetch_appel_private_key,
@@ -62,11 +63,18 @@ class SoumissionCreateView(APIView):
 
         document_ids = data.get('document_ids', [])
 
-        # Validate document IDs exist via Documents service
+        # Validate document IDs exist and belong to the submitting operator
         if document_ids:
-            docs_valid, missing = validate_document_ids(document_ids)
-            if not docs_valid:
+            docs_valid, missing, not_owned = validate_document_ids(
+                document_ids, id_operateur=data['id_soumissionnaire']
+            )
+            if missing:
                 return Response({"error": f"Documents introuvables: {missing}"}, status=status.HTTP_400_BAD_REQUEST)
+            if not_owned:
+                return Response(
+                    {"error": f"Les documents suivants n'appartiennent pas à cet opérateur: {not_owned}"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         soumission = Soumission.objects.create(
             id_appel_offre=data['id_appel_offre'],
@@ -364,3 +372,20 @@ class OperateurSoumissionsView(APIView):
         queryset = Soumission.objects.filter(id_soumissionnaire=operateur_id).order_by("-date_soumission")
         serializer = SoumissionListSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class SoumissionDocumentsView(APIView):
+    """
+    GET /api/soumissions/<soumission_id>/documents/
+    Returns full document metadata for all documents linked to a soumission.
+    """
+
+    def get(self, request, soumission_id, *args, **kwargs):
+        soum = get_object_or_404(Soumission, id_soumission=soumission_id)
+        document_ids = soum.document_ids or []
+
+        if not document_ids:
+            return Response([], status=status.HTTP_200_OK)
+
+        documents = fetch_documents_by_ids(document_ids)
+        return Response(documents, status=status.HTTP_200_OK)
