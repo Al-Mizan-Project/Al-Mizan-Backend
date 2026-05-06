@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     DemandeOperateurListView, DemandeOperateurDetailView, DemandeApprouverView,
+    DemandeRejeterView,
     CreerServiceContractantView, ListServiceContractantView,
     CreerCommissionExterneView, ListCommissionExterneView,
     CreerTutelleView, ListTutelleView,
@@ -19,6 +20,7 @@ urlpatterns = [
     path('admin/demandes/', DemandeOperateurListView.as_view(), name='admin-liste-demandes'),
     path('admin/demandes/<uuid:id>/', DemandeOperateurDetailView.as_view(), name='admin-detail-demande'),
     path('admin/demandes/<uuid:id>/approuver/', DemandeApprouverView.as_view(), name='admin-approuver-demande'),
+    path('admin/demandes/<uuid:id>/rejeter/', DemandeRejeterView.as_view(), name='admin-rejeter-demande'),
     
     # ==========================================
     # 2. GESTION DES ORGANISATIONS (Par l'Admin)

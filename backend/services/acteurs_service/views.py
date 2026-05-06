@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.conf import settings
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 from .models import Membre ,OperateurEconomique , TypeDocument ,DemandeDocument, DemandeOperateur, StatutDemande ,DemandeOperateur ,Organisation, ServiceContractant, CommissionExterne, Tutelle, TypeEntite
 from .serializers import OrganisationCreateSerializer , MembreDetailSerializer
@@ -71,9 +71,13 @@ class DemandeOperateurDetailView(generics.RetrieveAPIView):
             
             # Utilisation du endpoint de recherche filtré par 'ids' du DocumentFilterMixin
             target_url = f"{base_url}/api/documents/search/?ids={ids_string}"
+            headers = {}
+            internal_token = getattr(settings, "INTERNAL_SERVICE_TOKEN", "")
+            if internal_token:
+                headers["X-Internal-Service-Token"] = internal_token
             
             try:
-                response = requests.get(target_url)
+                response = requests.get(target_url, headers=headers)
                 if response.status_code == 200:
                     documents_data = response.json() # Récupère la liste des documents JSON
                 else:
@@ -128,7 +132,7 @@ class DemandeApprouverView(APIView):
 
                 # 3. Créer l'entité globale Organisation
                 organisation = Organisation.objects.create(
-                    nom=demande.nom_organisation,
+                    nom_officiel=demande.nom_organisation,
                     email_contact=demande.email_contact,
                     type_entite=TypeEntite.OPERATEUR_ECONOMIQUE
                 )
@@ -145,7 +149,7 @@ class DemandeApprouverView(APIView):
             return Response({
                 "message": "Demande approuvée avec succès. L'entreprise a été créée.",
                 "demande_id": demande.id,
-                "organisation_id": organisation.id
+                "organisation_id": organisation.id_organisation
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -155,6 +159,43 @@ class DemandeApprouverView(APIView):
             )
 
 
+class DemandeRejeterView(APIView):
+    """
+    Endpoint: POST /api/acteurs/admin/demandes/{id}/rejeter/
+    Action: Rejette une demande d'inscription avec un motif.
+    """
+
+    def post(self, request, id, *args, **kwargs):
+        demande = get_object_or_404(DemandeOperateur, id=id)
+
+        if demande.statut != StatutDemande.EN_ATTENTE:
+            return Response(
+                {"erreur": f"Impossible de rejeter. La demande est actuellement : {demande.get_statut_display()}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        motif = str(request.data.get("motif", "")).strip()
+        if not motif:
+            return Response(
+                {"motif": ["Ce champ est obligatoire."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        demande.statut = StatutDemande.REJETE
+        demande.motif_rejet = motif
+        demande.save(update_fields=["statut", "motif_rejet", "mis_a_jour_le"])
+
+        return Response(
+            {
+                "message": "Demande rejetée avec succès.",
+                "demande_id": demande.id,
+                "statut": demande.statut,
+                "motif_rejet": demande.motif_rejet,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class CreerResponsableView(APIView):
     permission_classes = [IsAuthenticated, IsAdminRole]
     def post(self, request, org_id):
@@ -162,7 +203,7 @@ class CreerResponsableView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        organisation = get_object_or_404(Organisation, id=org_id)
+        organisation = get_object_or_404(Organisation, id_organisation=org_id)
         data = serializer.validated_data
 
         # Configuration Rôle/Permission selon le type d'organisation (PDF Page 2)
@@ -192,8 +233,8 @@ class CreerResponsableView(APIView):
                     "email": data['email'],
                     "password": data['password'],
                     "id_membre": str(membre.id_membre), 
-                    "role": role_nom,
-                    "permission": perm_nom,
+                    "role_nom": role_nom,
+                    "permissions": [perm_nom],
                     "nom": data['nom'],
                     "prenom": data['prenom']
                 }
@@ -341,7 +382,7 @@ class CreateMembreByResponsableView(APIView):
                     "email": data['email'],
                     "password": data['password'],
                     "id_membre": str(nouveau_membre.id_membre),
-                    "role": role_mapping.get(organisation.type_entite),
+                    "role_nom": role_mapping.get(organisation.type_entite),
                     "permissions": data['permissions'], # Les permissions choisies par le responsable
                     "nom": data['nom'],
                     "prenom": data['prenom']
@@ -455,6 +496,8 @@ class ListOperateurEconomiqueView(ListAPIView):
         
 
 class SoumettreDemandeOperateurView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
     """
     Endpoint: POST /api/acteurs/demandes/soumettre/
     Description: Permet à un opérateur économique de soumettre une demande d'inscription.
@@ -487,7 +530,12 @@ class SoumettreDemandeOperateurView(APIView):
         }
 
         base_url = getattr(settings, 'DOCUMENTS_SERVICE_URL', 'http://127.0.0.1:8001')
-        upload_url = f"{base_url}/api/documents/upload/"
+        upload_url = f"{base_url}/api/documents/"
+
+        headers = {}
+        internal_token = getattr(settings, "INTERNAL_SERVICE_TOKEN", "")
+        if internal_token:
+            headers["X-Internal-Service-Token"] = internal_token
 
         # Étape 1 : Uploader tous les fichiers vers le service Document
         # On collecte les résultats avant d'écrire en base (fail-fast)
@@ -498,6 +546,8 @@ class SoumettreDemandeOperateurView(APIView):
             try:
                 response = requests.post(
                     upload_url,
+                    headers=headers,
+                    data={'related_type': 'demande_operateur'},
                     files={'file': (fichier.name, fichier, fichier.content_type)},
                 )
             except requests.exceptions.RequestException as e:

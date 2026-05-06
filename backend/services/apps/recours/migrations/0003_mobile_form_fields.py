@@ -3,7 +3,7 @@ from django.db import migrations
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("recours", "0002_runtime_tables"),
+        ("recours", "0001_initial"),
     ]
 
     operations = [

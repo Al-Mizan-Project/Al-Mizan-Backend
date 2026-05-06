@@ -19,7 +19,6 @@ from shared.health import HealthView, ReadyView
 
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
     path("health", HealthView.as_view()),
     path("ready", ReadyView.as_view()),
     path(
@@ -71,4 +70,5 @@ urlpatterns = [
     path("journaux-audit/", include("ledger.urls")),
     path("journaux-audit/", include("readstore.urls")),
     path("journaux-audit/", include("integrity.urls")),
+    path("admin/", admin.site.urls),
 ]

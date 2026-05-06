@@ -10,6 +10,7 @@ from .permissions import AuthServicePermission
 from .serializers import (
     ChangePasswordSerializer,
     ForgotPasswordSerializer,
+    InternalActeurRegisterSerializer,
     LoginSerializer,
     LogoutSerializer,
     PermissionSerializer,
@@ -17,17 +18,22 @@ from .serializers import (
     ResetPasswordSerializer,
     RolePermissionsReplaceSerializer,
     RoleSerializer,
+    UserPermissionsReplaceSerializer,
     UserRoleUpdateSerializer,
     UtilisateurCreateSerializer,
     UtilisateurSerializer,
     UtilisateurUpdateSerializer,
 )
 from .services.access_control import (
+    add_user_permission,
     add_role_permission,
+    list_direct_user_permissions,
     list_role_permissions,
     list_user_permissions,
     permissions_queryset,
+    remove_user_permission,
     remove_role_permission,
+    replace_user_permissions,
     replace_role_permissions,
     roles_queryset,
     update_user_role,
@@ -226,6 +232,7 @@ class UserPermissionsView(APIView):
     permission_classes = [AuthServicePermission]
     required_permissions = {
         "GET": ("users.read",),
+        "PUT": ("users.write",),
     }
 
     def get(self, request, user_id):
@@ -237,6 +244,43 @@ class UserPermissionsView(APIView):
         payload = PermissionSerializer(permissions, many=True).data
         write_cached(payload, "users-permissions", str(user_id), query_string)
         return Response(payload)
+
+    def put(self, request, user_id):
+        serializer = UserPermissionsReplaceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated = replace_user_permissions(
+            user_id=user_id,
+            permission_ids=serializer.validated_data["permission_ids"],
+            permission_names=serializer.validated_data["permission_names"],
+        )
+        return Response(PermissionSerializer(updated, many=True).data)
+
+
+class UserDirectPermissionsView(APIView):
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "GET": ("users.read",),
+    }
+
+    def get(self, request, user_id):
+        permissions = list_direct_user_permissions(user_id)
+        return Response(PermissionSerializer(permissions, many=True).data)
+
+
+class UserPermissionDetailView(APIView):
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "POST": ("users.write",),
+        "DELETE": ("users.write",),
+    }
+
+    def post(self, request, user_id, permission_id):
+        add_user_permission(user_id=user_id, permission_id=permission_id)
+        return Response(status=status.HTTP_201_CREATED)
+
+    def delete(self, request, user_id, permission_id):
+        remove_user_permission(user_id=user_id, permission_id=permission_id)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class RoleListCreateView(CachedListMixin, ListCreateAPIView):
