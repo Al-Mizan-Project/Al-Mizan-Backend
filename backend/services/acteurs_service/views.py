@@ -16,6 +16,16 @@ from rest_framework.generics import ListAPIView
 from .models import Organisation, TypeEntite
 from .serializers import OrganisationListSerializer
 from .permissions import IsResponsable , IsAdminRole
+
+
+def _auth_service_base_url():
+    return getattr(
+        settings,
+        'AUTH_SERVICE_URL',
+        getattr(settings, 'INTERNAL_BASE_URL', 'http://backend:8000'),
+    ).rstrip("/")
+
+
 class DemandeOperateurListView(generics.ListAPIView):
     """
     Endpoint: GET /api/acteurs/admin/demandes/
@@ -240,7 +250,7 @@ class CreerResponsableView(APIView):
                 }
 
                # L'URL pointe vers la nouvelle route interne
-                auth_url = getattr(settings, 'AUTH_SERVICE_URL', 'http://localhost:8002') + "/internal/users/register"
+                auth_url = _auth_service_base_url() + "/internal/users/register"
                 auth_response = requests.post(auth_url, json=auth_payload)
                 if auth_response.status_code != 201:
                     # Si Auth échoue, on rollback la création du membre
@@ -390,7 +400,7 @@ class CreateMembreByResponsableView(APIView):
 
                 # Appel vers le service Auth
                 # L'URL pointe vers la nouvelle route interne
-                auth_url = getattr(settings, 'AUTH_SERVICE_URL', 'http://localhost:8002') + "/internal/users/register"
+                auth_url = _auth_service_base_url() + "/internal/users/register"
                 auth_response = requests.post(auth_url, json=auth_payload)
                 if auth_response.status_code != 201:
                     raise Exception(f"Erreur Auth: {auth_response.text}")
@@ -431,7 +441,7 @@ class ListMembresOrganisationView(APIView):
             ids_string = ",".join(membres_ids)
             
             # Appel au service Auth (Il faudra créer cet endpoint côté Auth s'il n'existe pas)
-            auth_service_url = getattr(settings, 'AUTH_SERVICE_URL', 'http://localhost:8002')
+            auth_service_url = _auth_service_base_url()
             try:
                 # On demande au service Auth de nous renvoyer les comptes liés à ces id_membre
                 response = requests.get(f"{auth_service_url}/internal/users/search?membres_ids={ids_string}")

@@ -15,7 +15,7 @@ class IsAdminRole(BasePermission):
         token_payload = request.auth or {}
         role = token_payload.get('role') or getattr(request.user, 'role', None)
         
-        return role == "Admin"
+        return str(role or "").strip().lower() == "admin"
 
 
 class IsResponsable(BasePermission):

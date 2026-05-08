@@ -70,5 +70,5 @@ urlpatterns = [
     path("journaux-audit/", include("ledger.urls")),
     path("journaux-audit/", include("readstore.urls")),
     path("journaux-audit/", include("integrity.urls")),
-    path("admin/", admin.site.urls),
+    path("django-admin/", admin.site.urls),
 ]
