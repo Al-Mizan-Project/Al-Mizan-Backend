@@ -379,8 +379,14 @@ class ListMembresOrganisationView(APIView):
         # if request.user.id_membre and not Membre.objects.filter(id_membre=request.user.id_membre, organisation=organisation).exists():
         #     return Response({"erreur": "Accès refusé"}, status=status.HTTP_403_FORBIDDEN)
 
-        # 2. Récupérer tous les membres de cette organisation
-        membres = Membre.objects.filter(organisation=organisation).order_by('-created_at')
+        # 2. Récupérer les membres de cette organisation
+        if organisation.type_entite == TypeEntite.TUTELLE:
+            from .models import MembresTutelle
+            tutelle_links = MembresTutelle.objects.filter(tutelle__organisation=organisation)
+            membre_ids = [link.id_membre for link in tutelle_links]
+            membres = Membre.objects.filter(id_membre__in=membre_ids).order_by('-created_at')
+        else:
+            membres = Membre.objects.filter(organisation=organisation).order_by('-created_at')
 
         # 3. Préparer l'appel au service Auth pour récupérer les emails et permissions
         auth_data_dict = {}
@@ -583,3 +589,73 @@ class MembreDetailView(generics.RetrieveAPIView):
 
     # Décommente cette ligne si tu veux que seul un utilisateur connecté puisse voir ces infos
     # permission_classes = [IsAuthenticated]
+
+
+class OrganisationResponsableByTypeView(APIView):
+    """
+    GET /organisations/by-type/{entite_type}/responsable/
+    """
+    def get(self, request, entite_type):
+        # Normalisation du type (ex: 'externe' -> 'COMMISSION_EXTERNE')
+        type_map = {
+            'externe': TypeEntite.COMMISSION_EXTERNE,
+            'tutelle': TypeEntite.TUTELLE,
+            'commission_externe': TypeEntite.COMMISSION_EXTERNE,
+        }
+        target_type = type_map.get(entite_type.lower(), entite_type)
+        
+        # Filtre optionnel par organisation spécifique
+        org_id = request.query_params.get('org_id')
+        if org_id:
+            orgs = Organisation.objects.filter(id_organisation=org_id, type_entite=target_type)
+        else:
+            orgs = Organisation.objects.filter(type_entite=target_type)
+            
+        if not orgs.exists():
+            return Response({"error": f"Organisation de type {target_type} non trouvée"}, status=404)
+        
+        # Filtre optionnel par liste de membres (IDs entiers ou UUIDs)
+        membres_ids_param = request.query_params.get("membres_ids")
+        if membres_ids_param:
+            ids_raw = [id.strip() for id in membres_ids_param.split(",")]
+            # Conversion potentielle de int vers UUID (format 0000...)
+            ids_processed = []
+            for ir in ids_raw:
+                if len(ir) < 12 and ir.isdigit():
+                    hex_id = hex(int(ir))[2:].zfill(12)
+                    ids_processed.append(f"00000000-0000-0000-0000-{hex_id}")
+                else:
+                    ids_processed.append(ir)
+            
+            members_queryset = Membre.objects.filter(id_membre__in=ids_processed)
+        else:
+            members_queryset = Membre.objects.filter(organisation__in=orgs)
+
+        # Recherche du responsable
+        membre = members_queryset.filter(fonction__icontains='Responsable').first()
+        if not membre:
+            membre = members_queryset.filter(fonction__icontains='Chef').first()
+        if not membre:
+            membre = members_queryset.first()
+            
+        if not membre:
+            return Response({"error": "Aucun membre trouvé"}, status=404)
+            
+        # Récupération de l'ID utilisateur via Auth
+        id_utilisateur = None
+        auth_service_url = getattr(settings, 'AUTH_SERVICE_URL', 'http://localhost:8002')
+        try:
+            resp = requests.get(f"{auth_service_url}/internal/users/search?membres_ids={membre.id_membre}", timeout=2)
+            if resp.status_code == 200:
+                users = resp.json()
+                if users:
+                    id_utilisateur = users[0].get('id_utilisateur')
+        except Exception as e:
+            print(f"Erreur Auth: {e}")
+
+        return Response({
+            "id_membre": str(membre.id_membre),
+            "id_utilisateur": id_utilisateur,
+            "nom": f"{membre.prenom} {membre.nom}",
+            "organisation_nom": membre.organisation.nom_officiel
+        })

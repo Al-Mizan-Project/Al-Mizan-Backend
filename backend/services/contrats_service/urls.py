@@ -11,14 +11,16 @@ from .views import (
     ContratDocumentsListView,
     ContratDocumentDetailView,
     SoumissionContratView,
+    AffectationDetailView,
+    ValidationTransmitView,
 )
 
 urlpatterns = [
     # Validations
-    path("validations", ValidationListCreateView.as_view()),
-    path("validations/<int:validation_id>", ValidationRetrieveUpdateDeleteView.as_view()),
-    path("validations/<int:validation_id>/approuver", ValidationApproveView.as_view()),
-    path("validations/<int:validation_id>/rejeter", ValidationRejectView.as_view()),
+    path("validations/", ValidationListCreateView.as_view()),
+    path("validations/<int:validation_id>/", ValidationRetrieveUpdateDeleteView.as_view()),
+    path("validations/<int:validation_id>/approuver/", ValidationApproveView.as_view()),
+    path("validations/<int:validation_id>/rejeter/", ValidationRejectView.as_view()),
 
     # Contrats
     path("contrats", ContratListCreateView.as_view()),
@@ -31,4 +33,8 @@ urlpatterns = [
 
     # Cross-entity
     path("soumissions/<int:soumission_id>/contrat", SoumissionContratView.as_view()),
+    
+    # --- ADDITION FOR AFFECTATION ---
+    path("affectation-details/<int:soumission_id>/", AffectationDetailView.as_view()),
+    path("transmettre-dossier/", ValidationTransmitView.as_view()),
 ]

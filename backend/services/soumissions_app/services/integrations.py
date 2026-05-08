@@ -27,6 +27,32 @@ def validate_appel_offre(id_appel_offre):
     except requests.RequestException as exc:
         logger.warning("Appels service unreachable: %s", exc)
         return True, None  # graceful degradation
+        
+
+def fetch_user_service_id(headers):
+    """Fetch the service ID for the current user from Contractant service."""
+    url = f"{settings.CONTRACTANT_SERVICE_URL}/my-service"
+    try:
+        resp = requests.get(url, headers=headers, timeout=_timeout())
+        if resp.status_code == 200:
+            return resp.json().get("id_service")
+        return None
+    except requests.RequestException:
+        return None
+
+
+def fetch_appels_for_service(service_id):
+    """Fetch all AO IDs for a given service contractant."""
+    url = f"{settings.APPELS_SERVICE_URL}/services-contractants/{service_id}/appels-offres"
+    try:
+        resp = requests.get(url, headers=internal_service_headers(), timeout=_timeout())
+        if resp.status_code == 200:
+            data = resp.json()
+            appels = data if isinstance(data, list) else data.get("results", [])
+            return [a["id_appel_offres"] for a in appels]
+        return []
+    except requests.RequestException:
+        return []
 
 
 def fetch_appel_private_key(id_appel_offre):

@@ -19,6 +19,8 @@ from .services.integrations import (
     create_evaluation,
     fetch_appel_private_key,
     download_encrypted_file,
+    fetch_user_service_id,
+    fetch_appels_for_service,
 )
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
@@ -31,6 +33,16 @@ class SoumissionCreateView(APIView):
     """
     def get(self, request, *args, **kwargs):
         queryset = Soumission.objects.all().order_by("-date_soumission")
+
+        # ── Service Isolation ──────────────────────────────────────────
+        # If user is a commission member, they should only see AO belonging to their service
+        auth_header = request.headers.get("Authorization")
+        if auth_header:
+            headers = {"Authorization": auth_header}
+            service_id = fetch_user_service_id(headers)
+            if service_id:
+                allowed_ao_ids = fetch_appels_for_service(service_id)
+                queryset = queryset.filter(id_appel_offre__in=allowed_ao_ids)
 
         id_soumissionnaire = request.query_params.get("id_soumissionnaire")
         id_appel_offre = request.query_params.get("id_appel_offre")

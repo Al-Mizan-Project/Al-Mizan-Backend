@@ -11,6 +11,7 @@ from contractant_service.models import (
 )
 
 from .cache import bump_cache_version
+import re
 
 
 # ── Querysets ────────────────────────────────────────────────────────
@@ -141,3 +142,63 @@ def list_service_commissions(service_id):
             )
         ),
     }
+
+# ── Logic Determination Commission Externe Competente ───────────────
+
+def convert_threshold(text):
+    if not text: return 0
+    # Extract all digits and join them (to handle spaces like 10 000 000)
+    digits = "".join(re.findall(r'\d+', text))
+    return int(digits) if digits else 0
+
+def get_commission_externe_competente(appel_id):
+    """
+    Détermine la commission externe compétente pour un appel d'offres donné.
+    Retourne l'objet CommissionExterne ou None si transmission directe à la tutelle.
+    """
+    from .services_contractants import get_service_or_404
+    
+    # 1. Récupérer l'appel d'offres via le service Appels
+    appels_url = f"{settings.APPELS_SERVICE_URL.rstrip('/')}/appels-offres/{appel_id}"
+    try:
+        response = requests.get(
+            appels_url,
+            timeout=5,
+            headers={"X-Internal-Service-Token": settings.INTERNAL_SERVICE_TOKEN},
+        )
+        if response.status_code != 200:
+            raise NotFound("Appel d'offres non trouvé")
+        appel_data = response.json()
+    except requests.RequestException:
+        raise ValidationError("Service appels non joignable")
+
+    montant_estime = float(appel_data.get("montant_estime") or 0)
+    service_id = appel_data.get("id_service_contractant")
+    
+    # 2. Récupérer le service contractant et sa catégorie
+    service = get_service_or_404(service_id)
+    cat_sc = service.categorie.lower()
+    
+    # Mapping de normalisation entre ServiceContractant.categorie et CommissionExterne.niveau_competance
+    mapping = {
+        "communal": "Communale",
+        "commune": "Communale",
+        "wilaya": "de Wilaya",
+        "ministériel": "Sectorielle",
+        "ministeriel": "Sectorielle",
+        "national": "Nationale"
+    }
+    
+    target_niveau = mapping.get(cat_sc)
+    if not target_niveau:
+        return None
+
+    # 3. Trouver la commission externe correspondante
+    commissions = CommissionExterne.objects.filter(niveau_competance=target_niveau)
+    
+    for ce in commissions:
+        seuil = convert_threshold(ce.seuils_competence_financiere)
+        if montant_estime > seuil:
+            return ce
+            
+    return None
