@@ -9,6 +9,7 @@ from .views import (
     SoumissionDocumentsView,
     SoumissionTerminerEvaluationView,
     SoumissionWithdrawView,
+    SoumissionAffecterView,          # <-- added
 )
 
 urlpatterns = [
@@ -20,4 +21,5 @@ urlpatterns = [
     path('<int:soumission_id>/retirer/', SoumissionWithdrawView.as_view(), name='soumission-withdraw'),
     path('<int:soumission_id>/terminer-evaluation/', SoumissionTerminerEvaluationView.as_view(), name='soumission-terminer-evaluation'),
     path('<int:soumission_id>/conformite/', SoumissionConformitePatchView.as_view(), name='soumission-conformite-patch'),
+    path('<int:soumission_id>/affecter/', SoumissionAffecterView.as_view(), name='soumission-affecter'),   # <-- added
 ]
