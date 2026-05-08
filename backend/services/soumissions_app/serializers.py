@@ -105,3 +105,9 @@ class EvaluationCreateSerializer(serializers.Serializer):
     )
     note = serializers.IntegerField(min_value=0, max_value=100)
     commentaire = serializers.CharField(required=False, default="", allow_blank=True)
+
+
+
+class AffectationSerializer(serializers.Serializer):
+    evaluateur_ids = serializers.ListField(child=serializers.IntegerField(), min_length=1)
+    type_evaluation = serializers.ChoiceField(choices=['technique', 'administrative'])
