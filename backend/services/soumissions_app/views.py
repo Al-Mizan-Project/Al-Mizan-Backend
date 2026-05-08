@@ -8,9 +8,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
-from .models import Soumission, SoumissionStatut
+from .models import Soumission, SoumissionStatut, SoumissionEvaluateur           # <-- added SoumissionEvaluateur
 from .permissions import IsCommissionMember, CanOpenBids
-from .serializers import SoumissionListSerializer, SoumissionCreateSerializer, EvaluationCreateSerializer
+from .serializers import SoumissionListSerializer, SoumissionCreateSerializer, EvaluationCreateSerializer, AffectationSerializer   # <-- added AffectationSerializer
 from .services.crypto_service import CryptoService
 from .services.integrations import (
     validate_appel_offre,
@@ -402,3 +402,53 @@ class SoumissionDocumentsView(APIView):
 
         documents = fetch_documents_by_ids(document_ids)
         return Response(documents, status=status.HTTP_200_OK)
+
+
+# ========== NEW AFFECTATION ENDPOINT ==========
+class SoumissionAffecterView(APIView):
+    """
+    POST /soumissions/<soumission_id>/affecter/
+    Assigns one or more evaluators to a soumission.
+    """
+    permission_classes = [IsCommissionMember]   # Reuse existing permission
+
+    def post(self, request, soumission_id):
+        soum = get_object_or_404(Soumission, id_soumission=soumission_id)
+
+        # Check soumission status (allow only if not already closed)
+        if soum.statut not in [SoumissionStatut.SOUMIS, SoumissionStatut.EN_EVALUATION]:
+            return Response(
+                {"error": "La soumission n'est pas en phase d'affectation."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = AffectationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        evaluateur_ids = serializer.validated_data['evaluateur_ids']
+        type_eval = serializer.validated_data['type_evaluation']
+
+        created_assignments = []
+        for eid in evaluateur_ids:
+            obj, created = SoumissionEvaluateur.objects.get_or_create(
+                soumission=soum,
+                evaluateur_id=eid,
+                type_evaluation=type_eval
+            )
+            created_assignments.append({
+                "soumission_id": soum.id_soumission,
+                "evaluateur_id": eid,
+                "type": type_eval,
+                "created": created
+            })
+
+        # Optionally update soumission status to EN_EVALUATION if it was SOUMIS
+        if soum.statut == SoumissionStatut.SOUMIS:
+            soum.statut = SoumissionStatut.EN_EVALUATION
+            soum.save()
+
+        return Response({
+            "message": "Affectation réussie",
+            "assignments": created_assignments
+        }, status=status.HTTP_201_CREATED)
