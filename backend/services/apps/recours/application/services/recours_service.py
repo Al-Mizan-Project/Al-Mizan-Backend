@@ -4,13 +4,16 @@ from django.utils import timezone
 
 from apps.integrations.appels_client import AppelsClient
 from apps.integrations.audit_client import AuditClient
+from apps.integrations.contrats_client import ContratsClient
 from apps.integrations.notification_client import NotificationClient
 from apps.integrations.soumissions_client import SoumissionsClient
 from apps.recours.application.dto.recours_dto import (
     RecoursCreateDTO,
     RecoursDecisionDTO,
     RecoursResponseDTO,
+    RecoursUpdateDTO,
 )
+from apps.recours.domain.exceptions import DeadlineExceeded, RecoursNotModifiable
 from apps.recours.domain.entities.recours import Recours
 from apps.recours.domain.repositories.recours_repository import RecoursRepository
 from apps.recours.domain.services.recours_domain_service import RecoursDomainService
@@ -26,6 +29,7 @@ class RecoursService:
         appels_client: AppelsClient,
         notification_client: NotificationClient,
         audit_client: AuditClient,
+        contrats_client: ContratsClient = None,
     ):
         self.repository = repository
         self.domain_service = domain_service
@@ -33,6 +37,7 @@ class RecoursService:
         self.appels_client = appels_client
         self.notification_client = notification_client
         self.audit_client = audit_client
+        self.contrats_client = contrats_client
 
     # ---------------------------
     # CREATE RECOURS
@@ -72,17 +77,27 @@ class RecoursService:
         else:
             date_limite = now
 
+        # 3.5 Resolve id_validation — if the client didn't provide one,
+        # derive it from the contrats service (latest validation on the soumission).
+        id_validation = dto.id_validation
+        if id_validation is None and self.contrats_client is not None:
+            id_validation = self._resolve_id_validation(dto.id_soumission)
+
         # 4. Create domain entity
         recours = Recours(
             id_recours=None,
             id_operateur_economique=dto.id_operateur_economique,
-            id_validation=dto.id_validation,
+            id_validation=id_validation,
             id_soumission=dto.id_soumission,
             motif=dto.motif,
             statut="DEPOSE",
             date_depot=now,
             date_limite=date_limite,
             version=0,
+            type_recours=dto.type_recours,
+            objet=dto.objet,
+            explications=dto.explications,
+            document_ids=list(dto.document_ids or []),
         )
 
         # 5. Persist
@@ -117,16 +132,45 @@ class RecoursService:
         recours_list = self.repository.list(filters)
         return [self._to_response_dto(r) for r in recours_list]
 
+    def update_recours(self, recours_id: int, dto: RecoursUpdateDTO) -> RecoursResponseDTO:
+        recours = self.repository.get_by_id(recours_id)
+        self._assert_operator_editable(recours)
+
+        if dto.objet is not None:
+            recours.objet = dto.objet
+        if dto.explications is not None:
+            recours.explications = dto.explications
+        if dto.motif is not None:
+            recours.motif = dto.motif
+        elif dto.explications is not None or dto.objet is not None:
+            recours.motif = recours.explications or recours.objet or recours.motif
+        if dto.type_recours is not None:
+            recours.type_recours = dto.type_recours
+        if dto.document_ids is not None:
+            recours.document_ids = list(dto.document_ids)
+
+        recours = self.repository.save(recours)
+
+        self._safe_audit(
+            utilisateur_id=recours.id_operateur_economique,
+            action="UPDATE_RECOURS",
+            entite_id=recours.id_recours,
+        )
+
+        return self._to_response_dto(recours)
+
     # ---------------------------
     # DELETE
     # ---------------------------
 
     def delete_recours(self, recours_id: int):
+        recours = self.repository.get_by_id(recours_id)
+        self._assert_operator_editable(recours)
         self.repository.delete(recours_id)
 
         self._safe_audit(
-            utilisateur_id=0,
-            action="DELETE_RECOURS",
+            utilisateur_id=recours.id_operateur_economique,
+            action="CANCEL_RECOURS",
             entite_id=recours_id,
         )
 
@@ -249,7 +293,40 @@ class RecoursService:
             if recours.date_decision
             else None,
             traite_par=recours.traite_par,
+            type_recours=recours.type_recours,
+            objet=recours.objet or "",
+            explications=recours.explications or "",
+            document_ids=list(recours.document_ids or []),
         )
+
+    def _resolve_id_validation(self, soumission_id: int):
+        """Pick the most recent rejecting validation for this soumission.
+        Falls back to the latest validation, then to None.
+        Any failure is swallowed — id_validation is metadata, not a gate."""
+        try:
+            validations = self.contrats_client.get_validations_by_soumission(
+                soumission_id
+            ) or []
+        except Exception:
+            return None
+        if not validations:
+            return None
+        rejected = [v for v in validations if v.get("is_validated") is False]
+        chosen = rejected[0] if rejected else validations[0]
+        return chosen.get("id_validation")
+
+    def _assert_operator_editable(self, recours: Recours):
+        if recours.statut != "DEPOSE":
+            raise RecoursNotModifiable(
+                "Le recours ne peut plus etre modifie ou annule apres le debut du traitement"
+            )
+
+        now = timezone.now()
+        date_limite = recours.date_limite
+        if date_limite is not None and timezone.is_naive(date_limite):
+            date_limite = timezone.make_aware(date_limite, timezone.get_current_timezone())
+        if date_limite is not None and now > date_limite:
+            raise DeadlineExceeded("Le delai de modification du recours est depasse")
 
     def _safe_notify(self, utilisateur_id: int, type_notification: str, titre: str, message: str, entite_liee_id: int):
         try:

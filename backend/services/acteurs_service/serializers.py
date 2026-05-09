@@ -22,6 +22,7 @@ class DemandeOperateurSerializer(serializers.ModelSerializer):
             'nif', 
             'num_registre_commerce', 
             'statut', 
+            'motif_rejet',
             'cree_le', 
             'documents' # Ceci inclura la liste des documents imbriquée
         ]
@@ -34,7 +35,7 @@ class DemandeOperateurDetailSerializer(serializers.ModelSerializer):
         model = DemandeOperateur
         fields = [
             'id', 'nom_organisation', 'email_contact', 'telephone', 
-            'nif', 'num_registre_commerce', 'statut', 'cree_le', 
+            'nif', 'num_registre_commerce', 'statut', 'motif_rejet', 'cree_le', 
             'documents_complets' # Notre nouveau champ
         ]
 

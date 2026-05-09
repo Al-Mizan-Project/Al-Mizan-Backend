@@ -7,12 +7,14 @@ from apps.recours.domain.exceptions import RecoursException
 from apps.recours.application.dto.recours_dto import (
     RecoursCreateDTO,
     RecoursDecisionDTO,
+    RecoursUpdateDTO,
 )
 from apps.recours.application.services.recours_service import RecoursService
 from apps.recours.presentation.serializers.recours_serializers import (
     RecoursCreateSerializer,
     RecoursDecisionSerializer,
     RecoursResponseSerializer,
+    RecoursUpdateSerializer,
 )
 
 
@@ -97,6 +99,17 @@ class RecoursDetailView(BaseAPIView):
 
     def get(self, request, recours_id: int):
         result = self.service.get_recours(recours_id)
+
+        return Response(
+            RecoursResponseSerializer(result.__dict__).data
+        )
+
+    def patch(self, request, recours_id: int):
+        serializer = RecoursUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        dto = RecoursUpdateDTO(**serializer.validated_data)
+        result = self.service.update_recours(recours_id, dto)
 
         return Response(
             RecoursResponseSerializer(result.__dict__).data

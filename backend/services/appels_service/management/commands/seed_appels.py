@@ -6,11 +6,17 @@ Usage:
     python manage.py seed_appels --flush      # drop all existing data first
 """
 from django.core.management.base import BaseCommand
+from django.core.management.color import no_style
+from django.db import connection
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 
-from appels_service.models import AppelOffres, DocumentsAppel
+from acteurs_service.models import OperateurEconomique
+from contractant_service.models import ServiceContractant
+from documents_service.models import Document
+
+from appels_service.models import AchatSimple, AppelOffres, AppelOffresOperateurInvite, DocumentsAppel
 
 
 APPELS = [
@@ -274,6 +280,50 @@ DOCUMENTS = [
     (11, 113),
 ]
 
+PRIVATE_AO_INVITES_BY_REFERENCE = {
+    "AO-2026-002": ["001234567890123"],
+    "AO-2026-012": ["001234567890124"],
+}
+
+ACHATS_SIMPLES = [
+    {
+        "id_service_contractant": 1,
+        "reference": "AS-2026-001",
+        "objet": "Achat postes bureautiques",
+        "description": "Achat simple de postes bureautiques pour renfort équipe.",
+        "type_prestation": "fournitures",
+        "wilaya": "Alger",
+        "localisation": "Alger Centre",
+        "montant_estime": "2500000.00",
+        "operateur_nif": "001234567890123",
+        "statut": "valide",
+    },
+    {
+        "id_service_contractant": 2,
+        "reference": "AS-2026-002",
+        "objet": "Maintenance express réseau local",
+        "description": "Intervention ponctuelle sur infrastructure LAN.",
+        "type_prestation": "services",
+        "wilaya": "Oran",
+        "localisation": "Oran Akid",
+        "montant_estime": "780000.00",
+        "operateur_nif": "001234567890124",
+        "statut": "engage",
+    },
+    {
+        "id_service_contractant": 3,
+        "reference": "AS-2026-003",
+        "objet": "Etude de faisabilité extension site",
+        "description": "Etude simple de faisabilité avant lancement AO complet.",
+        "type_prestation": "etudes",
+        "wilaya": "Constantine",
+        "localisation": "Constantine Centre",
+        "montant_estime": "420000.00",
+        "operateur_nif": None,
+        "statut": "brouillon",
+    },
+]
+
 
 class Command(BaseCommand):
     help = "Seed the appels database with sample data."
@@ -307,7 +357,7 @@ class Command(BaseCommand):
         if statut == "attribue":
             return {
                 "date_publication": now - timedelta(days=45),
-                "date_limite_soumission": now - timedelta(days=35),
+                "date_limite_soumission": now + timedelta(days=30),
                 "date_ouverture_plis": now - timedelta(days=34),
             }
         return {
@@ -326,35 +376,124 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **options):
         if options["flush"]:
+            AchatSimple.objects.all().delete()
+            AppelOffresOperateurInvite.objects.all().delete()
             DocumentsAppel.objects.all().delete()
             AppelOffres.objects.all().delete()
+            sequence_sql = connection.ops.sequence_reset_sql(
+                no_style(),
+                [AppelOffres, DocumentsAppel],
+            )
+            with connection.cursor() as cursor:
+                for sql in sequence_sql:
+                    cursor.execute(sql)
             self.stdout.write(self.style.WARNING("Flushed all appels data."))
 
         now = timezone.now()
+        service_ids = list(ServiceContractant.objects.order_by("id_service").values_list("id_service", flat=True))
+        operateur_nifs = {
+            nif
+            for nifs in PRIVATE_AO_INVITES_BY_REFERENCE.values()
+            for nif in nifs
+        }
+        operateur_nifs.update(
+            item["operateur_nif"]
+            for item in ACHATS_SIMPLES
+            if item.get("operateur_nif")
+        )
+        operateurs_by_nif = {
+            row.nif: row.id_operateur_economique
+            for row in OperateurEconomique.objects.filter(nif__in=operateur_nifs)
+        }
+        available_document_ids = list(
+            Document.objects.order_by("id_document").values_list("id_document", flat=True)
+        )
+        use_seed_documents = bool(available_document_ids)
+
         appel_objects = []
         for data in APPELS:
+            payload = dict(data)
+            if service_ids:
+                source_index = max(int(payload.get("id_service_contractant", 1)), 1) - 1
+                payload["id_service_contractant"] = service_ids[source_index % len(service_ids)]
+
+            payload.setdefault("type_prestation", "travaux")
+            payload.setdefault("visibilite", "public")
+            payload.setdefault("localisation", payload.get("wilaya", "") or "")
+
+            invited_ids = [
+                operateurs_by_nif[nif]
+                for nif in PRIVATE_AO_INVITES_BY_REFERENCE.get(payload["reference"], [])
+                if nif in operateurs_by_nif
+            ]
+            if invited_ids:
+                payload["visibilite"] = "prive"
+
             timeline = self._timeline_for_status(data["statut"], now)
             obj, created = AppelOffres.objects.update_or_create(
-                reference=data["reference"],
-                defaults={**data, **timeline},
+                reference=payload["reference"],
+                defaults={**payload, **timeline},
             )
             appel_objects.append(obj)
+
+            if payload["visibilite"] == "prive" and invited_ids:
+                self._sync_operateurs_invites(obj, invited_ids)
+            else:
+                AppelOffresOperateurInvite.objects.filter(id_appel_offres=obj).delete()
+
             if created:
                 self.stdout.write(self.style.SUCCESS(f"  Created AppelOffres: {obj.reference}"))
             else:
                 self.stdout.write(f"  Updated (exists): {obj.reference}")
 
-        for appel_idx, doc_id in DOCUMENTS:
+        for link_index, (appel_idx, doc_id) in enumerate(DOCUMENTS):
             appel = appel_objects[appel_idx]
+            resolved_doc_id = (
+                available_document_ids[link_index % len(available_document_ids)]
+                if use_seed_documents
+                else doc_id
+            )
             link, created = DocumentsAppel.objects.get_or_create(
                 id_appel_offres=appel,
-                id_document=doc_id,
+                id_document=resolved_doc_id,
             )
             if created:
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"  Linked document {doc_id} -> appel {appel.reference}"
+                        f"  Linked document {resolved_doc_id} -> appel {appel.reference}"
                     )
                 )
 
+        for idx, data in enumerate(ACHATS_SIMPLES):
+            payload = dict(data)
+            if service_ids:
+                source_index = max(int(payload.get("id_service_contractant", 1)), 1) - 1
+                payload["id_service_contractant"] = service_ids[source_index % len(service_ids)]
+
+            operateur_nif = payload.pop("operateur_nif", None)
+            payload["id_operateur_economique"] = operateurs_by_nif.get(operateur_nif) if operateur_nif else None
+            payload.setdefault("date_demande", now - timedelta(days=(idx + 1)))
+
+            achat, created = AchatSimple.objects.update_or_create(
+                reference=payload["reference"],
+                defaults=payload,
+            )
+            if created:
+                self.stdout.write(self.style.SUCCESS(f"  Created AchatSimple: {achat.reference}"))
+            else:
+                self.stdout.write(f"  Updated (exists) AchatSimple: {achat.reference}")
+
         self.stdout.write(self.style.SUCCESS("Seeding complete."))
+
+    @staticmethod
+    def _sync_operateurs_invites(appel, operateur_ids):
+        target_ids = set(operateur_ids)
+        AppelOffresOperateurInvite.objects.filter(id_appel_offres=appel).exclude(
+            id_operateur_economique__in=target_ids
+        ).delete()
+
+        for operateur_id in target_ids:
+            AppelOffresOperateurInvite.objects.get_or_create(
+                id_appel_offres=appel,
+                id_operateur_economique=operateur_id,
+            )

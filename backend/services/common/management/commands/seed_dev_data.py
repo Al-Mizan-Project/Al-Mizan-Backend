@@ -42,12 +42,17 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         flush = bool(options["flush"])
+        with_documents = bool(options["with_documents"])
 
         self.stdout.write("Seeding acteurs service data...")
         call_command("seed_acteurs", flush=flush)
 
         self.stdout.write("Seeding contractant service data...")
         call_command("seed_contractant", flush=flush)
+
+        if with_documents:
+            self.stdout.write("Seeding document metadata + MinIO objects...")
+            call_command("seed_documents")
 
         self.stdout.write("Seeding appels service data...")
         call_command("seed_appels", flush=flush)
@@ -108,9 +113,8 @@ class Command(BaseCommand):
             count=options["notifications_count"],
         )
 
-        if options["with_documents"]:
-            self.stdout.write("Seeding document metadata + MinIO objects...")
-            call_command("seed_documents")
+        if with_documents:
+            self.stdout.write(self.style.SUCCESS("Documents already seeded before appels."))
 
         self.stdout.write(
             self.style.SUCCESS(

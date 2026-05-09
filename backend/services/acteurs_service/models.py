@@ -42,6 +42,7 @@ class DemandeOperateur(models.Model):
         choices=StatutDemande.choices, 
         default=StatutDemande.EN_ATTENTE
     )
+    motif_rejet = models.TextField(blank=True, default="")
     
     cree_le = models.DateTimeField(auto_now_add=True)
     mis_a_jour_le = models.DateTimeField(auto_now=True)

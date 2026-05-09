@@ -8,13 +8,14 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
-from .models import Soumission, SoumissionStatut
+from .models import Soumission, SoumissionStatut, SoumissionEvaluateur           # <-- added SoumissionEvaluateur
 from .permissions import IsCommissionMember, CanOpenBids
-from .serializers import SoumissionListSerializer, SoumissionCreateSerializer, EvaluationCreateSerializer
+from .serializers import SoumissionListSerializer, SoumissionCreateSerializer, EvaluationCreateSerializer, AffectationSerializer   # <-- added AffectationSerializer
 from .services.crypto_service import CryptoService
 from .services.integrations import (
     validate_appel_offre,
     validate_document_ids,
+    fetch_documents_by_ids,
     fetch_evaluations_for_soumission,
     create_evaluation,
     fetch_appel_private_key,
@@ -74,11 +75,18 @@ class SoumissionCreateView(APIView):
 
         document_ids = data.get('document_ids', [])
 
-        # Validate document IDs exist via Documents service
+        # Validate document IDs exist and belong to the submitting operator
         if document_ids:
-            docs_valid, missing = validate_document_ids(document_ids)
-            if not docs_valid:
+            docs_valid, missing, not_owned = validate_document_ids(
+                document_ids, id_operateur=data['id_soumissionnaire']
+            )
+            if missing:
                 return Response({"error": f"Documents introuvables: {missing}"}, status=status.HTTP_400_BAD_REQUEST)
+            if not_owned:
+                return Response(
+                    {"error": f"Les documents suivants n'appartiennent pas a cet operateur: {not_owned}"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         soumission = Soumission.objects.create(
             id_appel_offre=data['id_appel_offre'],
@@ -103,6 +111,19 @@ class SoumissionDetailView(APIView):
 
     def patch(self, request, soumission_id, *args, **kwargs):
         soum = get_object_or_404(Soumission, id_soumission=soumission_id)
+
+        if "document_ids" in request.data:
+            document_ids = request.data.get("document_ids") or []
+            docs_valid, missing, not_owned = validate_document_ids(
+                document_ids, id_operateur=soum.id_soumissionnaire
+            )
+            if missing:
+                return Response({"error": f"Documents introuvables: {missing}"}, status=status.HTTP_400_BAD_REQUEST)
+            if not_owned:
+                return Response(
+                    {"error": f"Les documents suivants n'appartiennent pas a cet operateur: {not_owned}"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         allowed_fields = {
             "document_ids",
@@ -376,3 +397,70 @@ class OperateurSoumissionsView(APIView):
         queryset = Soumission.objects.filter(id_soumissionnaire=operateur_id).order_by("-date_soumission")
         serializer = SoumissionListSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class SoumissionDocumentsView(APIView):
+    """
+    GET /api/soumissions/<soumission_id>/documents/
+    Returns full document metadata for all documents linked to a soumission.
+    """
+
+    def get(self, request, soumission_id, *args, **kwargs):
+        soum = get_object_or_404(Soumission, id_soumission=soumission_id)
+        document_ids = soum.document_ids or []
+
+        if not document_ids:
+            return Response([], status=status.HTTP_200_OK)
+
+        documents = fetch_documents_by_ids(document_ids)
+        return Response(documents, status=status.HTTP_200_OK)
+
+
+# ========== NEW AFFECTATION ENDPOINT ==========
+class SoumissionAffecterView(APIView):
+    """
+    POST /soumissions/<soumission_id>/affecter/
+    Assigns one or more evaluators to a soumission.
+    """
+    permission_classes = [IsCommissionMember]   # Reuse existing permission
+
+    def post(self, request, soumission_id):
+        soum = get_object_or_404(Soumission, id_soumission=soumission_id)
+
+        # Check soumission status (allow only if not already closed)
+        if soum.statut not in [SoumissionStatut.SOUMIS, SoumissionStatut.EN_EVALUATION]:
+            return Response(
+                {"error": "La soumission n'est pas en phase d'affectation."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = AffectationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        evaluateur_ids = serializer.validated_data['evaluateur_ids']
+        type_eval = serializer.validated_data['type_evaluation']
+
+        created_assignments = []
+        for eid in evaluateur_ids:
+            obj, created = SoumissionEvaluateur.objects.get_or_create(
+                soumission=soum,
+                evaluateur_id=eid,
+                type_evaluation=type_eval
+            )
+            created_assignments.append({
+                "soumission_id": soum.id_soumission,
+                "evaluateur_id": eid,
+                "type": type_eval,
+                "created": created
+            })
+
+        # Optionally update soumission status to EN_EVALUATION if it was SOUMIS
+        if soum.statut == SoumissionStatut.SOUMIS:
+            soum.statut = SoumissionStatut.EN_EVALUATION
+            soum.save()
+
+        return Response({
+            "message": "Affectation réussie",
+            "assignments": created_assignments
+        }, status=status.HTTP_201_CREATED)
