@@ -17,10 +17,12 @@ from .serializers import (
     CommissionInterneUpdateSerializer,
     MembresCommissionEvaluationSerializer,
     MembresCommissionInterneSerializer,
+    MembresCommissionExterneSerializer,
     ServiceContractantCreateSerializer,
     ServiceContractantSerializer,
     ServiceContractantUpdateSerializer,
 )
+from .models import MembresCommissionEvaluation, MembresCommissionInterne, MembresCommissionExterne
 from .services.cache import bump_cache_version, read_cached, write_cached
 from .services.commissions import (
     add_membre_to_commission_eval,
@@ -222,6 +224,13 @@ class CommissionInterneMembreDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class CommissionExterneMembresView(APIView):
+    def get(self, request, commission_externe_id):
+        membres = MembresCommissionExterne.objects.filter(id_comission_externe=commission_externe_id)
+        payload = MembresCommissionExterneSerializer(membres, many=True).data
+        return Response(payload)
+
+
 # ── Service Contractant ──────────────────────────────────────────────
 
 
@@ -317,3 +326,55 @@ class CommissionExterneRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpd
     def perform_destroy(self, instance):
         instance.delete()
         bump_cache_version()
+
+
+class CommissionExterneCompetenteView(APIView):
+    """
+    GET /commissions-externes/competente/<int:appel_id>
+    """
+    def get(self, request, appel_id):
+        from .services.commissions import get_commission_externe_competente
+        ce = get_commission_externe_competente(appel_id)
+        if ce:
+            return Response(CommissionExterneSerializer(ce).data)
+        return Response({"id_comission_externe": None}, status=status.HTTP_200_OK)
+
+
+class MyServiceView(APIView):
+    """
+    GET /my-service
+    Returns the id_service for the currently logged-in user.
+    """
+    def get(self, request):
+        user = request.user
+
+        # --- ADDITION: support internal calls with user_id param ---
+        user_id_param = request.query_params.get("user_id")
+        if user_id_param and not user.is_authenticated:
+            from auth_service.models import Utilisateur
+            try:
+                user = Utilisateur.objects.get(id_utilisateur=int(user_id_param))
+            except (Utilisateur.DoesNotExist, ValueError, TypeError):
+                return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        # --- END ADDITION ---
+
+        if not user or not hasattr(user, 'id_membre') or not user.id_membre:
+            return Response({"error": "User has no member ID"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Convert UUID to int (last segment hex)
+        try:
+            id_membre_int = int(str(user.id_membre).split('-')[-1], 16)
+        except (ValueError, IndexError):
+            return Response({"error": "Invalid member ID format"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Look in Evaluation Commissions
+        m_eval = MembresCommissionEvaluation.objects.filter(id_membre=id_membre_int).first()
+        if m_eval:
+            return Response({"id_service": m_eval.id_comission.id_service_id})
+
+        # Look in Internal Commissions
+        m_int = MembresCommissionInterne.objects.filter(id_membre=id_membre_int).first()
+        if m_int:
+            return Response({"id_service": m_int.id_commision_interne.id_service_id})
+
+        return Response({"error": "Service not found for this member"}, status=status.HTTP_404_NOT_FOUND)

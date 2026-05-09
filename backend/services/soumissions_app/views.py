@@ -20,6 +20,8 @@ from .services.integrations import (
     create_evaluation,
     fetch_appel_private_key,
     download_encrypted_file,
+    fetch_user_service_id,
+    fetch_appels_for_service,
 )
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
@@ -33,15 +35,15 @@ class SoumissionCreateView(APIView):
     def get(self, request, *args, **kwargs):
         queryset = Soumission.objects.all().order_by("-date_soumission")
 
-        # --- FILTER FOR EVALUATORS ---
-        user = request.user
-        if user and user.is_authenticated and hasattr(user, 'id_role') and user.id_role:
-            # Assuming user.id_role is a ForeignKey to Role model
-            role_name = user.id_role.nom_role
-            if role_name in ['evaluateur', 'evaluateur_administratif']:
-                assigned_ids = SoumissionEvaluateur.objects.filter(evaluateur_id=user.id_utilisateur).values_list('soumission_id', flat=True)
-                queryset = queryset.filter(id_soumission__in=assigned_ids)
-        # -----------------------------
+        # ── Service Isolation ──────────────────────────────────────────
+        # If user is a commission member, they should only see AO belonging to their service
+        auth_header = request.headers.get("Authorization")
+        if auth_header:
+            headers = {"Authorization": auth_header}
+            service_id = fetch_user_service_id(headers)
+            if service_id:
+                allowed_ao_ids = fetch_appels_for_service(service_id)
+                queryset = queryset.filter(id_appel_offre__in=allowed_ao_ids)
 
         id_soumissionnaire = request.query_params.get("id_soumissionnaire")
         id_appel_offre = request.query_params.get("id_appel_offre")

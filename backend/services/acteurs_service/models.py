@@ -168,3 +168,21 @@ class Membre(models.Model):
 
     def __str__(self):
         return f"{self.prenom} {self.nom}"
+
+
+class MembresTutelle(models.Model):
+    id_membre = models.UUIDField(db_index=True)
+    tutelle = models.ForeignKey(
+        Tutelle,
+        on_delete=models.CASCADE,
+        related_name="membre_links",
+    )
+
+    class Meta:
+        db_table = "Membres_Tutelle"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["id_membre", "tutelle"],
+                name="unique_membre_tutelle",
+            ),
+        ]

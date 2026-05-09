@@ -25,6 +25,22 @@ class EvaluationView(APIView):
     """
     def get(self, request):
         evaluations = Evaluation.objects.all()
+        
+        # ── Service Isolation (ADDITION) ────────────────────────────────
+        auth_header = request.headers.get("Authorization")
+        if auth_header:
+            headers = {"Authorization": auth_header}
+            url = f"{settings.CONTRACTANT_SERVICE_URL}/my-service"
+            try:
+                resp = requests.get(url, headers=headers, timeout=3)
+                if resp.status_code == 200:
+                    service_id = resp.json().get("id_service")
+                    if service_id:
+                        evaluations = evaluations.filter(id_comission__id_service=service_id)
+            except Exception:
+                pass
+        # ───────────────────────────────────────────────────────────────
+
         serializer = EvaluationSerializer(evaluations, many=True)
         return Response(serializer.data)
 

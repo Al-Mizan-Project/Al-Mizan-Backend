@@ -15,9 +15,13 @@ from .views import (
     ServiceContractantListCreateView,
     ServiceContractantMembresView,
     ServiceContractantRetrieveUpdateDeleteView,
+    MyServiceView,
+    CommissionExterneCompetenteView,
+    CommissionExterneMembresView,
 )
 
 urlpatterns = [
+    path("my-service", MyServiceView.as_view()),
     # Commission Evaluation
     path("commissions-evaluation", CommissionEvaluationListCreateView.as_view()),
     path("commissions-evaluation/<int:commission_id>", CommissionEvaluationRetrieveUpdateDeleteView.as_view()),
@@ -36,4 +40,6 @@ urlpatterns = [
     # Commission Externe
     path("commissions-externes", CommissionExterneListCreateView.as_view()),
     path("commissions-externes/<int:commission_externe_id>", CommissionExterneRetrieveUpdateDeleteView.as_view()),
+    path("commissions-externes/<int:commission_externe_id>/membres", CommissionExterneMembresView.as_view()),
+    path("commissions-externes/competente/<int:appel_id>", CommissionExterneCompetenteView.as_view()),
 ]

@@ -8,6 +8,7 @@ from .models import (
     CommissionInterne,
     MembresCommissionEvaluation,
     MembresCommissionInterne,
+    MembresCommissionExterne,
     ServiceContractant,
 )
 
@@ -163,4 +164,13 @@ class MembresCommissionInterneSerializer(serializers.ModelSerializer):
     class Meta:
         model = MembresCommissionInterne
         fields = ["id", "id_membre", "id_commision_interne"]
+        read_only_fields = ["id"]
+
+
+class MembresCommissionExterneSerializer(serializers.ModelSerializer):
+    id_comission_externe = serializers.IntegerField(source="id_comission_externe_id", read_only=True)
+
+    class Meta:
+        model = MembresCommissionExterne
+        fields = ["id", "id_membre", "id_comission_externe"]
         read_only_fields = ["id"]
