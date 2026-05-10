@@ -97,5 +97,20 @@ class CommissionExterne(models.Model):
     niveau_competance = models.CharField(max_length=20, choices=NIVEAU_CHOICES)
     seuils_competence_financiere = models.CharField(max_length=255)
 
+class MembresCommissionExterne(models.Model):
+    id_membre = models.IntegerField(db_index=True)
+    id_comission_externe = models.ForeignKey(
+        CommissionExterne,
+        on_delete=models.CASCADE,
+        db_column="id_comission_externe",
+        related_name="membre_links",
+    )
+
     class Meta:
-        db_table = "Comission_Externe"
+        db_table = "Membres_Commission_Externe"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["id_membre", "id_comission_externe"],
+                name="unique_membre_commission_externe",
+            ),
+        ]

@@ -10,6 +10,8 @@ from .views import (
     UserListCreateView,
     UserRetrieveUpdateDeleteView,
     UserRoleUpdateView,
+    UserDirectPermissionsView,
+    UserPermissionDetailView,
     UserPermissionsView,
     RoleListCreateView,
     RoleRetrieveUpdateDeleteView,
@@ -17,6 +19,8 @@ from .views import (
     PermissionRetrieveUpdateDeleteView,
     RolePermissionsView,
     RolePermissionDetailView,
+    InternalRegisterActeurView,
+    InternalSearchUsersView
 )
 
 urlpatterns = [
@@ -30,10 +34,14 @@ urlpatterns = [
     path("users/<int:user_id>", UserRetrieveUpdateDeleteView.as_view()),
     path("users/<int:user_id>/role", UserRoleUpdateView.as_view()),
     path("users/<int:user_id>/permissions", UserPermissionsView.as_view()),
+    path("users/<int:user_id>/permissions/direct", UserDirectPermissionsView.as_view()),
+    path("users/<int:user_id>/permissions/<int:permission_id>", UserPermissionDetailView.as_view()),
     path("roles", RoleListCreateView.as_view()),
     path("roles/<int:role_id>", RoleRetrieveUpdateDeleteView.as_view()),
     path("permissions", PermissionListCreateView.as_view()),
     path("permissions/<int:permission_id>", PermissionRetrieveUpdateDeleteView.as_view()),
     path("roles/<int:role_id>/permissions", RolePermissionsView.as_view()),
     path("roles/<int:role_id>/permissions/<int:permission_id>", RolePermissionDetailView.as_view()),
+    path("internal/users/register", InternalRegisterActeurView.as_view()),
+    path("internal/users/search", InternalSearchUsersView.as_view()),
 ]

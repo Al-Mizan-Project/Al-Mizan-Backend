@@ -5,6 +5,9 @@ class SoumissionStatut(models.TextChoices):
     EN_OUVERTURE = 'EN_OUVERTURE', 'En Ouverture'
     EN_EVALUATION = 'EN_EVALUATION', 'En Évaluation'
     EVALU_TERMINEE = 'EVALU_TERMINEE', 'Évaluation Terminée'
+    ATTRIBUE = 'ATTRIBUE', 'Attribué'
+    NON_RETENU = 'NON_RETENU', 'Non Retenu'
+    INFRUCTUEUX = 'INFRUCTUEUX', 'Infructueux'
     RETRAITE = 'RETRAITE', 'Retraitée'
 
 class Soumission(models.Model):
@@ -46,3 +49,24 @@ class Soumission(models.Model):
 
     def __str__(self):
         return f"Soumission #{self.id_soumission} - AO #{self.id_appel_offre}"
+
+
+class SoumissionEvaluateur(models.Model):
+    """Assigns evaluators to a soumission."""
+    TYPE_CHOICES = [
+        ('technique', 'Technique / Financière'),
+        ('administrative', 'Administrative'),
+    ]
+    id = models.AutoField(primary_key=True)
+    soumission = models.ForeignKey(Soumission, on_delete=models.CASCADE, related_name='evaluateurs_assignes')
+    evaluateur = models.ForeignKey('auth_service.Utilisateur', on_delete=models.CASCADE, related_name='soumissions_a_evaluer')
+    type_evaluation = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'soumission_evaluateur'
+        unique_together = [['soumission', 'evaluateur', 'type_evaluation']]
+
+    def __str__(self):
+        return f"Soumission {self.soumission.id_soumission} → Evaluateur {self.evaluateur.id_utilisateur} ({self.type_evaluation})"
+        

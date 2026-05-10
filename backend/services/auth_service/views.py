@@ -4,11 +4,13 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenRefreshView
-
+from .services.access_control import user_permission_names
+from .models import Utilisateur
 from .permissions import AuthServicePermission
 from .serializers import (
     ChangePasswordSerializer,
     ForgotPasswordSerializer,
+    InternalActeurRegisterSerializer,
     LoginSerializer,
     LogoutSerializer,
     PermissionSerializer,
@@ -16,17 +18,22 @@ from .serializers import (
     ResetPasswordSerializer,
     RolePermissionsReplaceSerializer,
     RoleSerializer,
+    UserPermissionsReplaceSerializer,
     UserRoleUpdateSerializer,
     UtilisateurCreateSerializer,
     UtilisateurSerializer,
     UtilisateurUpdateSerializer,
 )
 from .services.access_control import (
+    add_user_permission,
     add_role_permission,
+    list_direct_user_permissions,
     list_role_permissions,
     list_user_permissions,
     permissions_queryset,
+    remove_user_permission,
     remove_role_permission,
+    replace_user_permissions,
     replace_role_permissions,
     roles_queryset,
     update_user_role,
@@ -225,6 +232,7 @@ class UserPermissionsView(APIView):
     permission_classes = [AuthServicePermission]
     required_permissions = {
         "GET": ("users.read",),
+        "PUT": ("users.write",),
     }
 
     def get(self, request, user_id):
@@ -236,6 +244,43 @@ class UserPermissionsView(APIView):
         payload = PermissionSerializer(permissions, many=True).data
         write_cached(payload, "users-permissions", str(user_id), query_string)
         return Response(payload)
+
+    def put(self, request, user_id):
+        serializer = UserPermissionsReplaceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated = replace_user_permissions(
+            user_id=user_id,
+            permission_ids=serializer.validated_data["permission_ids"],
+            permission_names=serializer.validated_data["permission_names"],
+        )
+        return Response(PermissionSerializer(updated, many=True).data)
+
+
+class UserDirectPermissionsView(APIView):
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "GET": ("users.read",),
+    }
+
+    def get(self, request, user_id):
+        permissions = list_direct_user_permissions(user_id)
+        return Response(PermissionSerializer(permissions, many=True).data)
+
+
+class UserPermissionDetailView(APIView):
+    permission_classes = [AuthServicePermission]
+    required_permissions = {
+        "POST": ("users.write",),
+        "DELETE": ("users.write",),
+    }
+
+    def post(self, request, user_id, permission_id):
+        add_user_permission(user_id=user_id, permission_id=permission_id)
+        return Response(status=status.HTTP_201_CREATED)
+
+    def delete(self, request, user_id, permission_id):
+        remove_user_permission(user_id=user_id, permission_id=permission_id)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class RoleListCreateView(CachedListMixin, ListCreateAPIView):
@@ -363,3 +408,40 @@ class RolePermissionDetailView(APIView):
     def delete(self, request, role_id, permission_id):
         remove_role_permission(role_id=role_id, permission_id=permission_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+class InternalRegisterActeurView(APIView):
+    """ POST /internal/users/register """
+    # Idéalement, protéger par un Token de service interne (ex: X-Internal-Service-Token)
+    permission_classes = [] 
+
+    def post(self, request):
+        serializer = InternalActeurRegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response({"message": "Utilisateur créé", "id_utilisateur": user.id_utilisateur}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class InternalSearchUsersView(APIView):
+    """ GET /internal/users/search/?membres_ids=uuid1,uuid2 """
+    permission_classes = []
+
+    def get(self, request):
+        membres_ids_str = request.query_params.get('membres_ids', '')
+        if not membres_ids_str:
+            return Response([], status=status.HTTP_200_OK)
+
+        ids_list = membres_ids_str.split(',')
+        users = Utilisateur.objects.filter(id_membre__in=ids_list).select_related('id_role')
+        
+        result = []
+        for user in users:
+            result.append({
+                "id_membre": str(user.id_membre),
+                "email": user.email,
+                "is_active": user.is_active,
+                "role": user.id_role.nom_role if user.id_role else None,
+                "permissions": user_permission_names(user) # Utilise votre fonction existante !
+            })
+            
+        return Response(result, status=status.HTTP_200_OK)

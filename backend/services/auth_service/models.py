@@ -1,10 +1,12 @@
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.db import models
+import uuid
+from django.db import models
 
 
 class Role(models.Model):
     id_role = models.AutoField(primary_key=True)
-    nom_role = models.CharField(max_length=20, unique=True)
+    nom_role = models.CharField(max_length=100, unique=True)
 
     class Meta:
         db_table = "role"
@@ -12,7 +14,7 @@ class Role(models.Model):
 
 class Permission(models.Model):
     id_permission = models.AutoField(primary_key=True)
-    nom_permission = models.CharField(max_length=20, unique=True)
+    nom_permission = models.CharField(max_length=100, unique=True)
 
     class Meta:
         db_table = "permission"
@@ -26,6 +28,30 @@ class PermissionRole(models.Model):
         db_table = "Permission_role"
         constraints = [
             models.UniqueConstraint(fields=["id_role", "id_permission"], name="unique_role_permission"),
+        ]
+
+
+class UtilisateurPermission(models.Model):
+    id_utilisateur = models.ForeignKey(
+        "Utilisateur",
+        on_delete=models.CASCADE,
+        db_column="id_utilisateur",
+        related_name="permission_links",
+    )
+    id_permission = models.ForeignKey(
+        Permission,
+        on_delete=models.CASCADE,
+        db_column="id_permission",
+        related_name="user_links",
+    )
+
+    class Meta:
+        db_table = "Permission_utilisateur"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["id_utilisateur", "id_permission"],
+                name="unique_user_permission",
+            ),
         ]
 
 
@@ -51,7 +77,7 @@ class UtilisateurManager(BaseUserManager):
 class Utilisateur(AbstractBaseUser):
     id_utilisateur = models.AutoField(primary_key=True)
     id_role = models.ForeignKey(Role, on_delete=models.PROTECT, db_column="id_role", related_name="utilisateurs")
-    id_membre = models.IntegerField(db_index=True)
+    id_membre = models.UUIDField(null=True, blank=True)
     email = models.EmailField(unique=True, max_length=255)
     password = models.CharField(max_length=255, db_column="password_hash")
     created_at = models.DateTimeField(auto_now_add=True)

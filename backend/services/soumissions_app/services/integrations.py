@@ -27,6 +27,32 @@ def validate_appel_offre(id_appel_offre):
     except requests.RequestException as exc:
         logger.warning("Appels service unreachable: %s", exc)
         return True, None  # graceful degradation
+        
+
+def fetch_user_service_id(headers):
+    """Fetch the service ID for the current user from Contractant service."""
+    url = f"{settings.CONTRACTANT_SERVICE_URL}/my-service"
+    try:
+        resp = requests.get(url, headers=headers, timeout=_timeout())
+        if resp.status_code == 200:
+            return resp.json().get("id_service")
+        return None
+    except requests.RequestException:
+        return None
+
+
+def fetch_appels_for_service(service_id):
+    """Fetch all AO IDs for a given service contractant."""
+    url = f"{settings.APPELS_SERVICE_URL}/services-contractants/{service_id}/appels-offres"
+    try:
+        resp = requests.get(url, headers=internal_service_headers(), timeout=_timeout())
+        if resp.status_code == 200:
+            data = resp.json()
+            appels = data if isinstance(data, list) else data.get("results", [])
+            return [a["id_appel_offres"] for a in appels]
+        return []
+    except requests.RequestException:
+        return []
 
 
 def fetch_appel_private_key(id_appel_offre):
@@ -55,10 +81,13 @@ def fetch_appel_private_key(id_appel_offre):
 
 # ── Documents Service ───────────────────────────────────────────
 
-def validate_document_ids(document_ids):
-    """Return (all_valid: bool, missing_ids: list). Degrades gracefully."""
+def validate_document_ids(document_ids, id_operateur=None):
+    """Return (all_valid: bool, missing_ids: list, ownership_errors: list).
+    If id_operateur is provided, every document must be owned by that operator.
+    Degrades gracefully only when the documents service itself is unreachable.
+    """
     if not document_ids:
-        return True, []
+        return True, [], []
     ids_param = ",".join(str(d) for d in document_ids)
     url = f"{settings.DOCUMENTS_SERVICE_URL}/api/documents/search/"
     try:
@@ -73,12 +102,42 @@ def validate_document_ids(document_ids):
             results = data if isinstance(data, list) else data.get("results", [])
             found_ids = {item.get("id_document") for item in results}
             missing = [d for d in document_ids if d not in found_ids]
-            return len(missing) == 0, missing
+
+            ownership_errors = []
+            if id_operateur is not None:
+                for item in results:
+                    if item.get("id_operateur_economique") != id_operateur:
+                        ownership_errors.append(item.get("id_document"))
+
+            return len(missing) == 0 and len(ownership_errors) == 0, missing, ownership_errors
         logger.warning("Documents service returned %s", resp.status_code)
-        return True, []
+        return True, [], []
     except requests.RequestException as exc:
         logger.warning("Documents service unreachable: %s", exc)
-        return True, []
+        return True, [], []
+
+
+def fetch_documents_by_ids(document_ids):
+    """Fetch full document metadata from the Documents service for a list of IDs."""
+    if not document_ids:
+        return []
+    ids_param = ",".join(str(d) for d in document_ids)
+    url = f"{settings.DOCUMENTS_SERVICE_URL}/api/documents/search/"
+    try:
+        resp = requests.get(
+            url,
+            params={"ids": ids_param},
+            headers=internal_service_headers(),
+            timeout=_timeout(),
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data if isinstance(data, list) else data.get("results", [])
+        logger.warning("Documents service returned %s for fetch", resp.status_code)
+        return []
+    except requests.RequestException as exc:
+        logger.warning("Documents service unreachable for fetch: %s", exc)
+        return []
 
 
 # ── Evaluations Service ─────────────────────────────────────────

@@ -338,3 +338,10 @@ MINIO_BUCKET_NAME = env_str("MINIO_BUCKET_NAME", "almizan-documents")
 
 MAX_OCR_FILE_SIZE = env_int("MAX_OCR_FILE_SIZE", 20 * 1024 * 1024)
 OCR_MAX_WORKERS = env_int("OCR_MAX_WORKERS", 4)
+
+
+GROQ_API_KEY = env_str("GROQ_API_KEY", "")
+GROQ_MODEL = env_str("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MAX_TOKENS = env_int("GROQ_MAX_TOKENS", 2000)
+GROQ_MAX_RETRIES = env_int("GROQ_MAX_RETRIES", 3)
+GROQ_RETRY_BASE_DELAY = env_float("GROQ_RETRY_BASE_DELAY", 5.0)

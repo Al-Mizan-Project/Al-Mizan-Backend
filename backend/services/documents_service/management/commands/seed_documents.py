@@ -6,6 +6,8 @@ from datetime import timedelta
 import io
 import uuid
 
+TEST_OPERATOR_ID = 1
+
 class Command(BaseCommand):
     help = 'Seeds the database and MinIO with sample documents for testing API endpoints'
 
@@ -22,7 +24,8 @@ class Command(BaseCommand):
                 "type": "pdf",
                 "ia_statut": "VALID",
                 "encrypted": False,
-                "visible_after": None # Instantly visible
+                "visible_after": None, # Instantly visible
+                "id_operateur_economique": None
             },
             {
                 "nom": "offre_financiere_entrepriseA.xlsx",
@@ -31,7 +34,8 @@ class Command(BaseCommand):
                 "type": "xlsx",
                 "ia_statut": "PENDING",
                 "encrypted": True,
-                "visible_after": timezone.now() + timedelta(days=2) # Hidden for 2 days
+                "visible_after": timezone.now() + timedelta(days=2), # Hidden for 2 days
+                "id_operateur_economique": TEST_OPERATOR_ID
             },
             {
                 "nom": "offre_technique_entrepriseA.pdf",
@@ -40,7 +44,8 @@ class Command(BaseCommand):
                 "type": "pdf",
                 "ia_statut": "VALID",
                 "encrypted": False,
-                "visible_after": timezone.now() - timedelta(days=5) # Visible since 5 days ago
+                "visible_after": timezone.now() - timedelta(days=5), # Visible since 5 days ago
+                "id_operateur_economique": TEST_OPERATOR_ID
             },
             {
                 "nom": "contrat_final_signe.docx",
@@ -49,7 +54,8 @@ class Command(BaseCommand):
                 "type": "docx",
                 "ia_statut": "PENDING",
                 "encrypted": False,
-                "visible_after": None
+                "visible_after": None,
+                "id_operateur_economique": None
             },
             {
                 "nom": "piece_jointe_anomalie.jpg",
@@ -58,7 +64,8 @@ class Command(BaseCommand):
                 "type": "jpg",
                 "ia_statut": "ANOMALY",
                 "encrypted": False,
-                "visible_after": None
+                "visible_after": None,
+                "id_operateur_economique": TEST_OPERATOR_ID
             }
         ]
         
@@ -82,7 +89,8 @@ class Command(BaseCommand):
                 taille_fichier=len(sample['content']),
                 is_encrypted=sample['encrypted'],
                 ia_verif_statut=sample['ia_statut'],
-                visible_after=sample['visible_after']
+                visible_after=sample['visible_after'],
+                id_operateur_economique=sample['id_operateur_economique']
             )
             self.stdout.write(self.style.SUCCESS(f"Successfully seeded document ID: {doc.id_document} | {doc.nom}"))
             

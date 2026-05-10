@@ -11,7 +11,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 import requests
 import hashlib
 
-from .models import Utilisateur, Role, Permission, PermissionRole
+from .models import Utilisateur, Role, Permission, PermissionRole, UtilisateurPermission
 from .services.access_control import user_permission_names
 
 
@@ -130,6 +130,24 @@ class RolePermissionsReplaceSerializer(serializers.Serializer):
     permission_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), allow_empty=True)
 
 
+class UserPermissionsReplaceSerializer(serializers.Serializer):
+    permission_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
+    )
+    permission_names = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+    )
+
+    def validate(self, attrs):
+        attrs.setdefault("permission_ids", [])
+        attrs.setdefault("permission_names", [])
+        return attrs
+
+
 class UserRoleUpdateSerializer(serializers.Serializer):
     id_role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all())
 
@@ -180,3 +198,60 @@ def consume_password_reset_token(raw_token):
         return None
     cache.delete(key)
     return int(user_id)
+
+
+class InternalActeurRegisterSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    id_membre = serializers.CharField()
+    role_nom = serializers.CharField(required=False) # Le nom du rôle en texte (ex: "SERVICE Contractant")
+    role = serializers.CharField(required=False, write_only=True)
+    permission = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    permissions = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
+
+    def validate(self, attrs):
+        role_name = attrs.get("role_nom") or attrs.get("role")
+        if not role_name:
+            raise serializers.ValidationError({"role_nom": ["This field is required."]})
+        try:
+            attrs["role_nom"] = Role.objects.get(nom_role=role_name)
+        except Role.DoesNotExist:
+            raise serializers.ValidationError(
+                {"role_nom": [f"Le rôle '{role_name}' n'existe pas dans le service Auth."]}
+            )
+
+        permissions = list(attrs.get("permissions") or [])
+        single_permission = (attrs.get("permission") or "").strip()
+        if single_permission:
+            permissions.append(single_permission)
+        attrs["permissions"] = permissions
+        return attrs
+
+    def create(self, validated_data):
+        role = validated_data.pop('role_nom')
+        validated_data.pop("role", None)
+        validated_data.pop("permission", None)
+        permissions_noms = validated_data.pop('permissions', [])
+        
+        with transaction.atomic():
+            user = Utilisateur(
+                email=validated_data['email'],
+                id_membre=validated_data['id_membre'],
+                id_role=role
+            )
+            user.set_password(validated_data['password'])
+            user.save()
+
+            for permission_name in permissions_noms:
+                permission_name = str(permission_name).strip()
+                if not permission_name:
+                    continue
+                permission, _ = Permission.objects.get_or_create(nom_permission=permission_name)
+                UtilisateurPermission.objects.get_or_create(
+                    id_utilisateur=user,
+                    id_permission=permission,
+                )
+
+        return user

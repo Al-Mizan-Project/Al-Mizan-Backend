@@ -96,6 +96,12 @@ services:
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
       INITIAL_ADMIN_ROLE: ${INITIAL_ADMIN_ROLE:-admin}
       INITIAL_ADMIN_MEMBRE_ID: ${INITIAL_ADMIN_MEMBRE_ID:-1}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      GROQ_MAX_TOKENS: ${GROQ_MAX_TOKENS:-2000}
+      GROQ_MAX_RETRIES: ${GROQ_MAX_RETRIES:-3}
+      GROQ_RETRY_BASE_DELAY: ${GROQ_RETRY_BASE_DELAY:-5.0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,6 +113,8 @@ services:
         condition: service_completed_successfully
     ports:
       - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ../backend:/app
     restart: unless-stopped
 
   celery:
@@ -142,6 +150,8 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-admin_almizan}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-SecurePassword123!}
       MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-almizan-documents}
+    volumes:
+      - ../backend:/app
     depends_on:
       postgres:
         condition: service_healthy

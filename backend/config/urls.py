@@ -11,6 +11,7 @@ from soumissions_app.views import (
     SoumissionConformitePatchView,
     SoumissionCreateView,
     SoumissionDetailView,
+    SoumissionDocumentsView,
     SoumissionTerminerEvaluationView,
     SoumissionWithdrawView,
 )
@@ -18,7 +19,6 @@ from shared.health import HealthView, ReadyView
 
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
     path("health", HealthView.as_view()),
     path("ready", ReadyView.as_view()),
     path(
@@ -56,6 +56,7 @@ urlpatterns = [
     path("api/soumissions/", include("soumissions_app.urls")),
     path("soumissions", SoumissionCreateView.as_view()),
     path("soumissions/<int:soumission_id>", SoumissionDetailView.as_view()),
+    path("soumissions/<int:soumission_id>/documents", SoumissionDocumentsView.as_view()),
     path("soumissions/<int:id_appel_offre>/open-bids", OpenBidsView.as_view()),
     path("soumissions/<int:soumission_id>/evaluate", EvaluationCreateView.as_view()),
     path("soumissions/<int:soumission_id>/retirer", SoumissionWithdrawView.as_view()),
@@ -69,4 +70,5 @@ urlpatterns = [
     path("journaux-audit/", include("ledger.urls")),
     path("journaux-audit/", include("readstore.urls")),
     path("journaux-audit/", include("integrity.urls")),
+    path("django-admin/", admin.site.urls),
 ]
