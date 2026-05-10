@@ -11,7 +11,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
  
 from .serializers import AideRedactionRequestSerializer, AideRedactionResponseSerializer
 from .services.integrations import fetch_appel_details, fetch_appel_required_document_ids
@@ -96,6 +96,10 @@ def _create_anomaly_record(id_appel_offre: int, anomaly: dict) -> DetectionAnoma
     )
 
 
+class AuthenticatedAnomalyAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+
 # ---------------------------------------------------------------------------
 # Health & readiness
 # ---------------------------------------------------------------------------
@@ -130,7 +134,7 @@ class ReadyView(APIView):
 # ---------------------------------------------------------------------------
 # Anomaly Detection — POST /ia/anomalies/detecter
 # ---------------------------------------------------------------------------
-class DetecterAnomaliesView(APIView):
+class DetecterAnomaliesView(AuthenticatedAnomalyAPIView):
     """
     POST /ia/anomalies/detecter
 
@@ -220,7 +224,7 @@ class DetecterAnomaliesView(APIView):
 # ---------------------------------------------------------------------------
 # Anomaly Detection — POST /ia/anomalies/detecter-auto
 # ---------------------------------------------------------------------------
-class DetecterAnomaliesAutoView(APIView):
+class DetecterAnomaliesAutoView(AuthenticatedAnomalyAPIView):
     """
     POST /ia/anomalies/detecter-auto
 
@@ -299,7 +303,7 @@ class DetecterAnomaliesAutoView(APIView):
 # ---------------------------------------------------------------------------
 # Saucissonnage Detection — Market Splitting
 # ---------------------------------------------------------------------------
-class DetecterSaucissonnageView(APIView):
+class DetecterSaucissonnageView(AuthenticatedAnomalyAPIView):
     """
     POST /ia/saucissonnage/detecter
     
@@ -346,7 +350,7 @@ class DetecterSaucissonnageView(APIView):
         )
 
 
-class DetecterSaucissonnageAutoView(APIView):
+class DetecterSaucissonnageAutoView(AuthenticatedAnomalyAPIView):
     """
     POST /ia/saucissonnage/detecter-auto
     
@@ -424,7 +428,7 @@ class DetecterSaucissonnageAutoView(APIView):
 # ---------------------------------------------------------------------------
 # Anomaly Listing, Detail, Filtering
 # ---------------------------------------------------------------------------
-class AnomalieListView(APIView):
+class AnomalieListView(AuthenticatedAnomalyAPIView):
     """
     GET /ia/anomalies
 
@@ -485,7 +489,7 @@ class AnomalieListView(APIView):
 # ---------------------------------------------------------------------------
 # GET /ia/anomalies/{anomalie_id}
 # ---------------------------------------------------------------------------
-class AnomalieDetailView(APIView):
+class AnomalieDetailView(AuthenticatedAnomalyAPIView):
     """
     GET /ia/anomalies/{anomalie_id}
 
@@ -510,7 +514,7 @@ class AnomalieDetailView(APIView):
 # ---------------------------------------------------------------------------
 # GET /ia/anomalies/appel/{appel_id}
 # ---------------------------------------------------------------------------
-class AnomalieParAppelView(APIView):
+class AnomalieParAppelView(AuthenticatedAnomalyAPIView):
     """
     GET /ia/anomalies/appel/{appel_id}
 
@@ -552,7 +556,7 @@ class AnomalieParAppelView(APIView):
 # ---------------------------------------------------------------------------
 # GET /ia/anomalies/appel/{appel_id}/summary
 # ---------------------------------------------------------------------------
-class AnomaliesSummaryView(APIView):
+class AnomaliesSummaryView(AuthenticatedAnomalyAPIView):
     """
     GET /ia/anomalies/appel/{appel_id}/summary
 
@@ -602,7 +606,7 @@ class AnomaliesSummaryView(APIView):
 # ---------------------------------------------------------------------------
 # GET /ia/anomalies/soumission/{soumission_id}
 # ---------------------------------------------------------------------------
-class AnomalieParSoumissionView(APIView):
+class AnomalieParSoumissionView(AuthenticatedAnomalyAPIView):
     """
     GET /ia/anomalies/soumission/{soumission_id}
 
@@ -638,7 +642,7 @@ class AnomalieParSoumissionView(APIView):
 # ---------------------------------------------------------------------------
 # PATCH /ia/anomalies/{anomalie_id}/statut-examen
 # ---------------------------------------------------------------------------
-class AnomalieStatutExamenPatchView(APIView):
+class AnomalieStatutExamenPatchView(AuthenticatedAnomalyAPIView):
     """
     PATCH /ia/anomalies/{anomalie_id}/statut-examen
 

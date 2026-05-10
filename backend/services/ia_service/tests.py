@@ -2,6 +2,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
  
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.test import TestCase
 from rest_framework.test import APIClient
  
@@ -643,10 +644,19 @@ class SaucissonnageDetectionTests(TestCase):
 class IaServiceApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.user = User.objects.create_user(username="ia-user", password="testpassword")
+        self.client.force_authenticate(user=self.user)
         self.authenticate_internal()
 
     def authenticate_internal(self):
         self.client.credentials(HTTP_X_INTERNAL_SERVICE_TOKEN=settings.INTERNAL_SERVICE_TOKEN)
+
+    def test_anomalies_endpoints_require_authenticated_user(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get("/ia/anomalies")
+
+        self.assertEqual(response.status_code, 403)
 
     def test_health_endpoint(self):
         response = self.client.get("/health")
