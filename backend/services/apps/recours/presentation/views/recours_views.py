@@ -1,5 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 
 from apps.common.exceptions import ApplicationException
@@ -19,6 +20,7 @@ from apps.recours.presentation.serializers.recours_serializers import (
 
 
 class BaseAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     service: RecoursService | None = None
 
     def handle_exception(self, exc):

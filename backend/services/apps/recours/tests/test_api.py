@@ -1,6 +1,7 @@
 from datetime import timedelta
 from unittest.mock import patch
 
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -11,8 +12,16 @@ from apps.recours.infrastructure.models.recours_model import RecoursModel
 class RecoursApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.client.credentials(HTTP_X_INTERNAL_SERVICE_TOKEN="dev-internal-token")
+        self.user = User.objects.create_user(username="recours-user", password="testpassword")
+        self.client.force_authenticate(user=self.user)
         self.url = "/api/recours/"
+
+    def test_requires_authenticated_actor(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 403)
 
     def test_create_recours(self):
         with self._mock_integrations():
