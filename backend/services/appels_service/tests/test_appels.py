@@ -4,6 +4,7 @@ from django.test import TestCase, override_settings
 from django.core.cache import cache
 
 from appels_service.models import AchatSimple, AppelOffres, DocumentsAppel
+from acteurs_service.models import CommissionExterne, Organisation, NiveauCompetence, TypeEntite
 
 
 def make_appel(**kwargs):
@@ -12,15 +13,16 @@ def make_appel(**kwargs):
         "reference": "AO-TEST-001",
         "titre": "Test appel d'offres",
         "description": "Description test",
-        "type_procedure": "Appel d'offres ouvert",
+        "type_procedure": "publique",
         "type_prestation": "travaux",
         "visibilite": "public",
         "wilaya": "Alger",
+        "secteur": "BTP",
         "localisation": "Hussein Dey",
         "montant_estime": "10000000.00",
         "poids_technique": 40,
         "poids_financier": 60,
-        "statut": "brouillon",
+        "statut": "non_valide",
     }
     defaults.update(kwargs)
     return AppelOffres.objects.create(**defaults)
@@ -36,6 +38,51 @@ class AppelsServiceTestCase(TestCase):
         super().setUp()
         cache.clear()
         self.client.defaults["HTTP_X_INTERNAL_SERVICE_TOKEN"] = settings.INTERNAL_SERVICE_TOKEN
+
+        Organisation.objects.all().delete()
+        CommissionExterne.objects.all().delete()
+
+        national_org = Organisation.objects.create(
+            nom_officiel="Commission Nationale",
+            type_entite=TypeEntite.COMMISSION_EXTERNE,
+            wilaya="Alger",
+            secteur="BTP",
+        )
+        CommissionExterne.objects.create(
+            organisation=national_org,
+            numero_agrement="NAT-001",
+            specialite="Generale",
+            niveau_competence=NiveauCompetence.NATIONAL,
+            seuil="10000000.00",
+        )
+
+        sector_org = Organisation.objects.create(
+            nom_officiel="Commission Sectorielle BTP",
+            type_entite=TypeEntite.COMMISSION_EXTERNE,
+            wilaya="Alger",
+            secteur="BTP",
+        )
+        CommissionExterne.objects.create(
+            organisation=sector_org,
+            numero_agrement="SEC-001",
+            specialite="BTP",
+            niveau_competence=NiveauCompetence.SECTORIELLE,
+            seuil="5000000.00",
+        )
+
+        wilaya_org = Organisation.objects.create(
+            nom_officiel="Commission Wilaya Alger",
+            type_entite=TypeEntite.COMMISSION_EXTERNE,
+            wilaya="Alger",
+            secteur="BTP",
+        )
+        CommissionExterne.objects.create(
+            organisation=wilaya_org,
+            numero_agrement="WIL-001",
+            specialite="Alger",
+            niveau_competence=NiveauCompetence.WILAYA,
+            seuil="1000000.00",
+        )
 
 
 # List
@@ -89,15 +136,15 @@ class AppelOffresCreateTest(AppelsServiceTestCase):
             "visibilite": "public",
             "location": "Zone industrielle Rouiba",
             "montant_estime": "5000000",
-            "poids_technique": 50,
-            "poids_financier": 50,
+            "id_operateur_choisi": 42,
+            "id_doc_besoin": 5001,
         })
         self.assertEqual(response.status_code, 201)
         data = response.json()
         self.assertEqual(data["reference"], "AO-CRT-001")
         self.assertEqual(data["type_prestation"], "fournitures")
         self.assertEqual(data["localisation"], "Zone industrielle Rouiba")
-        self.assertEqual(data["statut"], "brouillon")
+        self.assertEqual(data["statut"], "valide")
 
     def test_create_missing_required(self):
         response = self._post({"id_service_contractant": 1})
@@ -120,6 +167,12 @@ class AppelOffresCreateTest(AppelsServiceTestCase):
             "titre": "ID test",
             "type_procedure": "Appel d'offres restreint",
             "type_prestation": "etudes",
+            "wilaya": "Alger",
+            "secteur": "BTP",
+            "montant_estime": "6000000",
+            "id_doc_cdc": 3001,
+            "id_doc_justification": 3002,
+            "operateurs_invites": [101, 102],
         })
         self.assertEqual(response.status_code, 201)
         self.assertIn("id_appel_offres", response.json())
@@ -141,6 +194,11 @@ class AppelOffresPrivateVisibilityTest(AppelsServiceTestCase):
             "type_procedure": "Appel d'offres restreint",
             "type_prestation": "services",
             "visibilite": "prive",
+            "wilaya": "Alger",
+            "secteur": "BTP",
+            "montant_estime": "6000000",
+            "id_doc_cdc": 3101,
+            "id_doc_justification": 3102,
         })
         self.assertEqual(response.status_code, 400)
         self.assertIn("operateurs_invites", response.json().get("error", {}).get("details", {}))
@@ -153,6 +211,11 @@ class AppelOffresPrivateVisibilityTest(AppelsServiceTestCase):
             "type_procedure": "Appel d'offres restreint",
             "type_prestation": "services",
             "visibilite": "prive",
+            "wilaya": "Alger",
+            "secteur": "BTP",
+            "montant_estime": "6000000",
+            "id_doc_cdc": 3201,
+            "id_doc_justification": 3202,
             "operateurs_invites": [10, 20, 20],
         })
         self.assertEqual(response.status_code, 201)
@@ -175,6 +238,9 @@ class AppelOffresPrivateVisibilityTest(AppelsServiceTestCase):
             "type_procedure": "Appel d'offres ouvert",
             "type_prestation": "travaux",
             "visibilite": "public",
+            "wilaya": "Alger",
+            "secteur": "BTP",
+            "montant_estime": "12000000",
             "operateurs_invites": [11, 12],
         })
         self.assertEqual(response.status_code, 400)
@@ -246,13 +312,13 @@ class AppelOffresDeleteTest(AppelsServiceTestCase):
 # Workflow actions
 class AppelOffresPublierTest(AppelsServiceTestCase):
     def test_publier_from_brouillon(self):
-        appel = make_appel(reference="AO-PUB-001", statut="brouillon")
+        appel = make_appel(reference="AO-PUB-001", statut="valide", etat_execution="brouillon")
         response = self.client.post(f"/appels-offres/{appel.id_appel_offres}/publier")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["statut"], "publie")
+        self.assertEqual(response.json()["etat_execution"], "publie")
 
     def test_publier_already_publie_fails(self):
-        appel = make_appel(reference="AO-PUB-002", statut="publie")
+        appel = make_appel(reference="AO-PUB-002", statut="valide", etat_execution="publie")
         response = self.client.post(f"/appels-offres/{appel.id_appel_offres}/publier")
         self.assertEqual(response.status_code, 400)
 
@@ -263,45 +329,45 @@ class AppelOffresPublierTest(AppelsServiceTestCase):
 
 class AppelOffresCloturerDepotTest(AppelsServiceTestCase):
     def test_cloturer_from_publie(self):
-        appel = make_appel(reference="AO-CLO-001", statut="publie")
+        appel = make_appel(reference="AO-CLO-001", statut="valide", etat_execution="publie")
         response = self.client.post(f"/appels-offres/{appel.id_appel_offres}/cloturer-depot")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["statut"], "depot_cloture")
+        self.assertEqual(response.json()["etat_execution"], "depot_cloture")
 
     def test_cloturer_from_brouillon_fails(self):
-        appel = make_appel(reference="AO-CLO-002", statut="brouillon")
+        appel = make_appel(reference="AO-CLO-002", statut="valide", etat_execution="brouillon")
         response = self.client.post(f"/appels-offres/{appel.id_appel_offres}/cloturer-depot")
         self.assertEqual(response.status_code, 400)
 
 
 class AppelOffresOuvrirPlisTest(AppelsServiceTestCase):
     def test_ouvrir_from_depot_cloture(self):
-        appel = make_appel(reference="AO-OUV-001", statut="depot_cloture")
+        appel = make_appel(reference="AO-OUV-001", statut="valide", etat_execution="depot_cloture")
         response = self.client.post(f"/appels-offres/{appel.id_appel_offres}/ouvrir-plis")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["statut"], "plis_ouverts")
+        self.assertEqual(response.json()["etat_execution"], "plis_ouverts")
 
     def test_ouvrir_from_publie_fails(self):
-        appel = make_appel(reference="AO-OUV-002", statut="publie")
+        appel = make_appel(reference="AO-OUV-002", statut="valide", etat_execution="publie")
         response = self.client.post(f"/appels-offres/{appel.id_appel_offres}/ouvrir-plis")
         self.assertEqual(response.status_code, 400)
 
 
 class AppelOffresAnnulerTest(AppelsServiceTestCase):
     def test_annuler_from_brouillon(self):
-        appel = make_appel(reference="AO-ANN-001", statut="brouillon")
+        appel = make_appel(reference="AO-ANN-001", statut="valide", etat_execution="brouillon")
         response = self.client.post(f"/appels-offres/{appel.id_appel_offres}/annuler")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["statut"], "annule")
+        self.assertEqual(response.json()["etat_execution"], "annule")
 
     def test_annuler_from_publie(self):
-        appel = make_appel(reference="AO-ANN-002", statut="publie")
+        appel = make_appel(reference="AO-ANN-002", statut="valide", etat_execution="publie")
         response = self.client.post(f"/appels-offres/{appel.id_appel_offres}/annuler")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["statut"], "annule")
+        self.assertEqual(response.json()["etat_execution"], "annule")
 
     def test_annuler_from_plis_ouverts_fails(self):
-        appel = make_appel(reference="AO-ANN-003", statut="plis_ouverts")
+        appel = make_appel(reference="AO-ANN-003", statut="valide", etat_execution="plis_ouverts")
         response = self.client.post(f"/appels-offres/{appel.id_appel_offres}/annuler")
         self.assertEqual(response.status_code, 400)
 

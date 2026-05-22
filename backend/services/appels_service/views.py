@@ -23,6 +23,9 @@ from .services.appels import (
     list_appel_documents,
     add_document_to_appel,
     remove_document_from_appel,
+    action_soumettre_validation,
+    action_valider,
+    action_refuser,
     action_publier,
     action_cloturer_depot,
     action_ouvrir_plis,
@@ -105,7 +108,12 @@ class AppelOffresListCreateView(CachedListMixin, ListCreateAPIView):
             service_id = int(service_id_raw) if service_id_raw not in (None, "") else None
         except ValueError:
             service_id = None
-        return appels_offres_queryset(statut=statut, service_id=service_id, search=search)
+        return appels_offres_queryset(
+            statut=statut,
+            service_id=service_id,
+            search=search,
+            request=self.request,
+        )
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -123,7 +131,7 @@ class AppelOffresRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDes
     lookup_url_kwarg = "appel_id"
 
     def get_queryset(self):
-        return appels_offres_queryset()
+        return appels_offres_queryset(request=self.request)
 
     def get_serializer_class(self):
         if self.request.method in {"PATCH", "PUT"}:
@@ -211,6 +219,40 @@ class AppelOffresOuvrirPlisView(APIView):
 class AppelOffresAnnulerView(APIView):
     def post(self, request, appel_id):
         appel = action_annuler(appel_id)
+        bump_cache_version()
+        return Response(AppelOffresSerializer(appel).data)
+
+
+# ── Validation workflow actions ─────────────────────────────────────
+
+
+def _resolve_validated_by(request):
+    membre_id = getattr(request.user, "id_membre", None)
+    if membre_id:
+        return str(membre_id)
+    return request.data.get("validated_by")
+
+
+class AppelOffresSoumettreValidationView(APIView):
+    def post(self, request, appel_id):
+        validated_by = _resolve_validated_by(request)
+        appel = action_soumettre_validation(appel_id, validated_by=validated_by)
+        bump_cache_version()
+        return Response(AppelOffresSerializer(appel).data)
+
+
+class AppelOffresValiderView(APIView):
+    def post(self, request, appel_id):
+        validated_by = _resolve_validated_by(request)
+        appel = action_valider(appel_id, validated_by=validated_by)
+        bump_cache_version()
+        return Response(AppelOffresSerializer(appel).data)
+
+
+class AppelOffresRefuserView(APIView):
+    def post(self, request, appel_id):
+        validated_by = _resolve_validated_by(request)
+        appel = action_refuser(appel_id, validated_by=validated_by)
         bump_cache_version()
         return Response(AppelOffresSerializer(appel).data)
 
