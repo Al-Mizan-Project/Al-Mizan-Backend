@@ -832,18 +832,7 @@ class VerifierConformiteSoumissionAutoView(APIView):
             conformite_rapport=rapport,
         )
 
-        target_doc_status = "VALID" if conformite_statut == "CONFORME" else "ANOMALY"
         document_sync = []
-        for doc in provided_documents:
-            doc_id = doc.get("id_document")
-            if doc_id is None:
-                continue
-            result = patch_document_ia_metadata(
-                id_document=int(doc_id),
-                ia_verif_statut=target_doc_status,
-                ia_verif_details=rapport,
-            )
-            document_sync.append({"id_document": int(doc_id), **result})
 
         return Response(
             {

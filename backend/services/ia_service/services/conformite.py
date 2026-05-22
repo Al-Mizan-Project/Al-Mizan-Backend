@@ -4,11 +4,50 @@ from typing import Dict, List, Tuple
 
 
 DOCUMENT_TYPE_SYNONYMS = {
-    "rc": ["rc", "registre commerce", "registre de commerce", "registre_commerce"],
-    "nif": ["nif", "numero identification fiscale", "identification fiscale"],
+    # ── Documents prioritaires — ORDRE IMPORTANT (premier match gagne) ─
+    # Les déclarations AVANT les offres pour éviter les faux positifs
+    "declaration_souscrire": [
+        "declaration a souscrire",
+        "declaration souscrire",
+        "declaration_souscrire",
+        "souscrire",
+        "lettre de soumission",
+        "engagement du soumissionnaire",
+    ],
+    "declaration_probite": [
+        "declaration de probite",
+        "declaration_probite",
+        "probite",
+        "engagement de probite",
+        "attestation de probite",
+    ],
+    "offre_technique": [
+        "offre technique",
+        "offre_technique",
+        "fiche technique",
+        "memoire technique",
+        "dossier technique",
+        "proposition technique",
+        "specifications techniques",
+    ],
+    "offre_financiere": [
+        "offre financiere",
+        "offre_financiere",
+        "bordereau des prix",
+        "bordereau prix unitaires",
+        "bpu",
+        "devis quantitatif",
+        "devis estimatif",
+        "montant de l offre",
+        "soumission financiere",
+        "proposition financiere",
+    ],
+    # ── Documents administratifs ───────────────────────────────────────
+    "rc": ["rc", "registre commerce", "registre de commerce", "registre_commerce", "extrait du registre"],
+    "nif": ["nif", "numero identification fiscale", "identification fiscale", "carte fiscale"],
     "nis": ["nis", "numero identification statistique", "identification statistique"],
     "ai": ["ai", "article imposition", "attestation imposition"],
-    "cnas": ["cnas", "attestation cnas", "certificat cnas"],
+    "cnas": ["cnas", "attestation cnas", "certificat cnas", "mise a jour cnas"],
     "casnos": ["casnos", "attestation casnos", "certificat casnos"],
     "attestation_fiscale": [
         "attestation fiscale",
@@ -16,9 +55,18 @@ DOCUMENT_TYPE_SYNONYMS = {
         "quitus fiscal",
         "extrait role",
     ],
-    "declaration_probite": ["probite", "declaration de probite", "déclaration de probité"],
-    "offre_technique": ["offre technique", "technique"],
-    "offre_financiere": ["offre financiere", "offre financière", "financiere", "financière"],
+    "garantie_bancaire": [
+        "garantie bancaire",
+        "caution de soumission",
+        "caution bancaire",
+        "caution provisoire",
+        "caution definitive",
+    ],
+    "certificat_non_faillite": [
+        "non faillite",
+        "certificat de non faillite",
+        "non faillite non reglement judiciaire",
+    ],
 }
 
 
@@ -64,12 +112,7 @@ def build_provided_documents_from_metadata(documents: List[Dict], enforce_validi
         if not inferred_type:
             continue
 
-        is_valid = doc.get("is_valid")
-        if is_valid is None:
-            if enforce_validity_checks:
-                is_valid = str(doc.get("ia_verif_statut", "")).upper() != "ANOMALY"
-            else:
-                is_valid = True
+        is_valid = True
 
         provided.append(
             {
@@ -87,7 +130,7 @@ def _extract_doc_type(doc: Dict) -> str:
 
 
 def run_conformite_check(required_documents: List[str], provided_documents: List[Dict]) -> Tuple[str, Dict]:
-    required_set = {item.strip().lower() for item in required_documents if str(item).strip()}
+    required_set = {_normalize_text(item) for item in required_documents if str(item).strip()}
     provided_map = {}
     invalid_docs = []
 

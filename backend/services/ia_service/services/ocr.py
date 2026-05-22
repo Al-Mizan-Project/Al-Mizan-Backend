@@ -61,11 +61,12 @@ def _extract_pdf_ocr_text(payload: bytes) -> str:
         return ""
 
     ocr_lang = getattr(settings, "OCR_TESSERACT_LANG", "fra+ara")
+    ocr_config = "--oem 1 --psm 6"
     text_parts: list[str] = []
     try:
-        images = convert_from_bytes(payload, dpi=200)
+        images = convert_from_bytes(payload, dpi=150)
         for image in images:
-            page_text = (pytesseract.image_to_string(image, lang=ocr_lang) or "").strip()
+            page_text = (pytesseract.image_to_string(image, lang=ocr_lang, config=ocr_config) or "").strip()
             if page_text:
                 text_parts.append(page_text)
     except Exception as exc:
@@ -86,7 +87,8 @@ def _extract_image_ocr_text(payload: bytes) -> str:
     try:
         image = Image.open(io.BytesIO(payload))
         ocr_lang = getattr(settings, "OCR_TESSERACT_LANG", "fra+ara")
-        return (pytesseract.image_to_string(image, lang=ocr_lang) or "").strip()
+        ocr_config = "--oem 1 --psm 6"
+        return (pytesseract.image_to_string(image, lang=ocr_lang, config=ocr_config) or "").strip()
     except Exception as exc:
         logger.debug("Image OCR failed: %s", exc)
         return ""
@@ -151,6 +153,18 @@ def extract_document_text(payload: bytes, filename: str = "") -> Dict:
         if fallback:
             extracted = fallback
             engine = "tesseract"
+
+    # ── Demo logging ────────────────────────────────────────────────────
+    if extracted:
+        logger.info(
+            "OCR processing: %s | engine: %s | extracted chars: %d",
+            filename or "<unknown>", engine, len(extracted),
+        )
+    else:
+        logger.warning(
+            "OCR failed: %s | no text could be extracted (tried all engines)",
+            filename or "<unknown>",
+        )
 
     return {
         "text": extracted,
