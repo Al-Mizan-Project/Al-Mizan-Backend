@@ -20,7 +20,11 @@ class TypeEntite(models.TextChoices):
     OPERATEUR_ECONOMIQUE = 'OPERATEUR_ECONOMIQUE', 'Opérateur Économique'
     SERVICE_CONTRACTANT = 'SERVICE_CONTRACTANT', 'Service Contractant'
     COMMISSION_EXTERNE = 'COMMISSION_EXTERNE', 'Commission Externe'
-    TUTELLE = 'TUTELLE', 'Tutelle'
+
+class NiveauCompetence(models.TextChoices):
+    WILAYA = 'WILAYA', 'Wilaya'
+    SECTORIELLE = 'SECTORIELLE', 'Sectorielle'
+    NATIONAL = 'NATIONAL', 'National'
 
 
 # ==========================================
@@ -54,9 +58,7 @@ class DemandeOperateur(models.Model):
 class DemandeDocument(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     demande = models.ForeignKey(DemandeOperateur, on_delete=models.CASCADE, related_name='documents')
-    
     document_id = models.IntegerField(help_text="ID du fichier dans le service Document", default=0) 
-    
     type_document = models.CharField(
         max_length=30, 
         choices=TypeDocument.choices,
@@ -70,7 +72,6 @@ class DemandeDocument(models.Model):
 
 class Organisation(models.Model):
     id_organisation = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    
     nom_officiel = models.CharField(max_length=255, default="Organisation Anonyme") 
     adresse_siege = models.CharField(max_length=100, blank=True, null=True, default="")
     email_contact = models.CharField(max_length=100, blank=True, null=True, default="")
@@ -79,6 +80,10 @@ class Organisation(models.Model):
         choices=TypeEntite.choices,
         default=TypeEntite.OPERATEUR_ECONOMIQUE
     )
+    
+    # Nouveaux champs partagés déplacés au niveau de l'organisation
+    wilaya = models.CharField(max_length=100, blank=True, null=True)
+    secteur = models.CharField(max_length=100, blank=True, null=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -110,7 +115,6 @@ class ServiceContractant(models.Model):
         primary_key=True, 
         related_name='service_contractant'
     )
-    # Champs spécifiques ajoutés avec valeurs par défaut
     code_service = models.CharField(max_length=50, default="SC-000")
     secteur_activite = models.CharField(max_length=100, default="Non défini")
     
@@ -125,23 +129,16 @@ class CommissionExterne(models.Model):
         primary_key=True, 
         related_name='commission_externe'
     )
-    # Champs spécifiques ajoutés avec valeurs par défaut
     numero_agrement = models.CharField(max_length=50, default="AGR-000")
     specialite = models.CharField(max_length=100, default="Générale")
     
-    def __str__(self):
-        return self.organisation.nom_officiel
-
-
-class Tutelle(models.Model):
-    organisation = models.OneToOneField(
-        Organisation, 
-        on_delete=models.CASCADE, 
-        primary_key=True, 
-        related_name='tutelle'
+    # Nouveaux champs spécifiques
+    niveau_competence = models.CharField(
+        max_length=20,
+        choices=NiveauCompetence.choices,
+        default=NiveauCompetence.WILAYA
     )
-    # Champs spécifiques ajoutés avec valeurs par défaut
-    ministere_attache = models.CharField(max_length=150, default="Ministère non assigné")
+    seuil = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
     
     def __str__(self):
         return self.organisation.nom_officiel
@@ -153,7 +150,7 @@ class Tutelle(models.Model):
 
 class Membre(models.Model):
     id_membre = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    organisation = models.ForeignKey('Organisation', on_delete=models.CASCADE, related_name='membres', null=True)
+    organisation = models.ForeignKey(Organisation, on_delete=models.CASCADE, related_name='membres', null=True)
     
     nom = models.CharField(max_length=100, default="Anonyme")
     prenom = models.CharField(max_length=100, default="Anonyme")
@@ -168,21 +165,3 @@ class Membre(models.Model):
 
     def __str__(self):
         return f"{self.prenom} {self.nom}"
-
-
-class MembresTutelle(models.Model):
-    id_membre = models.UUIDField(db_index=True)
-    tutelle = models.ForeignKey(
-        Tutelle,
-        on_delete=models.CASCADE,
-        related_name="membre_links",
-    )
-
-    class Meta:
-        db_table = "Membres_Tutelle"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["id_membre", "tutelle"],
-                name="unique_membre_tutelle",
-            ),
-        ]

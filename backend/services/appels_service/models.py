@@ -12,17 +12,33 @@ class AppelOffres(models.Model):
         ("public", "Public"),
         ("prive", "Prive"),
     ]
+    # NOUVEAU : Liste des statuts mise à jour selon vos exigences
     STATUT_CHOICES = [
-        ("brouillon", "Brouillon"),
-        ("publie", "Publié"),
-        ("depot_cloture", "Dépôt clôturé"),
-        ("plis_ouverts", "Plis ouverts"),
-        ("attribue", "Attribué"),
-        ("annule", "Annulé"),
+        ("non_valide", "Non validé"),
+        ("valide", "Validé"),
+        ("refuse", "Refusé"),
+        ("ferme", "Fermé"),
+    ]
+    # NOUVEAU : Liste des niveaux de validation requis
+    VALIDATION_LEVEL_CHOICES = [
+        ("interne", "Interne"),
+        ("externe_wilaya", "Externe Wilaya"),
+        ("externe_secteur", "Externe Secteur"),
+        ("externe_nationale", "Externe Nationale"),
     ]
 
     id_appel_offres = models.AutoField(primary_key=True)
     id_service_contractant = models.IntegerField(db_index=True)
+    
+    # NOUVEAUX ATTRIBUTS (Microservices)
+    commission_id = models.IntegerField(db_index=True, help_text="ID de la commission provenant du service externe")
+    validated_by = models.IntegerField(db_index=True, null=True, blank=True, help_text="ID du membre ayant validé la demande")
+    validation_level = models.CharField(
+        max_length=30,
+        choices=VALIDATION_LEVEL_CHOICES,
+        default="interne"
+    )
+
     reference = models.CharField(max_length=80, unique=True)
     titre = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
@@ -52,7 +68,10 @@ class AppelOffres(models.Model):
     qualification_category = models.CharField(max_length=120, blank=True, default="")
     minimum_experience_years = models.IntegerField(default=0)
     participation_conditions = models.JSONField(default=list, blank=True)
-    statut = models.CharField(max_length=30, choices=STATUT_CHOICES, default="brouillon")
+    
+    # MODIFIÉ : Statut par défaut configuré sur "non_valide"
+    statut = models.CharField(max_length=30, choices=STATUT_CHOICES, default="non_valide")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
