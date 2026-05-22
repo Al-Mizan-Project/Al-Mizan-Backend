@@ -4,7 +4,6 @@ from .views import (
     DemandeRejeterView,
     CreerServiceContractantView, ListServiceContractantView,
     CreerCommissionExterneView, ListCommissionExterneView,
-    CreerTutelleView, ListTutelleView,
     ListOperateurEconomiqueView,
     CreerResponsableView, CreateMembreByResponsableView, MembreDetailView ,ListMembresOrganisationView , SoumettreDemandeOperateurView,
     OrganisationResponsableByTypeView
@@ -33,10 +32,6 @@ urlpatterns = [
     # --- Commission Externe ---
     path('admin/organisations/commission-externe/creer/', CreerCommissionExterneView.as_view(), name='admin-creer-commission-externe'),
     path('admin/organisations/commission-externe/', ListCommissionExterneView.as_view(), name='list-commission-externe'),
-    
-    # --- Tutelle ---
-    path('admin/organisations/tutelle/creer/', CreerTutelleView.as_view(), name='admin-creer-tutelle'),
-    path('admin/organisations/tutelle/', ListTutelleView.as_view(), name='list-tutelle'),
     
     # --- Opérateurs Économiques (Listing seul, car créés via l'approbation) ---
     path('admin/organisations/operateurs/', ListOperateurEconomiqueView.as_view(), name='list-operateurs'),
