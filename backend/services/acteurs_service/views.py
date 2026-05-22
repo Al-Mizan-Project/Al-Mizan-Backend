@@ -7,8 +7,8 @@ from rest_framework.response import Response
 from django.conf import settings
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
-from .models import Membre ,OperateurEconomique , TypeDocument ,DemandeDocument, DemandeOperateur, StatutDemande ,DemandeOperateur ,Organisation, ServiceContractant, CommissionExterne, Tutelle, TypeEntite
-from .serializers import OrganisationCreateSerializer , MembreDetailSerializer
+from .models import Membre ,OperateurEconomique , TypeDocument ,DemandeDocument, DemandeOperateur, StatutDemande ,DemandeOperateur ,Organisation, ServiceContractant, CommissionExterne, TypeEntite
+from .serializers import OrganisationCreateSerializer, ServiceContractantCreateSerializer, CommissionExterneCreateSerializer, MembreDetailSerializer
 from .serializers import DemandeOperateurSerializer
 from .serializers import DemandeOperateurDetailSerializer , MembreListSerializer
 from .serializers import CreateResponsableSerializer , MembreCreateByResponsableSerializer
@@ -221,7 +221,6 @@ class CreerResponsableView(APIView):
             TypeEntite.OPERATEUR_ECONOMIQUE: ("Operateur Economique", "responsable_operateur_economique"),
             TypeEntite.SERVICE_CONTRACTANT: ("SERVICE Contractant", "responsable_service_contratant"),
             TypeEntite.COMMISSION_EXTERNE: ("Commission Externe", "responsable_commission_externe"),
-            TypeEntite.TUTELLE: ("Tutelle", "responsable_tutelle"),
         }
         
         role_nom, perm_nom = mapping.get(organisation.type_entite, (None, None))
@@ -323,32 +322,6 @@ class CreerCommissionExterneView(APIView):
             return Response({"erreur": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class CreerTutelleView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
-    """ POST /api/acteurs/admin/organisations/tutelle/ """
-    def post(self, request):
-        serializer = OrganisationCreateSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        data = serializer.validated_data
-        try:
-            with transaction.atomic():
-                org = Organisation.objects.create(
-                    nom_officiel=data['nom_officiel'],
-                    adresse_siege=data.get('adresse_siege', ''),
-                    email_contact=data.get('email_contact', ''),
-                    type_entite=TypeEntite.TUTELLE
-                )
-                Tutelle.objects.create(organisation=org)
-                
-            return Response({
-                "message": "Tutelle créée avec succès",
-                "id_organisation": org.id_organisation
-            }, status=status.HTTP_201_CREATED)
-            
-        except Exception as e:
-            return Response({"erreur": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 class CreateMembreByResponsableView(APIView):
     permission_classes = [IsAuthenticated , IsResponsable] # Seul un utilisateur connecté peut créer des membres
 
@@ -385,7 +358,6 @@ class CreateMembreByResponsableView(APIView):
                     'SERVICE_CONTRACTANT': "SERVICE Contractant",
                     'OPERATEUR_ECONOMIQUE': "Operateur Economique",
                     'COMMISSION_EXTERNE': "Commission Externe",
-                    'TUTELLE': "Tutelle"
                 }
                 
                 auth_payload = {
@@ -425,19 +397,7 @@ class ListMembresOrganisationView(APIView):
     def get(self, request, org_id):
         # 1. Vérifier que l'organisation existe
         organisation = get_object_or_404(Organisation, id_organisation=org_id)
-
-        # (Optionnel) Sécurité : Vérifier que le request.user appartient bien à cette organisation
-        # if request.user.id_membre and not Membre.objects.filter(id_membre=request.user.id_membre, organisation=organisation).exists():
-        #     return Response({"erreur": "Accès refusé"}, status=status.HTTP_403_FORBIDDEN)
-
-        # 2. Récupérer les membres de cette organisation
-        if organisation.type_entite == TypeEntite.TUTELLE:
-            from .models import MembresTutelle
-            tutelle_links = MembresTutelle.objects.filter(tutelle__organisation=organisation)
-            membre_ids = [link.id_membre for link in tutelle_links]
-            membres = Membre.objects.filter(id_membre__in=membre_ids).order_by('-created_at')
-        else:
-            membres = Membre.objects.filter(organisation=organisation).order_by('-created_at')
+        membres = Membre.objects.filter(organisation=organisation).order_by('-created_at')
 
         # 3. Préparer l'appel au service Auth pour récupérer les emails et permissions
         auth_data_dict = {}
@@ -492,14 +452,6 @@ class ListCommissionExterneView(ListAPIView):
         ).order_by('-created_at')
 
 
-class ListTutelleView(ListAPIView):
-    """ GET /api/acteurs/admin/organisations/tutelle/ """
-    serializer_class = OrganisationListSerializer
-
-    def get_queryset(self):
-        return Organisation.objects.filter(
-            type_entite=TypeEntite.TUTELLE
-        ).order_by('-created_at')
 
 class ListOperateurEconomiqueView(ListAPIView):
     """ GET /api/acteurs/admin/organisations/operateurs/ """
@@ -659,7 +611,6 @@ class OrganisationResponsableByTypeView(APIView):
         # Normalisation du type (ex: 'externe' -> 'COMMISSION_EXTERNE')
         type_map = {
             'externe': TypeEntite.COMMISSION_EXTERNE,
-            'tutelle': TypeEntite.TUTELLE,
             'commission_externe': TypeEntite.COMMISSION_EXTERNE,
         }
         target_type = type_map.get(entite_type.lower(), entite_type)

@@ -11,6 +11,8 @@ from .models import (
     DocumentsAppel,
 )
 
+# ── Fonctions de validation Microservices ────────────────────────────
+
 
 def _validate_service_contractant(value):
     contractant_url = getattr(settings, "CONTRACTANT_SERVICE_URL", "")
@@ -63,6 +65,44 @@ def _validate_operateur_economique(value):
         raise serializers.ValidationError("Unable to validate id_operateur_economique at this time")
     if response.status_code != 200:
         raise serializers.ValidationError("id_operateur_economique does not exist")
+    return value
+
+
+def _validate_commission(value):
+    acteurs_url = getattr(settings, "ACTEURS_SERVICE_URL", "")
+    if not acteurs_url:
+        return value
+    url = f"{acteurs_url.rstrip('/')}/commissions/{value}"
+    try:
+        response = requests.get(
+            url,
+            timeout=settings.ACTEURS_SERVICE_TIMEOUT,
+            headers=internal_service_headers(),
+        )
+    except requests.RequestException:
+        raise serializers.ValidationError("Unable to validate commission_id at this time")
+    if response.status_code != 200:
+        raise serializers.ValidationError("commission_id does not exist")
+    return value
+
+
+def _validate_membre_commission(value):
+    if value is None:
+        return value
+    acteurs_url = getattr(settings, "ACTEURS_SERVICE_URL", "")
+    if not acteurs_url:
+        return value
+    url = f"{acteurs_url.rstrip('/')}/membres/{value}"
+    try:
+        response = requests.get(
+            url,
+            timeout=settings.ACTEURS_SERVICE_TIMEOUT,
+            headers=internal_service_headers(),
+        )
+    except requests.RequestException:
+        raise serializers.ValidationError("Unable to validate validated_by (id_membre) at this time")
+    if response.status_code != 200:
+        raise serializers.ValidationError("validated_by (id_membre) does not exist")
     return value
 
 
@@ -129,6 +169,9 @@ class AppelOffresSerializer(serializers.ModelSerializer):
         fields = [
             "id_appel_offres",
             "id_service_contractant",
+            "commission_id",
+            "validated_by",
+            "validation_level",
             "reference",
             "titre",
             "description",
@@ -168,6 +211,12 @@ class _AppelOffresWriteSerializer(serializers.ModelSerializer):
     )
     location = serializers.CharField(source="localisation", required=False, allow_blank=True)
 
+    def validate_commission_id(self, value):
+        return _validate_commission(value)
+
+    def validate_validated_by(self, value):
+        return _validate_membre_commission(value)
+
     def validate_operateurs_invites(self, value):
         normalized = _normalize_operateurs_invites(value)
         for operateur_id in normalized:
@@ -180,11 +229,16 @@ class _AppelOffresWriteSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
 
-        visibilite = attrs.get(
-            "visibilite",
-            getattr(self.instance, "visibilite", "public"),
-        )
+        visibilite = attrs.get("visibilite", getattr(self.instance, "visibilite", "public"))
         operateurs_invites = attrs.get("operateurs_invites")
+        
+        statut = attrs.get("statut", getattr(self.instance, "statut", "non_valide"))
+        validated_by = attrs.get("validated_by", getattr(self.instance, "validated_by", None))
+
+        if statut == "valide" and not validated_by:
+            raise serializers.ValidationError(
+                {"validated_by": ["An appeal offer cannot be marked as 'valide' without a validating member (validated_by)."]}
+            )
 
         if visibilite == "prive":
             if operateurs_invites is None:
@@ -216,6 +270,9 @@ class AppelOffresCreateSerializer(_AppelOffresWriteSerializer):
         fields = [
             "id_appel_offres",
             "id_service_contractant",
+            "commission_id",
+            "validated_by",
+            "validation_level",
             "reference",
             "titre",
             "description",
@@ -258,6 +315,9 @@ class AppelOffresUpdateSerializer(_AppelOffresWriteSerializer):
         model = AppelOffres
         fields = [
             "id_service_contractant",
+            "commission_id",
+            "validated_by",
+            "validation_level",
             "reference",
             "titre",
             "description",
@@ -281,6 +341,7 @@ class AppelOffresUpdateSerializer(_AppelOffresWriteSerializer):
             "minimum_experience_years",
             "participation_conditions",
             "operateurs_invites",
+            "statut",
         ]
 
     def update(self, instance, validated_data):
@@ -385,7 +446,7 @@ class AchatSimpleUpdateSerializer(serializers.ModelSerializer):
         return _validate_operateur_economique(value)
 
 
-# ── Documents Appel ───────────────────────────────────────────────────
+# ── Documents Appel et Suivis ─────────────────────────────────────────
 
 
 class DocumentsAppelSerializer(serializers.ModelSerializer):
