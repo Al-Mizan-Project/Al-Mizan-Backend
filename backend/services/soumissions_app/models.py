@@ -70,3 +70,40 @@ class SoumissionEvaluateur(models.Model):
     def __str__(self):
         return f"Soumission {self.soumission.id_soumission} → Evaluateur {self.evaluateur.id_utilisateur} ({self.type_evaluation})"
         
+class Attribution(models.Model):
+    VALIDATION_LEVEL_CHOICES = [
+        ("interne", "Interne"),
+        ("externe_wilaya", "Externe Wilaya"),
+        ("externe_secteur", "Externe Secteur"),
+        ("externe_nationale", "Externe Nationale"),
+    ]
+    STATUT_CHOICES = [
+        ("provisoire", "Provisoire"),
+        ("definitive", "Définitive"),
+    ]
+
+    service_contractant_id = models.IntegerField(db_index=True)
+    soumission = models.ForeignKey(
+        Soumission,
+        on_delete=models.CASCADE,
+        db_column="soumission_id",
+        related_name="attributions",
+    )
+    appel_id = models.IntegerField(db_index=True)
+    commission_id = models.IntegerField(db_index=True, help_text="ID de la commission chargée de valider l'attribution — même valeur que AppelOffres.commission_id")
+    validated_by = models.IntegerField(null=True, blank=True)
+    validation_level = models.CharField(
+        max_length=30,
+        choices=VALIDATION_LEVEL_CHOICES,
+        default="interne",
+    )
+    statut = models.CharField(
+        max_length=20,
+        choices=STATUT_CHOICES,
+        default="provisoire",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "attribution"
