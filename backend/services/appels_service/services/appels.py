@@ -1,31 +1,34 @@
 from rest_framework.exceptions import NotFound, ValidationError
+from django.conf import settings
 from django.db.models import Q
+from django.utils import timezone
 
 from appels_service.models import AppelOffres, AppelOffresSuivi, DocumentsAppel
+from appels_service.services.procedure_rules import get_procedure_rules, resolve_validation_routing
 
 
-# ── Valid statut transitions ──────────────────────────────────────────
+# ── Execution status transitions ─────────────────────────────────────
 
-_TRANSITIONS = {
+_EXECUTION_TRANSITIONS = {
     "publier": {
         "from": {"brouillon"},
         "to": "publie",
-        "error": "Seul un appel en statut 'brouillon' peut être publié.",
+        "error": "Seul un appel en statut d'execution 'brouillon' peut etre publie.",
     },
     "cloturer_depot": {
         "from": {"publie"},
         "to": "depot_cloture",
-        "error": "Seul un appel 'publié' peut être clôturé.",
+        "error": "Seul un appel 'publie' peut etre cloture.",
     },
     "ouvrir_plis": {
         "from": {"depot_cloture"},
         "to": "plis_ouverts",
-        "error": "Les plis ne peuvent être ouverts que lorsque le dépôt est clôturé.",
+        "error": "Les plis ne peuvent etre ouverts que lorsque le depot est cloture.",
     },
     "annuler": {
         "from": {"brouillon", "publie", "depot_cloture"},
         "to": "annule",
-        "error": "Un appel déjà clôturé (plis ouverts) ne peut pas être annulé.",
+        "error": "Un appel deja cloture (plis ouverts) ne peut pas etre annule.",
     },
 }
 
@@ -33,7 +36,7 @@ _TRANSITIONS = {
 # ── Querysets ─────────────────────────────────────────────────────────
 
 
-def appels_offres_queryset(statut=None, service_id=None, search=None):
+def appels_offres_queryset(statut=None, service_id=None, search=None, request=None):
     queryset = AppelOffres.objects.prefetch_related("operateurs_invites").order_by("-created_at")
     if statut:
         queryset = queryset.filter(statut=statut)
@@ -45,6 +48,8 @@ def appels_offres_queryset(statut=None, service_id=None, search=None):
             | Q(titre__icontains=search)
             | Q(description__icontains=search)
         )
+    if request is not None:
+        queryset = _filter_queryset_for_request(queryset, request)
     return queryset
 
 
@@ -54,6 +59,122 @@ def appels_by_service_queryset(service_id):
         .filter(id_service_contractant=service_id)
         .order_by("-created_at")
     )
+
+
+def _is_internal_request(request) -> bool:
+    expected = getattr(settings, "INTERNAL_SERVICE_TOKEN", "")
+    if not expected:
+        return False
+    provided = request.headers.get("X-Internal-Service-Token", "")
+    return provided == expected
+
+
+def _token_get(token, key):
+    if token is None:
+        return None
+    getter = getattr(token, "get", None)
+    if not getter:
+        return None
+    return getter(key)
+
+
+def _get_role(request):
+    token = getattr(request, "auth", None)
+    role = _token_get(token, "role")
+    if not role:
+        role = getattr(getattr(request.user, "id_role", None), "nom_role", "")
+    return str(role or "").strip().lower()
+
+
+def _coerce_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _get_operator_id(request):
+    token = getattr(request, "auth", None)
+    for key in ("id_operateur_economique", "operateur_id", "operator_id"):
+        raw = _token_get(token, key)
+        if raw not in (None, ""):
+            value = _coerce_int(raw)
+            if value is not None:
+                return value
+    return None
+
+
+def _get_commission_id(request):
+    token = getattr(request, "auth", None)
+    for key in ("commission_id", "id_commission", "organisation_id"):
+        raw = _token_get(token, key)
+        if raw not in (None, ""):
+            return str(raw)
+
+    membre_id = getattr(request.user, "id_membre", None)
+    if not membre_id:
+        return None
+
+    try:
+        from acteurs_service.models import Membre, TypeEntite
+    except Exception:
+        return None
+
+    membre = (
+        Membre.objects.select_related("organisation")
+        .filter(id_membre=membre_id)
+        .first()
+    )
+    if membre and membre.organisation and membre.organisation.type_entite == TypeEntite.COMMISSION_EXTERNE:
+        return str(membre.organisation_id)
+    return None
+
+
+def _filter_queryset_for_request(queryset, request):
+    if _is_internal_request(request):
+        return queryset
+
+    role = _get_role(request)
+    if role == "operateur_economique":
+        operateur_id = _get_operator_id(request)
+        if operateur_id is None:
+            return queryset.none()
+        public_types = {
+            "publique",
+            "Appel d'offres ouvert",
+            "Appel d'offres publique",
+        }
+        restricted = {
+            "restreint",
+            "gre_a_gre",
+            "consultation",
+            "Appel d'offres restreint",
+            "Gré à gré",
+            "Gre a gre",
+            "Consultation",
+        }
+        return (
+            queryset.filter(statut="valide")
+            .filter(
+                Q(type_procedure__in=public_types)
+                | (
+                    Q(type_procedure__in=restricted)
+                    & (
+                        Q(operateurs_invites__id_operateur_economique=operateur_id)
+                        | Q(id_operateur_choisi=operateur_id)
+                    )
+                )
+            )
+            .distinct()
+        )
+
+    if role == "commission_externe":
+        commission_id = _get_commission_id(request)
+        if not commission_id:
+            return queryset.none()
+        return queryset.filter(statut="non_valide", commission_id=commission_id)
+
+    return queryset
 
 
 # ── Lookups ───────────────────────────────────────────────────────────
@@ -70,12 +191,21 @@ def get_appel_or_404(appel_id):
 
 
 def _apply_transition(appel_id, action_name):
-    transition = _TRANSITIONS[action_name]
+    transition = _EXECUTION_TRANSITIONS[action_name]
     appel = get_appel_or_404(appel_id)
-    if appel.statut not in transition["from"]:
-        raise ValidationError({"statut": [transition["error"]]})
-    appel.statut = transition["to"]
-    appel.save(update_fields=["statut", "updated_at"])
+    rules = get_procedure_rules(appel.type_procedure)
+    if not rules.allow_execution:
+        raise ValidationError({"type_procedure": ["Cette procedure ne permet pas d'execution."]})
+    if appel.statut != "valide":
+        raise ValidationError({"statut": ["L'appel doit etre valide avant execution."]})
+    if appel.etat_execution not in transition["from"]:
+        raise ValidationError({"etat_execution": [transition["error"]]})
+    appel.etat_execution = transition["to"]
+    update_fields = ["etat_execution", "updated_at"]
+    if action_name == "publier" and not appel.date_publication:
+        appel.date_publication = timezone.now()
+        update_fields.append("date_publication")
+    appel.save(update_fields=update_fields)
     return appel
 
 
@@ -93,6 +223,55 @@ def action_ouvrir_plis(appel_id):
 
 def action_annuler(appel_id):
     return _apply_transition(appel_id, "annuler")
+
+
+def action_soumettre_validation(appel_id, validated_by=None):
+    appel = get_appel_or_404(appel_id)
+    rules = get_procedure_rules(appel.type_procedure)
+    if not rules.requires_validation:
+        raise ValidationError({"type_procedure": ["Cette procedure ne passe pas en validation."]})
+
+    commission_id, validation_level = resolve_validation_routing(
+        appel.montant_estime,
+        appel.wilaya,
+        appel.secteur,
+    )
+    appel.commission_id = commission_id
+    appel.validation_level = validation_level
+    appel.statut = "non_valide"
+    appel.validated_by = str(validated_by) if validated_by else None
+    appel.save(update_fields=["commission_id", "validation_level", "statut", "validated_by", "updated_at"])
+    return appel
+
+
+def action_valider(appel_id, validated_by):
+    appel = get_appel_or_404(appel_id)
+    rules = get_procedure_rules(appel.type_procedure)
+    if not rules.requires_validation:
+        raise ValidationError({"type_procedure": ["Cette procedure ne passe pas en validation."]})
+    if appel.statut != "non_valide":
+        raise ValidationError({"statut": ["Seuls les appels non valides peuvent etre valides."]})
+    if not validated_by:
+        raise ValidationError({"validated_by": ["Le membre validateur est obligatoire."]})
+    appel.statut = "valide"
+    appel.validated_by = str(validated_by)
+    appel.save(update_fields=["statut", "validated_by", "updated_at"])
+    return appel
+
+
+def action_refuser(appel_id, validated_by):
+    appel = get_appel_or_404(appel_id)
+    rules = get_procedure_rules(appel.type_procedure)
+    if not rules.requires_validation:
+        raise ValidationError({"type_procedure": ["Cette procedure ne passe pas en validation."]})
+    if appel.statut != "non_valide":
+        raise ValidationError({"statut": ["Seuls les appels non valides peuvent etre refuses."]})
+    if not validated_by:
+        raise ValidationError({"validated_by": ["Le membre validateur est obligatoire."]})
+    appel.statut = "refuse"
+    appel.validated_by = str(validated_by)
+    appel.save(update_fields=["statut", "validated_by", "updated_at"])
+    return appel
 
 
 # ── Documents ─────────────────────────────────────────────────────────
