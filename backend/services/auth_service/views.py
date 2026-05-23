@@ -4,6 +4,9 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenRefreshView
+from django.conf import settings
+from django.shortcuts import redirect
+from urllib.parse import urlencode
 from .services.access_control import user_permission_names
 from .models import Utilisateur
 from .permissions import AuthServicePermission
@@ -40,6 +43,7 @@ from .services.access_control import (
     users_queryset,
 )
 from .services.authentication import (
+    activate_account,
     authenticate_user,
     change_password,
     complete_password_reset,
@@ -136,6 +140,20 @@ class AuthResetPasswordView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class AuthActivateView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        token = request.query_params.get("token", "")
+        if not token:
+            return Response({"token": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
+        user = activate_account(token)
+        redirect_url = getattr(settings, "FRONTEND_LOGIN_URL", "/login")
+        separator = "&" if "?" in redirect_url else "?"
+        return redirect(f"{redirect_url}{separator}{urlencode({'activated': '1', 'email': user.email})}")
+
+
 class CachedListMixin:
     cache_namespace = ""
 
@@ -169,8 +187,8 @@ class UserListCreateView(CachedListMixin, ListCreateAPIView):
     cache_namespace = "users"
     permission_classes = [AuthServicePermission]
     required_permissions = {
-        "GET": ("users.read",),
-        "POST": ("users.write",),
+        "GET": ("user:update",),
+        "POST": ("user:create",),
     }
 
     def get_queryset(self):
@@ -192,10 +210,10 @@ class UserRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDestroyAPI
     lookup_url_kwarg = "user_id"
     permission_classes = [AuthServicePermission]
     required_permissions = {
-        "GET": ("users.read",),
-        "PATCH": ("users.write",),
-        "PUT": ("users.write",),
-        "DELETE": ("users.write",),
+        "GET": ("user:update",),
+        "PATCH": ("user:update",),
+        "PUT": ("user:update",),
+        "DELETE": ("user:deactivate",),
     }
 
     def get_queryset(self):
@@ -218,7 +236,7 @@ class UserRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDestroyAPI
 class UserRoleUpdateView(APIView):
     permission_classes = [AuthServicePermission]
     required_permissions = {
-        "PATCH": ("users.write",),
+        "PATCH": ("role:assign",),
     }
 
     def patch(self, request, user_id):
@@ -231,8 +249,8 @@ class UserRoleUpdateView(APIView):
 class UserPermissionsView(APIView):
     permission_classes = [AuthServicePermission]
     required_permissions = {
-        "GET": ("users.read",),
-        "PUT": ("users.write",),
+        "GET": ("user:update",),
+        "PUT": ("role:assign",),
     }
 
     def get(self, request, user_id):
@@ -259,7 +277,7 @@ class UserPermissionsView(APIView):
 class UserDirectPermissionsView(APIView):
     permission_classes = [AuthServicePermission]
     required_permissions = {
-        "GET": ("users.read",),
+        "GET": ("user:update",),
     }
 
     def get(self, request, user_id):
@@ -270,8 +288,8 @@ class UserDirectPermissionsView(APIView):
 class UserPermissionDetailView(APIView):
     permission_classes = [AuthServicePermission]
     required_permissions = {
-        "POST": ("users.write",),
-        "DELETE": ("users.write",),
+        "POST": ("role:assign",),
+        "DELETE": ("role:assign",),
     }
 
     def post(self, request, user_id, permission_id):
@@ -288,8 +306,8 @@ class RoleListCreateView(CachedListMixin, ListCreateAPIView):
     serializer_class = RoleSerializer
     permission_classes = [AuthServicePermission]
     required_permissions = {
-        "GET": ("roles.read",),
-        "POST": ("roles.write",),
+        "GET": ("role:manage",),
+        "POST": ("role:manage",),
     }
 
     def get_queryset(self):
@@ -307,10 +325,10 @@ class RoleRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDestroyAPI
     lookup_url_kwarg = "role_id"
     permission_classes = [AuthServicePermission]
     required_permissions = {
-        "GET": ("roles.read",),
-        "PATCH": ("roles.write",),
-        "PUT": ("roles.write",),
-        "DELETE": ("roles.write",),
+        "GET": ("role:manage",),
+        "PATCH": ("role:manage",),
+        "PUT": ("role:manage",),
+        "DELETE": ("role:manage",),
     }
 
     def get_queryset(self):
@@ -330,8 +348,8 @@ class PermissionListCreateView(CachedListMixin, ListCreateAPIView):
     serializer_class = PermissionSerializer
     permission_classes = [AuthServicePermission]
     required_permissions = {
-        "GET": ("permissions.read",),
-        "POST": ("permissions.write",),
+        "GET": ("role:manage",),
+        "POST": ("role:manage",),
     }
 
     def get_queryset(self):
@@ -349,10 +367,10 @@ class PermissionRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDest
     lookup_url_kwarg = "permission_id"
     permission_classes = [AuthServicePermission]
     required_permissions = {
-        "GET": ("permissions.read",),
-        "PATCH": ("permissions.write",),
-        "PUT": ("permissions.write",),
-        "DELETE": ("permissions.write",),
+        "GET": ("role:manage",),
+        "PATCH": ("role:manage",),
+        "PUT": ("role:manage",),
+        "DELETE": ("role:manage",),
     }
 
     def get_queryset(self):
@@ -370,8 +388,8 @@ class PermissionRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDest
 class RolePermissionsView(APIView):
     permission_classes = [AuthServicePermission]
     required_permissions = {
-        "GET": ("roles.read",),
-        "PUT": ("roles.write",),
+        "GET": ("role:manage",),
+        "PUT": ("role:manage",),
     }
 
     def get(self, request, role_id):
@@ -397,8 +415,8 @@ class RolePermissionsView(APIView):
 class RolePermissionDetailView(APIView):
     permission_classes = [AuthServicePermission]
     required_permissions = {
-        "POST": ("roles.write",),
-        "DELETE": ("roles.write",),
+        "POST": ("role:manage",),
+        "DELETE": ("role:manage",),
     }
 
     def post(self, request, role_id, permission_id):
@@ -418,7 +436,13 @@ class InternalRegisterActeurView(APIView):
         serializer = InternalActeurRegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            return Response({"message": "Utilisateur créé", "id_utilisateur": user.id_utilisateur}, status=status.HTTP_201_CREATED)
+            payload = {"message": "Utilisateur créé", "id_utilisateur": user.id_utilisateur}
+            activation_url = getattr(serializer, "activation_url", None)
+            if activation_url:
+                payload["activation_url"] = activation_url
+            if settings.DEBUG and getattr(serializer, "temporary_password", None):
+                payload["temporary_password"] = serializer.temporary_password
+            return Response(payload, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -440,6 +464,7 @@ class InternalSearchUsersView(APIView):
                 "id_membre": str(user.id_membre),
                 "email": user.email,
                 "is_active": user.is_active,
+                "must_change_password": user.must_change_password,
                 "role": user.id_role.nom_role if user.id_role else None,
                 "permissions": user_permission_names(user) # Utilise votre fonction existante !
             })
