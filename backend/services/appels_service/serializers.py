@@ -216,6 +216,7 @@ class AppelOffresSerializer(serializers.ModelSerializer):
 
 
 class _AppelOffresWriteSerializer(serializers.ModelSerializer):
+    type_procedure = serializers.CharField()
     operateurs_invites = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
         required=False,

@@ -31,6 +31,7 @@ def make_appel(**kwargs):
 @override_settings(
     CONTRACTANT_SERVICE_URL="",
     ACTEURS_SERVICE_URL="",
+    DOCUMENTS_SERVICE_URL="",
     INTERNAL_SERVICE_TOKEN="test-internal-token",
 )
 class AppelsServiceTestCase(TestCase):
