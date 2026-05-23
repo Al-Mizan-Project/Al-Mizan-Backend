@@ -2,6 +2,12 @@ from django.db import models
 
 
 class AppelOffres(models.Model):
+    TYPE_PROCEDURE_CHOICES = [
+        ("publique", "Publique"),
+        ("restreint", "Restreint"),
+        ("gre_a_gre", "Gre a gre"),
+        ("consultation", "Consultation"),
+    ]
     TYPE_PRESTATION_CHOICES = [
         ("travaux", "Travaux"),
         ("fournitures", "Fournitures"),
@@ -21,18 +27,38 @@ class AppelOffres(models.Model):
     ]
     # NOUVEAU : Liste des niveaux de validation requis
     VALIDATION_LEVEL_CHOICES = [
+        ("aucun", "Aucun"),
         ("interne", "Interne"),
         ("externe_wilaya", "Externe Wilaya"),
         ("externe_secteur", "Externe Secteur"),
         ("externe_nationale", "Externe Nationale"),
+    ]
+    EXECUTION_STATUS_CHOICES = [
+        ("brouillon", "Brouillon"),
+        ("publie", "Publie"),
+        ("depot_cloture", "Depot cloture"),
+        ("plis_ouverts", "Plis ouverts"),
+        ("annule", "Annule"),
     ]
 
     id_appel_offres = models.AutoField(primary_key=True)
     id_service_contractant = models.IntegerField(db_index=True)
     
     # NOUVEAUX ATTRIBUTS (Microservices)
-    commission_id = models.IntegerField(db_index=True, help_text="ID de la commission provenant du service externe")
-    validated_by = models.IntegerField(db_index=True, null=True, blank=True, help_text="ID du membre ayant validé la demande")
+    commission_id = models.CharField(
+        max_length=36,
+        db_index=True,
+        null=True,
+        blank=True,
+        help_text="ID de la commission provenant du service externe",
+    )
+    validated_by = models.CharField(
+        max_length=36,
+        db_index=True,
+        null=True,
+        blank=True,
+        help_text="ID du membre ayant valide la demande",
+    )
     validation_level = models.CharField(
         max_length=30,
         choices=VALIDATION_LEVEL_CHOICES,
@@ -42,7 +68,7 @@ class AppelOffres(models.Model):
     reference = models.CharField(max_length=80, unique=True)
     titre = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
-    type_procedure = models.CharField(max_length=50)
+    type_procedure = models.CharField(max_length=50, choices=TYPE_PROCEDURE_CHOICES)
     type_prestation = models.CharField(
         max_length=20,
         choices=TYPE_PRESTATION_CHOICES,
@@ -54,13 +80,14 @@ class AppelOffres(models.Model):
         default="public",
     )
     wilaya = models.CharField(max_length=80, blank=True, default="")
+    secteur = models.CharField(max_length=120, blank=True, default="")
     localisation = models.CharField(max_length=255, blank=True, default="")
     montant_estime = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     date_publication = models.DateTimeField(null=True, blank=True)
     date_limite_soumission = models.DateTimeField(null=True, blank=True)
     date_ouverture_plis = models.DateTimeField(null=True, blank=True)
-    poids_technique = models.IntegerField(default=50)
-    poids_financier = models.IntegerField(default=50)
+    poids_technique = models.IntegerField(null=True, blank=True, default=50)
+    poids_financier = models.IntegerField(null=True, blank=True, default=50)
     required_docs_admin = models.JSONField(default=list, blank=True)
     required_docs_tech = models.JSONField(default=list, blank=True)
     required_docs_fin = models.JSONField(default=list, blank=True)
@@ -68,9 +95,18 @@ class AppelOffres(models.Model):
     qualification_category = models.CharField(max_length=120, blank=True, default="")
     minimum_experience_years = models.IntegerField(default=0)
     participation_conditions = models.JSONField(default=list, blank=True)
+    id_operateur_choisi = models.IntegerField(null=True, blank=True, db_index=True)
+    id_doc_cdc = models.IntegerField(null=True, blank=True, db_index=True)
+    id_doc_justification = models.IntegerField(null=True, blank=True, db_index=True)
+    id_doc_besoin = models.IntegerField(null=True, blank=True, db_index=True)
     
     # MODIFIÉ : Statut par défaut configuré sur "non_valide"
     statut = models.CharField(max_length=30, choices=STATUT_CHOICES, default="non_valide")
+    etat_execution = models.CharField(
+        max_length=30,
+        choices=EXECUTION_STATUS_CHOICES,
+        default="brouillon",
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
