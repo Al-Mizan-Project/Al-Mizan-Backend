@@ -60,6 +60,7 @@ class SoumissionEvaluateur(models.Model):
     id = models.AutoField(primary_key=True)
     soumission = models.ForeignKey(Soumission, on_delete=models.CASCADE, related_name='evaluateurs_assignes')
     evaluateur = models.ForeignKey('auth_service.Utilisateur', on_delete=models.CASCADE, related_name='soumissions_a_evaluer')
+    id_comission = models.IntegerField(null=True, blank=True, help_text="Commission COPEO assigned to this soumission")
     type_evaluation = models.CharField(max_length=20, choices=TYPE_CHOICES)
     assigned_at = models.DateTimeField(auto_now_add=True)
 

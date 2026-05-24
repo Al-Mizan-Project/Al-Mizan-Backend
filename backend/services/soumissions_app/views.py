@@ -425,42 +425,30 @@ class SoumissionAffecterView(APIView):
     permission_classes = [IsCommissionMember]   # Reuse existing permission
 
     def post(self, request, soumission_id):
-        soum = get_object_or_404(Soumission, id_soumission=soumission_id)
+     soum = get_object_or_404(Soumission, id_soumission=soumission_id)
 
-        # Check soumission status (allow only if not already closed)
-        if soum.statut not in [SoumissionStatut.SOUMIS, SoumissionStatut.EN_EVALUATION]:
-            return Response(
-                {"error": "La soumission n'est pas en phase d'affectation."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+     if soum.statut not in [SoumissionStatut.SOUMIS, SoumissionStatut.EN_EVALUATION]:
+        return Response({"error": "La soumission n'est pas en phase d'affectation."}, status=status.HTTP_400_BAD_REQUEST)
 
-        serializer = AffectationSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+     serializer = AffectationSerializer(data=request.data)
+     if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        evaluateur_ids = serializer.validated_data['evaluateur_ids']
-        type_eval = serializer.validated_data['type_evaluation']
+     id_comission = serializer.validated_data['id_comission']
 
-        created_assignments = []
-        for eid in evaluateur_ids:
-            obj, created = SoumissionEvaluateur.objects.get_or_create(
-                soumission=soum,
-                evaluateur_id=eid,
-                type_evaluation=type_eval
-            )
-            created_assignments.append({
-                "soumission_id": soum.id_soumission,
-                "evaluateur_id": eid,
-                "type": type_eval,
-                "created": created
-            })
+    # Assign commission to soumission — one commission per soumission
+     obj, created = SoumissionEvaluateur.objects.update_or_create(
+        soumission=soum,
+        defaults={'id_comission': id_comission}
+    )
 
-        # Optionally update soumission status to EN_EVALUATION if it was SOUMIS
-        if soum.statut == SoumissionStatut.SOUMIS:
-            soum.statut = SoumissionStatut.EN_EVALUATION
-            soum.save()
+     if soum.statut == SoumissionStatut.SOUMIS:
+        soum.statut = SoumissionStatut.EN_EVALUATION
+        soum.save()
 
-        return Response({
-            "message": "Affectation réussie",
-            "assignments": created_assignments
-        }, status=status.HTTP_201_CREATED)
+     return Response({
+        "message": "Commission affectée",
+        "soumission_id": soum.id_soumission,
+        "id_comission": id_comission,
+        "created": created,
+     }, status=status.HTTP_201_CREATED)
