@@ -31,30 +31,6 @@ class PermissionRole(models.Model):
         ]
 
 
-class UtilisateurPermission(models.Model):
-    id_utilisateur = models.ForeignKey(
-        "Utilisateur",
-        on_delete=models.CASCADE,
-        db_column="id_utilisateur",
-        related_name="permission_links",
-    )
-    id_permission = models.ForeignKey(
-        Permission,
-        on_delete=models.CASCADE,
-        db_column="id_permission",
-        related_name="user_links",
-    )
-
-    class Meta:
-        db_table = "Permission_utilisateur"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["id_utilisateur", "id_permission"],
-                name="unique_user_permission",
-            ),
-        ]
-
-
 class UtilisateurManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:

@@ -1,8 +1,7 @@
 from django.db import transaction
-from django.db.models import Q
 from rest_framework.exceptions import NotFound, ValidationError
 
-from auth_service.models import Permission, PermissionRole, Role, Utilisateur, UtilisateurPermission
+from auth_service.models import Permission, PermissionRole, Role, Utilisateur
 from auth_service.rbac import ROLE_PERMISSIONS, normalize_role_name
 
 from .cache import bump_cache_version
@@ -53,9 +52,7 @@ def update_user_role(user_id, role):
 def list_user_permissions(user_id):
     user = get_user_or_404(user_id)
     return (
-        Permission.objects.filter(
-            Q(role_links__id_role=user.id_role) | Q(user_links__id_utilisateur=user)
-        )
+        Permission.objects.filter(role_links__id_role=user.id_role)
         .distinct()
         .order_by("id_permission")
     )
@@ -63,9 +60,7 @@ def list_user_permissions(user_id):
 
 def user_permission_names(user):
     return list(
-        Permission.objects.filter(
-            Q(role_links__id_role=user.id_role) | Q(user_links__id_utilisateur=user)
-        )
+        Permission.objects.filter(role_links__id_role=user.id_role)
         .order_by("id_permission")
         .values_list("nom_permission", flat=True)
         .distinct()
@@ -73,28 +68,8 @@ def user_permission_names(user):
 
 
 def list_direct_user_permissions(user_id):
-    user = get_user_or_404(user_id)
-    return Permission.objects.filter(user_links__id_utilisateur=user).distinct().order_by("id_permission")
-
-
-def _permissions_by_ids(permission_ids):
-    if not permission_ids:
-        return []
-    permissions = list(Permission.objects.filter(id_permission__in=permission_ids))
-    if len(permissions) != len(set(permission_ids)):
-        raise ValidationError({"permission_ids": ["One or more permissions do not exist."]})
-    return permissions
-
-
-def _permissions_by_names(permission_names):
-    names = [name.strip() for name in permission_names or [] if str(name).strip()]
-    if not names:
-        return []
-    permissions = []
-    for name in names:
-        permission, _ = Permission.objects.get_or_create(nom_permission=name)
-        permissions.append(permission)
-    return permissions
+    get_user_or_404(user_id)
+    return Permission.objects.none()
 
 
 def _sync_fixed_role_permissions(role):
@@ -116,40 +91,20 @@ def _sync_fixed_role_permissions(role):
 
 @transaction.atomic
 def replace_user_permissions(user_id, permission_ids=None, permission_names=None):
-    user = get_user_or_404(user_id)
-    permissions = _permissions_by_ids(permission_ids)
-    permissions.extend(_permissions_by_names(permission_names))
-    unique_permissions = {permission.id_permission: permission for permission in permissions}.values()
-    UtilisateurPermission.objects.filter(id_utilisateur=user).delete()
-    if unique_permissions:
-        UtilisateurPermission.objects.bulk_create(
-            [
-                UtilisateurPermission(id_utilisateur=user, id_permission=permission)
-                for permission in unique_permissions
-            ],
-            ignore_conflicts=True,
-        )
-    bump_cache_version()
-    return list_user_permissions(user_id)
+    get_user_or_404(user_id)
+    raise ValidationError({"permissions": ["Les permissions utilisateur directes ont ete supprimees."]})
 
 
 def add_user_permission(user_id, permission_id):
-    user = get_user_or_404(user_id)
-    permission = get_permission_or_404(permission_id)
-    UtilisateurPermission.objects.get_or_create(id_utilisateur=user, id_permission=permission)
-    bump_cache_version()
+    get_user_or_404(user_id)
+    get_permission_or_404(permission_id)
+    raise ValidationError({"permissions": ["Les permissions utilisateur directes ont ete supprimees."]})
 
 
 def remove_user_permission(user_id, permission_id):
-    user = get_user_or_404(user_id)
-    permission = get_permission_or_404(permission_id)
-    deleted_count, _ = UtilisateurPermission.objects.filter(
-        id_utilisateur=user,
-        id_permission=permission,
-    ).delete()
-    if deleted_count == 0:
-        raise NotFound("User-permission link not found")
-    bump_cache_version()
+    get_user_or_404(user_id)
+    get_permission_or_404(permission_id)
+    raise ValidationError({"permissions": ["Les permissions utilisateur directes ont ete supprimees."]})
 
 
 def list_role_permissions(role_id):

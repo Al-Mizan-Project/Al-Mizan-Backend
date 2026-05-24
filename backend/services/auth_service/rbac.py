@@ -121,13 +121,15 @@ ROLE_PERMISSIONS = {
         "dossier:assigner",
         "rapport_cm:read",
     ],
-    "VALIDATEUR_INTERNE": [
-        "cdc:read",
-        "cdc:valider_intern",
-        "cdc:rejeter_intern",
+    "VALIDATEUR_INTERNE_MARCHE": [
         "marche:valider_intern",
         "marche:rejeter_intern",
         "marche:read",
+    ],
+    "VALIDATEUR_INTERNE_CDC": [
+        "cdc:read",
+        "cdc:valider_intern",
+        "cdc:rejeter_intern",
     ],
     "RESP_OE": [
         "appel_offre:read",
@@ -158,14 +160,15 @@ ROLE_PERMISSIONS = {
         "dossier:assigner",
         "rapport_cm:read",
     ],
-    "VALIDATEUR_EXTERNE": [
+    "VALIDATEUR_EXTERNE_MARCHE": [
+        "dossier:read",
+        "marche:valider_extern",
+        "marche:rejeter_extern",
+    ],
+    "VALIDATEUR_EXTERNE_CDC": [
         "dossier:read",
         "cdc:valider_extern",
         "cdc:rejeter_extern",
-        "marche:valider_extern",
-        "marche:rejeter_extern",
-        "observation:create",
-        "rapport_instruction:create",
     ],
     "ADMIN": [
         "organisation:create",
@@ -199,6 +202,17 @@ ROLE_ALIASES = {
     "commission externe": "RESP_CM",
     "commission_externe": "RESP_CM",
     "commission-externe": "RESP_CM",
+    "validateur_interne": "VALIDATEUR_INTERNE_MARCHE",
+    "validateur interne": "VALIDATEUR_INTERNE_MARCHE",
+    "validateur-interne": "VALIDATEUR_INTERNE_MARCHE",
+    "validateur-externe": "VALIDATEUR_EXTERNE_MARCHE",
+    "validateur_externe": "VALIDATEUR_EXTERNE_MARCHE",
+    "validateur externe": "VALIDATEUR_EXTERNE_MARCHE",
+}
+
+OBSOLETE_ROLE_REPLACEMENTS = {
+    "VALIDATEUR_INTERNE": "VALIDATEUR_INTERNE_MARCHE",
+    "VALIDATEUR_EXTERNE": "VALIDATEUR_EXTERNE_MARCHE",
 }
 
 

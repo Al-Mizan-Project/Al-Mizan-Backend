@@ -15,7 +15,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 import requests
 
-from .models import Utilisateur, Role, Permission, PermissionRole, UtilisateurPermission
+from .models import Utilisateur, Role, Permission, PermissionRole
 from .rbac import normalize_role_name, permissions_for_role
 from .services.access_control import user_permission_names
 

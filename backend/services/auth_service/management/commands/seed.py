@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 import uuid
 
 from auth_service.models import Permission, PermissionRole, Role, Utilisateur
-from auth_service.rbac import ROLE_PERMISSIONS
+from auth_service.rbac import OBSOLETE_ROLE_REPLACEMENTS, ROLE_PERMISSIONS
 
 
 DEFAULT_ADMIN_EMAIL = "a@a.dz"
@@ -46,6 +46,7 @@ class Command(BaseCommand):
             Role.objects.all().delete()
             self.stdout.write(self.style.WARNING("Flushed auth users, roles and permissions."))
 
+        self._replace_obsolete_roles()
         roles = {name: Role.objects.get_or_create(nom_role=name)[0] for name in ROLE_PERMISSIONS}
         admin_role = roles["ADMIN"]
         contractant_role = roles["RESP_SC"]
@@ -162,3 +163,13 @@ class Command(BaseCommand):
 
     def _member_uuid(self, value):
         return uuid.UUID(int=int(value))
+
+    def _replace_obsolete_roles(self):
+        for old_name, new_name in OBSOLETE_ROLE_REPLACEMENTS.items():
+            old_role = Role.objects.filter(nom_role=old_name).first()
+            if not old_role:
+                continue
+            new_role, _ = Role.objects.get_or_create(nom_role=new_name)
+            Utilisateur.objects.filter(id_role=old_role).update(id_role=new_role)
+            PermissionRole.objects.filter(id_role=old_role).delete()
+            old_role.delete()

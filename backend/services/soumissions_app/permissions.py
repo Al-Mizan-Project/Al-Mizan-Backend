@@ -21,7 +21,7 @@ class IsCommissionMember(BasePermission):
         role = normalize_role_name(token_payload.get("role", ""))
 
         # Admin / commission roles are always allowed
-        if role in ("ADMIN", "EVALUATEUR", "RESP_CM", "VALIDATEUR_EXTERNE", "MEMBRE_COMITE_TECHNIQUE"):
+        if role in ("ADMIN", "EVALUATEUR", "RESP_CM", "VALIDATEUR_EXTERNE_MARCHE", "VALIDATEUR_EXTERNE_CDC", "MEMBRE_COMITE_TECHNIQUE"):
             return True
 
         id_appel_offre = view.kwargs.get("id_appel_offre")

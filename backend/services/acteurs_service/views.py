@@ -452,12 +452,12 @@ class CreateMembreByResponsableView(APIView):
         role_mapping = {
             TypeEntite.SERVICE_CONTRACTANT: "REDACTEUR_CDC",
             TypeEntite.OPERATEUR_ECONOMIQUE: "PREPARATEUR_OE",
-            TypeEntite.COMMISSION_EXTERNE: "VALIDATEUR_EXTERNE",
+            TypeEntite.COMMISSION_EXTERNE: "VALIDATEUR_EXTERNE_MARCHE",
         }
         allowed_roles = {
-            TypeEntite.SERVICE_CONTRACTANT: {"REDACTEUR_CDC", "EVALUATEUR", "MEMBRE_COMITE_TECHNIQUE", "RESP_VALID_INTERN", "VALIDATEUR_INTERNE"},
+            TypeEntite.SERVICE_CONTRACTANT: {"REDACTEUR_CDC", "EVALUATEUR", "MEMBRE_COMITE_TECHNIQUE", "RESP_VALID_INTERN", "VALIDATEUR_INTERNE_MARCHE", "VALIDATEUR_INTERNE_CDC"},
             TypeEntite.OPERATEUR_ECONOMIQUE: {"PREPARATEUR_OE"},
-            TypeEntite.COMMISSION_EXTERNE: {"VALIDATEUR_EXTERNE"},
+            TypeEntite.COMMISSION_EXTERNE: {"VALIDATEUR_EXTERNE_MARCHE", "VALIDATEUR_EXTERNE_CDC"},
         }
         role_nom = normalize_role_name(data.get("role_nom") or data.get("role") or role_mapping.get(organisation.type_entite))
         if role_nom not in allowed_roles.get(organisation.type_entite, set()):
