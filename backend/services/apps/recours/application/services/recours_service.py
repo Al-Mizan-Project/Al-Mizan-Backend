@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.utils import timezone
 
@@ -61,21 +61,27 @@ class RecoursService:
         # 3. Fetch appel offre for deadline
         appel_id = soumission.get("appel_id") or soumission.get("id_appel_offre")
         appel = self.appels_client.get_appel_offre(appel_id)
-        date_limite = appel.get("date_limite_recours") or appel.get("date_limite_soumission")
-        if isinstance(date_limite, str):
+
+        ouverture_plis_date = appel.get("ouverture_plis_date") or appel.get("date_ouverture_plis")
+        if isinstance(ouverture_plis_date, str):
             try:
-                date_limite = datetime.fromisoformat(date_limite.replace("Z", "+00:00"))
+                ouverture_plis_date = datetime.fromisoformat(ouverture_plis_date.replace("Z", "+00:00"))
             except ValueError:
-                date_limite = None
+                ouverture_plis_date = None
 
         now = timezone.now()
-        if date_limite is not None and timezone.is_naive(date_limite):
-            date_limite = timezone.make_aware(date_limite, timezone.get_current_timezone())
 
-        if date_limite is not None:
-            self.domain_service.verifier_delai(date_limite, now)
+        if ouverture_plis_date is not None and timezone.is_naive(ouverture_plis_date):
+            ouverture_plis_date = timezone.make_aware(ouverture_plis_date, timezone.get_current_timezone())
+
+        if ouverture_plis_date is not None:
+            date_limite = ouverture_plis_date + timedelta(days=10)
         else:
             date_limite = now
+
+        self.domain_service.verifier_delai(date_limite, now)
+
+        date_fin_instruction = date_limite + timedelta(days=15)
 
         # 3.5 Resolve id_validation — if the client didn't provide one,
         # derive it from the contrats service (latest validation on the soumission).
@@ -93,6 +99,7 @@ class RecoursService:
             statut="DEPOSE",
             date_depot=now,
             date_limite=date_limite,
+            date_fin_instruction=date_fin_instruction,
             version=0,
             type_recours=dto.type_recours,
             objet=dto.objet,
@@ -232,6 +239,8 @@ class RecoursService:
             entite_liee_id=recours.id_recours,
         )
 
+        self._safe_notify_soumissionnaires_masse(recours)
+
         return self._to_response_dto(recours)
 
     def rejeter_recours(self, recours_id: int):
@@ -289,9 +298,8 @@ class RecoursService:
             decision=recours.decision,
             date_depot=str(recours.date_depot),
             date_limite=str(recours.date_limite),
-            date_decision=str(recours.date_decision)
-            if recours.date_decision
-            else None,
+            date_fin_instruction=str(recours.date_fin_instruction) if recours.date_fin_instruction else None,  # NEW
+            date_decision=str(recours.date_decision) if recours.date_decision else None,
             traite_par=recours.traite_par,
             type_recours=recours.type_recours,
             objet=recours.objet or "",
@@ -360,3 +368,32 @@ class RecoursService:
         except Exception:
             return None
         return None
+
+    def _safe_notify_soumissionnaires_masse(self, recours: Recours):
+            """POST /notifications/envoi-masse to all soumissionnaires of the appel d'offre."""
+            try:
+                soumission = self.soumissions_client.get_soumission(recours.id_soumission)
+                appel_id = soumission.get("appel_id") or soumission.get("id_appel_offre")
+                soumissionnaires = self.soumissions_client.get_soumissionnaires_by_appel(appel_id)
+                utilisateur_ids = [
+                    s.get("id_soumissionnaire")
+                    for s in soumissionnaires
+                    if s.get("id_soumissionnaire")
+                ]
+                if not utilisateur_ids:
+                    return
+                self.notification_client.send_bulk_notifications(
+                    {
+                        "utilisateur_ids": utilisateur_ids,
+                        "type_notification": "RECOURS_ACCEPTE",
+                        "titre": "Recours accepte",
+                        "message": f"Le recours {recours.id_recours} sur l'appel d'offre {appel_id} a ete accepte.",
+                        "priorite": "normale",
+                        "categorie": "recours",
+                        "entite_liee_type": "recours",
+                        "entite_liee_id": recours.id_recours,
+                        "statut": "cree",
+                    }
+                )
+            except Exception:
+                return

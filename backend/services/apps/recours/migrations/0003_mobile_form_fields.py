@@ -1,4 +1,4 @@
-from django.db import migrations
+from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
@@ -7,20 +7,43 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql="""
-            ALTER TABLE recours
-                ALTER COLUMN id_validation DROP NOT NULL,
-                ADD COLUMN IF NOT EXISTS type_recours varchar(20) NULL,
-                ADD COLUMN IF NOT EXISTS objet varchar(255) NOT NULL DEFAULT '',
-                ADD COLUMN IF NOT EXISTS explications text NOT NULL DEFAULT '';
-            """,
-            reverse_sql="""
-            ALTER TABLE recours
-                DROP COLUMN IF EXISTS explications,
-                DROP COLUMN IF EXISTS objet,
-                DROP COLUMN IF EXISTS type_recours,
-                ALTER COLUMN id_validation SET NOT NULL;
-            """,
+        migrations.AlterField(
+            model_name="recoursmodel",
+            name="id_validation",
+            field=models.IntegerField(
+                null=True,
+                blank=True,
+            ),
+        ),
+        migrations.AddField(
+            model_name="recoursmodel",
+            name="type_recours",
+            field=models.CharField(
+                max_length=20,
+                choices=[
+                    ("GRACIEUX", "Gracieux"),
+                    ("HIERARCHIQUE", "Hiérarchique"),
+                    ("CONTENTIEUX", "Contentieux"),
+                ],
+                null=True,
+                blank=True,
+            ),
+        ),
+        migrations.AddField(
+            model_name="recoursmodel",
+            name="objet",
+            field=models.CharField(
+                max_length=255,
+                blank=True,
+                default="",
+            ),
+        ),
+        migrations.AddField(
+            model_name="recoursmodel",
+            name="explications",
+            field=models.TextField(
+                blank=True,
+                default="",
+            ),
         ),
     ]
