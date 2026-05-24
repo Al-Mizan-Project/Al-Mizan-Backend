@@ -40,7 +40,6 @@ class AttributionAffecterSerializer(serializers.Serializer):
 
 
 class AttributionValiderSerializer(serializers.Serializer):
-    """Body for POST /validations/{id}/valider — member confirms validation."""
 
     # No extra fields needed — just calling the endpoint sets statut=definitive.
     # Optional comment can be added later.

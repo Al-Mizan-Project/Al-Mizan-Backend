@@ -1,0 +1,466 @@
+Waiting for PostgreSQL at postgres:5432...
+PostgreSQL is ready
+Redis is ready
+Running default migrations...
+Operations to perform:
+  Apply all migrations: acteurs_service, admin, appels_service, auth, auth_service, contenttypes, contractant_service, contrats_service, documents_service, evaluations_service, ia_service, ledger, notifications_service, readstore, recours, sessions, soumissions_app
+Running migrations:
+  Applying acteurs_service.0001_initial... OK
+  Applying acteurs_service.0002_demandeoperateur_motif_rejet... OK
+  Applying acteurs_service.0003_membrestutelle... OK
+  Applying acteurs_service.0004_remove_tutelle_organisation_and_more... OK
+  Applying contenttypes.0001_initial... OK
+  Applying auth_service.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying appels_service.0001_initial... OK
+  Applying appels_service.0002_alter_appeloffres_statut... OK
+  Applying appels_service.0003_appeloffres_real_contractant_fields... OK
+  Applying appels_service.0004_appeloffressuivi... OK
+  Applying appels_service.0005_appeloffres_enrichment_and_achats_simples... OK
+  Applying appels_service.0006_alter_documentsappel_id... OK
+  Applying appels_service.0007_appeloffres_commission_id_appeloffres_validated_by_and_more... OK
+  Applying appels_service.0008_appeloffres_procedure_rules_and_execution... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0001_initial... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying auth_service.0004_utilisateurpermission... OK
+  Applying auth_service.0005_alter_permissionrole_id_alter_utilisateur_id_membre... OK
+  Applying contractant_service.0001_initial... OK
+  Applying contractant_service.0002_alter_commissionexterne_table_and_more... OK
+  Applying contrats_service.0001_initial... OK
+  Applying contrats_service.0002_rename_id_organisation_to_id_utilisateur... OK
+  Applying documents_service.0001_initial... OK
+  Applying documents_service.0002_document_taille_fichier... OK
+  Applying documents_service.0003_document_visible_after... OK
+  Applying documents_service.0004_document_id_operateur_economique... OK
+  Applying evaluations_service.0001_initial... OK
+  Applying ia_service.0001_initial... OK
+  Applying ia_service.0002_anomalie_detection_v2... OK
+  Applying ia_service.0003_alter_detectionanomalieia_niveau_severite_and_more... OK
+  Applying ledger.0001_initial... OK
+  Applying ledger.0002_outboxevent... OK
+  Applying ledger.0003_alter_auditlog_id... OK
+  Applying ledger.0004_runtime_tables... OK
+  Applying ledger.0005_alter_auditlog_id... OK
+  Applying notifications_service.0001_initial... OK
+  Applying readstore.0001_initial... OK
+  Applying readstore.0002_runtime_table... OK
+  Applying recours.0001_initial... OK
+  Applying recours.0003_mobile_form_fields... OK
+  Applying recours.0004_alter_documentrecoursmodel_unique_together_and_more... OK
+  Applying sessions.0001_initial... OK
+  Applying soumissions_app.0001_initial... OK
+  Applying soumissions_app.0002_soumission_document_ids... OK
+  Applying soumissions_app.0003_remove_evaluation_model... OK
+  Applying soumissions_app.0004_alter_soumission_statut... OK
+  Applying soumissions_app.0005_soumissionevaluateur... OK
+  Applying soumissions_app.0006_attribution... OK
+Single database mode detected; skipping separate ledger/read migration passes
+Ensuring routed runtime tables exist...
+default: all runtime tables present
+ledger: created journaux_audit
+ledger: created journaux_outbox
+read: created audit_read_projection
+Bootstrapping admin if available...
+Initial admin ready: admin@example.com
+[2026-05-24 10:45:27 +0000] [11] [INFO] Starting gunicorn 23.0.0
+[2026-05-24 10:45:27 +0000] [11] [INFO] Listening at: http://0.0.0.0:8000 (11)
+[2026-05-24 10:45:27 +0000] [11] [INFO] Using worker: uvicorn.workers.UvicornWorker
+[2026-05-24 10:45:27 +0000] [12] [INFO] Booting worker with pid: 12
+[2026-05-24 10:45:28 +0000] [13] [INFO] Booting worker with pid: 13
+[2026-05-24 10:45:28 +0000] [14] [INFO] Booting worker with pid: 14
+[2026-05-24 10:45:29 +0000] [12] [INFO] Started server process [12]
+[2026-05-24 10:45:29 +0000] [12] [INFO] Waiting for application startup.
+[2026-05-24 10:45:29 +0000] [12] [INFO] ASGI 'lifespan' protocol appears unsupported.
+[2026-05-24 10:45:29 +0000] [12] [INFO] Application startup complete.
+[2026-05-24 10:45:29 +0000] [13] [INFO] Started server process [13]
+[2026-05-24 10:45:29 +0000] [13] [INFO] Waiting for application startup.
+[2026-05-24 10:45:29 +0000] [13] [INFO] ASGI 'lifespan' protocol appears unsupported.
+[2026-05-24 10:45:29 +0000] [13] [INFO] Application startup complete.
+[2026-05-24 10:45:29 +0000] [14] [INFO] Started server process [14]
+[2026-05-24 10:45:29 +0000] [14] [INFO] Waiting for application startup.
+[2026-05-24 10:45:29 +0000] [14] [INFO] ASGI 'lifespan' protocol appears unsupported.
+[2026-05-24 10:45:29 +0000] [14] [INFO] Application startup complete.
+172.30.0.6:59550 - "GET /docs/swagger/ HTTP/1.1" 200
+/app/services/acteurs_service/serializers.py: Warning [DemandeOperateurDetailView > DemandeOperateurDetailSerializer]: unable to resolve type hint for function "get_documents_complets". Consider using a type hint or @extend_schema_field. Defaulting to string.
+/app/services/acteurs_service/views.py: Error [DemandeApprouverView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [DemandeRejeterView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/serializers.py: Warning [ListCommissionExterneView > OrganisationListSerializer]: unable to resolve type hint for function "get_responsable_nom". Consider using a type hint or @extend_schema_field. Defaulting to string.
+/app/services/acteurs_service/views.py: Error [CreerCommissionExterneView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [CreerServiceContractantView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AideRedactionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [AppelOffreSoumissionsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [OperateurSoumissionsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursListCreateView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursAccepterView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursCloturerView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursDecisionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursInstruireView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursRejeterView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [SoumissionCreateView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [SoumissionDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [SoumissionAffecterView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [SoumissionDocumentsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [EvaluationCreateView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresAnnulerView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [CalculerClassementView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [ClassementView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresCloturerDepotView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresDocumentsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresDocumentDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [AppelOffreEvaluationsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresOuvrirPlisView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresPublierView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresRefuserView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresSoumettreValidationView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresValiderView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [ValiderNotesView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contrats_service/views.py: Error [AttributionDefinitiveListView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contrats_service/views.py: Error [AttributionDefinitiveDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contrats_service/views.py: Error [AttributionProvisoireListView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contrats_service/views.py: Error [AttributionDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contrats_service/views.py: Error [AffecterAttributionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contrats_service/views.py: Error [ValiderAttributionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [AuthChangePasswordView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [AuthForgotPasswordView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [AuthLoginView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [AuthLogoutView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [AuthResetPasswordView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [CommissionEvaluationMembresView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [CommissionEvaluationMembreDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [CommissionExterneMembresView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [CommissionExterneCompetenteView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [CommissionInterneMembresView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [CommissionInterneMembreDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [SoumettreDemandeOperateurView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/documents_service/views.py: Error [DocumentCollectionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/documents_service/views.py: Error [DocumentDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/documents_service/views.py: Error [DocumentDownloadUrlView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [EvaluationView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [EvaluationDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/shared/health.py: Error [HealthView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AnomalieListView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AnomalieDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AnomalieStatutExamenPatchView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AnomalieParAppelView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AnomaliesSummaryView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [DetecterAnomaliesView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [DetecterAnomaliesAutoView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AnomalieParSoumissionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [CdcRedigerView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [CdcReviserView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [VerifierConformiteSoumissionAutoView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [VerifierConformiteSoumissionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [DetecterSaucissonnageView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [DetecterSaucissonnageAutoView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [InternalRegisterActeurView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [InternalSearchUsersView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/readstore/views.py: Error [AuditDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ledger/views.py: Error [CreateAuditLogView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/readstore/views.py: Error [AuditByEntityView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/readstore/views.py: Error [AuditListView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/readstore/views.py: Error [AuditByUserView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/integrity/views.py: Error [VerifyFullChainView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/integrity/views.py: Error [VerifyRecordView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [CreateMembreByResponsableView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [MyServiceView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [NotificationListView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [NotificationDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [SendNotificationView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [MarkNotificationReadView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [MassSendNotificationsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [ListMembresOrganisationView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [CreerResponsableView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [OrganisationResponsableByTypeView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/shared/health.py: Error [ReadyView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [RolePermissionsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [RolePermissionDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Warning [ServiceContractantAchatsSimplesView]: Failed to obtain model through view's queryset due to raised exception. Prevent this either by setting "queryset = Model.objects.none()" on the view, checking for "getattr(self, "swagger_fake_view", False)" in get_queryset() or by simply using @extend_schema. (Exception: 'service_id')
+/app/services/appels_service/views.py: Warning [ServiceContractantAppelsView]: Failed to obtain model through view's queryset due to raised exception. Prevent this either by setting "queryset = Model.objects.none()" on the view, checking for "getattr(self, "swagger_fake_view", False)" in get_queryset() or by simply using @extend_schema. (Exception: 'service_id')
+/app/services/contractant_service/views.py: Error [ServiceContractantCommissionsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [ServiceContractantMembresView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [SoumissionEvaluationsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [UserWatchedAppelDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [UserWatchedAppelsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [UserNotificationsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [MarkAllUserNotificationsReadView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [UserPermissionsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [UserPermissionDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [UserDirectPermissionsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [UserRoleUpdateView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+Warning: enum naming encountered a non-optimally resolvable collision for fields named "statut". The same name has been used for multiple choice sets in multiple components. The collision was resolved with "Statut670Enum". add an entry to ENUM_NAME_OVERRIDES to fix the naming.
+Warning: enum naming encountered a non-optimally resolvable collision for fields named "statut". The same name has been used for multiple choice sets in multiple components. The collision was resolved with "StatutD7eEnum". add an entry to ENUM_NAME_OVERRIDES to fix the naming.
+Warning: enum naming encountered a non-optimally resolvable collision for fields named "statut". The same name has been used for multiple choice sets in multiple components. The collision was resolved with "Statut010Enum". add an entry to ENUM_NAME_OVERRIDES to fix the naming.
+Warning: operationId "api_recours_retrieve" has collisions [('/api/recours/', 'get'), ('/api/recours/{recours_id}/', 'get')]. resolving with numeral suffixes.
+Warning: operationId "api_soumissions_retrieve" has collisions [('/api/soumissions/', 'get'), ('/api/soumissions/{soumission_id}/', 'get')]. resolving with numeral suffixes.
+Warning: operationId "attributions_definitives_retrieve" has collisions [('/attributions-definitives/', 'get'), ('/attributions-definitives/{attribution_definitive_id}/', 'get')]. resolving with numeral suffixes.
+Warning: operationId "attributions_provisoires_retrieve" has collisions [('/attributions-provisoires/', 'get'), ('/attributions-provisoires/{attribution_provisoire_id}/', 'get')]. resolving with numeral suffixes.
+Warning: operationId "documents_retrieve" has collisions [('/documents', 'get'), ('/documents/{id_document}', 'get')]. resolving with numeral suffixes.
+Warning: operationId "evaluations_retrieve" has collisions [('/evaluations', 'get'), ('/evaluations/{evaluation_id}', 'get')]. resolving with numeral suffixes.
+Warning: operationId "ia_anomalies_retrieve" has collisions [('/ia/anomalies', 'get'), ('/ia/anomalies/{anomalie_id}', 'get')]. resolving with numeral suffixes.
+Warning: operationId "notifications_retrieve" has collisions [('/notifications', 'get'), ('/notifications/{notification_id}', 'get')]. resolving with numeral suffixes.
+Warning: operationId "soumissions_retrieve" has collisions [('/soumissions', 'get'), ('/soumissions/{soumission_id}', 'get')]. resolving with numeral suffixes.
+172.30.0.6:59550 - "GET /openapi.json HTTP/1.1" 200
+Internal Server Error: /attributions-definitives/3/
+2026-05-24 10:47:49,401 ERROR [django.request] Internal Server Error: /attributions-definitives/3/
+172.30.0.6:42074 - "GET /attributions-definitives/3/ HTTP/1.1" 500
+Internal Server Error: /attributions-provisoires/4/
+2026-05-24 10:48:01,469 ERROR [django.request] Internal Server Error: /attributions-provisoires/4/
+172.30.0.6:55994 - "GET /attributions-provisoires/4/ HTTP/1.1" 500
+Unauthorized: /attributions-provisoires/4/
+2026-05-24 10:48:42,241 WARNING [django.request] Unauthorized: /attributions-provisoires/4/
+172.30.0.6:44036 - "GET /attributions-provisoires/4/ HTTP/1.1" 401
+Unauthorized: /auth/login
+2026-05-24 10:48:52,958 WARNING [django.request] Unauthorized: /auth/login
+172.30.0.6:50134 - "POST /auth/login HTTP/1.1" 401
+Unauthorized: /auth/login
+2026-05-24 10:48:57,625 WARNING [django.request] Unauthorized: /auth/login
+172.30.0.6:50134 - "POST /auth/login HTTP/1.1" 401
+Unauthorized: /auth/login
+2026-05-24 10:49:15,520 WARNING [django.request] Unauthorized: /auth/login
+172.30.0.6:33178 - "POST /auth/login HTTP/1.1" 401
+Unauthorized: /auth/login
+2026-05-24 10:49:55,557 WARNING [django.request] Unauthorized: /auth/login
+172.30.0.6:37298 - "POST /auth/login HTTP/1.1" 401
+Unauthorized: /auth/login
+2026-05-24 10:50:41,029 WARNING [django.request] Unauthorized: /auth/login
+172.30.0.6:59996 - "POST /auth/login HTTP/1.1" 401
+Unauthorized: /auth/login
+2026-05-24 10:51:04,416 WARNING [django.request] Unauthorized: /auth/login
+172.30.0.6:51968 - "POST /auth/login HTTP/1.1" 401
+Waiting for PostgreSQL at postgres:5432...
+PostgreSQL is ready
+Redis is ready
+Running default migrations...
+Operations to perform:
+  Apply all migrations: acteurs_service, admin, appels_service, auth, auth_service, contenttypes, contractant_service, contrats_service, documents_service, evaluations_service, ia_service, ledger, notifications_service, readstore, recours, sessions, soumissions_app
+Running migrations:
+  No migrations to apply.
+  Your models in app(s): 'appels_service', 'contrats_service' have changes that are not yet reflected in a migration, and so won't be applied.
+  Run 'manage.py makemigrations' to make new migrations, and then re-run 'manage.py migrate' to apply them.
+Single database mode detected; skipping separate ledger/read migration passes
+Ensuring routed runtime tables exist...
+default: all runtime tables present
+ledger: all runtime tables present
+read: all runtime tables present
+Bootstrapping admin if available...
+Initial admin ready: admin@example.com
+[2026-05-24 11:01:55 +0000] [11] [INFO] Starting gunicorn 23.0.0
+[2026-05-24 11:01:55 +0000] [11] [INFO] Listening at: http://0.0.0.0:8000 (11)
+[2026-05-24 11:01:55 +0000] [11] [INFO] Using worker: uvicorn.workers.UvicornWorker
+[2026-05-24 11:01:55 +0000] [12] [INFO] Booting worker with pid: 12
+[2026-05-24 11:01:55 +0000] [13] [INFO] Booting worker with pid: 13
+[2026-05-24 11:01:55 +0000] [14] [INFO] Booting worker with pid: 14
+[2026-05-24 11:01:56 +0000] [12] [INFO] Started server process [12]
+[2026-05-24 11:01:56 +0000] [12] [INFO] Waiting for application startup.
+[2026-05-24 11:01:56 +0000] [12] [INFO] ASGI 'lifespan' protocol appears unsupported.
+[2026-05-24 11:01:56 +0000] [12] [INFO] Application startup complete.
+[2026-05-24 11:01:57 +0000] [13] [INFO] Started server process [13]
+[2026-05-24 11:01:57 +0000] [13] [INFO] Waiting for application startup.
+[2026-05-24 11:01:57 +0000] [13] [INFO] ASGI 'lifespan' protocol appears unsupported.
+[2026-05-24 11:01:57 +0000] [13] [INFO] Application startup complete.
+[2026-05-24 11:01:57 +0000] [14] [INFO] Started server process [14]
+[2026-05-24 11:01:57 +0000] [14] [INFO] Waiting for application startup.
+[2026-05-24 11:01:57 +0000] [14] [INFO] ASGI 'lifespan' protocol appears unsupported.
+[2026-05-24 11:01:57 +0000] [14] [INFO] Application startup complete.
+Unauthorized: /attributions-provisoires/
+2026-05-24 11:02:16,842 WARNING [django.request] Unauthorized: /attributions-provisoires/
+172.30.0.1:45812 - "GET /attributions-provisoires/ HTTP/1.1" 401
+Unauthorized: /attributions-provisoires/1/
+2026-05-24 11:02:16,869 WARNING [django.request] Unauthorized: /attributions-provisoires/1/
+172.30.0.1:45828 - "GET /attributions-provisoires/1/ HTTP/1.1" 401
+Unauthorized: /attributions-provisoires/1/affecter/
+2026-05-24 11:02:16,906 WARNING [django.request] Unauthorized: /attributions-provisoires/1/affecter/
+172.30.0.1:45840 - "POST /attributions-provisoires/1/affecter/ HTTP/1.1" 401
+Unauthorized: /attributions-provisoires/1/valider/
+2026-05-24 11:02:17,286 WARNING [django.request] Unauthorized: /attributions-provisoires/1/valider/
+172.30.0.1:45846 - "POST /attributions-provisoires/1/valider/ HTTP/1.1" 401
+Unauthorized: /attributions-definitives/
+2026-05-24 11:02:17,643 WARNING [django.request] Unauthorized: /attributions-definitives/
+172.30.0.1:45858 - "GET /attributions-definitives/ HTTP/1.1" 401
+Unauthorized: /attributions-definitives/1/
+2026-05-24 11:02:17,676 WARNING [django.request] Unauthorized: /attributions-definitives/1/
+172.30.0.1:45874 - "GET /attributions-definitives/1/ HTTP/1.1" 401
+Not Found: /soumissions/1/contrat/
+2026-05-24 11:02:17,732 WARNING [django.request] Not Found: /soumissions/1/contrat/
+172.30.0.1:45884 - "GET /soumissions/1/contrat/ HTTP/1.1" 404
+Not Found: /soumissions/1/affectation-details/
+2026-05-24 11:02:17,772 WARNING [django.request] Not Found: /soumissions/1/affectation-details/
+172.30.0.1:45892 - "GET /soumissions/1/affectation-details/ HTTP/1.1" 404
+Not Found: /validations/
+2026-05-24 11:02:17,823 WARNING [django.request] Not Found: /validations/
+172.30.0.1:45900 - "GET /validations/ HTTP/1.1" 404
+Not Found: /validations/1/approuver/
+2026-05-24 11:02:17,863 WARNING [django.request] Not Found: /validations/1/approuver/
+172.30.0.1:45906 - "POST /validations/1/approuver/ HTTP/1.1" 404
+Unauthorized: /auth/login
+2026-05-24 11:06:37,631 WARNING [django.request] Unauthorized: /auth/login
+172.30.0.6:37372 - "POST /auth/login HTTP/1.1" 401
+172.30.0.6:33294 - "GET /docs/swagger/ HTTP/1.1" 200
+/app/services/acteurs_service/serializers.py: Warning [DemandeOperateurDetailView > DemandeOperateurDetailSerializer]: unable to resolve type hint for function "get_documents_complets". Consider using a type hint or @extend_schema_field. Defaulting to string.
+/app/services/acteurs_service/views.py: Error [DemandeApprouverView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [DemandeRejeterView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/serializers.py: Warning [ListCommissionExterneView > OrganisationListSerializer]: unable to resolve type hint for function "get_responsable_nom". Consider using a type hint or @extend_schema_field. Defaulting to string.
+/app/services/acteurs_service/views.py: Error [CreerCommissionExterneView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [CreerServiceContractantView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AideRedactionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [AppelOffreSoumissionsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [OperateurSoumissionsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursListCreateView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursAccepterView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursCloturerView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursDecisionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursInstruireView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/apps/recours/presentation/views/recours_views.py: Error [RecoursRejeterView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [SoumissionCreateView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [SoumissionDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [SoumissionAffecterView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [SoumissionDocumentsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/soumissions_app/views.py: Error [EvaluationCreateView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresAnnulerView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [CalculerClassementView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [ClassementView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresCloturerDepotView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresDocumentsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresDocumentDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [AppelOffreEvaluationsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresOuvrirPlisView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresPublierView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresRefuserView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresSoumettreValidationView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [AppelOffresValiderView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [ValiderNotesView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contrats_service/views.py: Error [AttributionDefinitiveListView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contrats_service/views.py: Error [AttributionDefinitiveDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contrats_service/views.py: Error [AttributionProvisoireListView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contrats_service/views.py: Error [AttributionDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contrats_service/views.py: Error [AffecterAttributionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contrats_service/views.py: Error [ValiderAttributionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [AuthChangePasswordView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [AuthForgotPasswordView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [AuthLoginView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [AuthLogoutView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [AuthResetPasswordView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [CommissionEvaluationMembresView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [CommissionEvaluationMembreDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [CommissionExterneMembresView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [CommissionExterneCompetenteView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [CommissionInterneMembresView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [CommissionInterneMembreDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [SoumettreDemandeOperateurView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/documents_service/views.py: Error [DocumentCollectionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/documents_service/views.py: Error [DocumentDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/documents_service/views.py: Error [DocumentDownloadUrlView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [EvaluationView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [EvaluationDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/shared/health.py: Error [HealthView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AnomalieListView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AnomalieDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AnomalieStatutExamenPatchView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AnomalieParAppelView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AnomaliesSummaryView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [DetecterAnomaliesView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [DetecterAnomaliesAutoView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [AnomalieParSoumissionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [CdcRedigerView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [CdcReviserView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [VerifierConformiteSoumissionAutoView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [VerifierConformiteSoumissionView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [DetecterSaucissonnageView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ia_service/views.py: Error [DetecterSaucissonnageAutoView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [InternalRegisterActeurView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [InternalSearchUsersView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/readstore/views.py: Error [AuditDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/ledger/views.py: Error [CreateAuditLogView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/readstore/views.py: Error [AuditByEntityView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/readstore/views.py: Error [AuditListView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/readstore/views.py: Error [AuditByUserView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/integrity/views.py: Error [VerifyFullChainView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/integrity/views.py: Error [VerifyRecordView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [CreateMembreByResponsableView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [MyServiceView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [NotificationListView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [NotificationDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [SendNotificationView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [MarkNotificationReadView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [MassSendNotificationsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [ListMembresOrganisationView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [CreerResponsableView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/acteurs_service/views.py: Error [OrganisationResponsableByTypeView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/shared/health.py: Error [ReadyView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [RolePermissionsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [RolePermissionDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Warning [ServiceContractantAchatsSimplesView]: Failed to obtain model through view's queryset due to raised exception. Prevent this either by setting "queryset = Model.objects.none()" on the view, checking for "getattr(self, "swagger_fake_view", False)" in get_queryset() or by simply using @extend_schema. (Exception: 'service_id')
+/app/services/appels_service/views.py: Warning [ServiceContractantAppelsView]: Failed to obtain model through view's queryset due to raised exception. Prevent this either by setting "queryset = Model.objects.none()" on the view, checking for "getattr(self, "swagger_fake_view", False)" in get_queryset() or by simply using @extend_schema. (Exception: 'service_id')
+/app/services/contractant_service/views.py: Error [ServiceContractantCommissionsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/contractant_service/views.py: Error [ServiceContractantMembresView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/evaluations_service/views.py: Error [SoumissionEvaluationsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [UserWatchedAppelDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/appels_service/views.py: Error [UserWatchedAppelsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [UserNotificationsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/notifications_service/views.py: Error [MarkAllUserNotificationsReadView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [UserPermissionsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [UserPermissionDetailView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [UserDirectPermissionsView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+/app/services/auth_service/views.py: Error [UserRoleUpdateView]: unable to guess serializer. This is graceful fallback handling for APIViews. Consider using GenericAPIView as view base class, if view is under your control. Either way you may want to add a serializer_class (or method). Ignoring view for now.
+Warning: enum naming encountered a non-optimally resolvable collision for fields named "statut". The same name has been used for multiple choice sets in multiple components. The collision was resolved with "Statut010Enum". add an entry to ENUM_NAME_OVERRIDES to fix the naming.
+Warning: enum naming encountered a non-optimally resolvable collision for fields named "statut". The same name has been used for multiple choice sets in multiple components. The collision was resolved with "Statut670Enum". add an entry to ENUM_NAME_OVERRIDES to fix the naming.
+Warning: enum naming encountered a non-optimally resolvable collision for fields named "statut". The same name has been used for multiple choice sets in multiple components. The collision was resolved with "StatutD7eEnum". add an entry to ENUM_NAME_OVERRIDES to fix the naming.
+Warning: operationId "api_recours_retrieve" has collisions [('/api/recours/', 'get'), ('/api/recours/{recours_id}/', 'get')]. resolving with numeral suffixes.
+Warning: operationId "api_soumissions_retrieve" has collisions [('/api/soumissions/', 'get'), ('/api/soumissions/{soumission_id}/', 'get')]. resolving with numeral suffixes.
+Warning: operationId "attributions_definitives_retrieve" has collisions [('/attributions-definitives/', 'get'), ('/attributions-definitives/{attribution_definitive_id}/', 'get')]. resolving with numeral suffixes.
+Warning: operationId "attributions_provisoires_retrieve" has collisions [('/attributions-provisoires/', 'get'), ('/attributions-provisoires/{attribution_provisoire_id}/', 'get')]. resolving with numeral suffixes.
+Warning: operationId "documents_retrieve" has collisions [('/documents', 'get'), ('/documents/{id_document}', 'get')]. resolving with numeral suffixes.
+Warning: operationId "evaluations_retrieve" has collisions [('/evaluations', 'get'), ('/evaluations/{evaluation_id}', 'get')]. resolving with numeral suffixes.
+Warning: operationId "ia_anomalies_retrieve" has collisions [('/ia/anomalies', 'get'), ('/ia/anomalies/{anomalie_id}', 'get')]. resolving with numeral suffixes.
+Warning: operationId "notifications_retrieve" has collisions [('/notifications', 'get'), ('/notifications/{notification_id}', 'get')]. resolving with numeral suffixes.
+Warning: operationId "soumissions_retrieve" has collisions [('/soumissions', 'get'), ('/soumissions/{soumission_id}', 'get')]. resolving with numeral suffixes.
+172.30.0.6:33294 - "GET /openapi.json HTTP/1.1" 200
+Not Found: //auth/login
+2026-05-24 11:07:25,533 WARNING [django.request] Not Found: //auth/login
+172.30.0.6:58858 - "POST //auth/login HTTP/1.1" 404
+Not Found: //auth/login
+2026-05-24 11:07:30,287 WARNING [django.request] Not Found: //auth/login
+172.30.0.6:58858 - "POST //auth/login HTTP/1.1" 404
+Not Found: //auth/login
+2026-05-24 11:08:25,952 WARNING [django.request] Not Found: //auth/login
+172.30.0.6:57740 - "POST //auth/login HTTP/1.1" 404
+Unauthorized: /auth/login
+2026-05-24 11:09:17,037 WARNING [django.request] Unauthorized: /auth/login
+172.30.0.6:46664 - "POST /auth/login HTTP/1.1" 401
+Unauthorized: /auth/login
+2026-05-24 11:11:04,801 WARNING [django.request] Unauthorized: /auth/login
+172.30.0.1:48794 - "POST /auth/login HTTP/1.1" 401
+172.30.0.1:39454 - "POST /auth/login HTTP/1.1" 200
+172.30.0.1:39462 - "GET /attributions-provisoires/ HTTP/1.1" 200
+Internal Server Error: /attributions-provisoires/1/
+2026-05-24 11:12:54,982 ERROR [django.request] Internal Server Error: /attributions-provisoires/1/
+172.30.0.1:39468 - "GET /attributions-provisoires/1/ HTTP/1.1" 500
+Internal Server Error: /attributions-provisoires/1/affecter/
+2026-05-24 11:12:55,050 ERROR [django.request] Internal Server Error: /attributions-provisoires/1/affecter/
+172.30.0.1:39482 - "POST /attributions-provisoires/1/affecter/ HTTP/1.1" 500
+Internal Server Error: /attributions-provisoires/1/valider/
+2026-05-24 11:12:55,339 ERROR [django.request] Internal Server Error: /attributions-provisoires/1/valider/
+172.30.0.1:39490 - "POST /attributions-provisoires/1/valider/ HTTP/1.1" 500
+172.30.0.1:39504 - "GET /attributions-definitives/ HTTP/1.1" 200
+Internal Server Error: /attributions-definitives/1/
+2026-05-24 11:12:55,449 ERROR [django.request] Internal Server Error: /attributions-definitives/1/
+172.30.0.1:39518 - "GET /attributions-definitives/1/ HTTP/1.1" 500
+172.30.0.1:41840 - "POST /auth/login HTTP/1.1" 200
+Internal Server Error: /attributions-provisoires/1/
+2026-05-24 11:14:18,051 ERROR [django.request] Internal Server Error: /attributions-provisoires/1/
+172.30.0.1:41844 - "GET /attributions-provisoires/1/ HTTP/1.1" 500
