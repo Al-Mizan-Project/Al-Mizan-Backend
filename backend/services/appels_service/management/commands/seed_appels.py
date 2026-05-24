@@ -12,7 +12,6 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 
-from acteurs_service.models import OperateurEconomique
 from contractant_service.models import ServiceContractant
 from documents_service.models import Document
 
@@ -402,8 +401,8 @@ class Command(BaseCommand):
             if item.get("operateur_nif")
         )
         operateurs_by_nif = {
-            row.nif: row.id_operateur_economique
-            for row in OperateurEconomique.objects.filter(nif__in=operateur_nifs)
+            nif: idx
+            for idx, nif in enumerate(sorted(operateur_nifs), start=1)
         }
         available_document_ids = list(
             Document.objects.order_by("id_document").values_list("id_document", flat=True)
@@ -411,6 +410,7 @@ class Command(BaseCommand):
         use_seed_documents = bool(available_document_ids)
 
         appel_objects = []
+        execution_statuses = {"brouillon", "publie", "depot_cloture", "plis_ouverts", "annule"}
         for data in APPELS:
             payload = dict(data)
             if service_ids:
@@ -421,6 +421,10 @@ class Command(BaseCommand):
             payload.setdefault("visibilite", "public")
             payload.setdefault("localisation", payload.get("wilaya", "") or "")
 
+            legacy_statut = payload.pop("statut", "brouillon")
+            payload["etat_execution"] = legacy_statut if legacy_statut in execution_statuses else "brouillon"
+            payload["statut"] = "valide"
+
             invited_ids = [
                 operateurs_by_nif[nif]
                 for nif in PRIVATE_AO_INVITES_BY_REFERENCE.get(payload["reference"], [])
@@ -429,7 +433,27 @@ class Command(BaseCommand):
             if invited_ids:
                 payload["visibilite"] = "prive"
 
-            timeline = self._timeline_for_status(data["statut"], now)
+            timeline = self._timeline_for_status(legacy_statut, now)
+
+            type_procedure = str(payload.get("type_procedure", "")).lower()
+            if "restreint" in type_procedure:
+                payload.setdefault("id_doc_cdc", available_document_ids[0] if available_document_ids else 1001)
+                payload.setdefault("id_doc_justification", available_document_ids[1] if len(available_document_ids) > 1 else 1002)
+            if "consultation" in type_procedure:
+                payload.setdefault("id_operateur_choisi", invited_ids[0] if invited_ids else 1)
+                payload.setdefault("id_doc_besoin", available_document_ids[0] if available_document_ids else 1003)
+                payload["date_limite_soumission"] = None
+                payload["date_ouverture_plis"] = None
+                payload["poids_technique"] = None
+                payload["poids_financier"] = None
+            if "gre a gre" in type_procedure or "gre" in type_procedure:
+                payload.setdefault("id_operateur_choisi", invited_ids[0] if invited_ids else 1)
+                payload.setdefault("id_doc_cdc", available_document_ids[0] if available_document_ids else 1001)
+                payload.setdefault("id_doc_justification", available_document_ids[1] if len(available_document_ids) > 1 else 1002)
+                payload["date_limite_soumission"] = None
+                payload["date_ouverture_plis"] = None
+                payload["poids_technique"] = None
+                payload["poids_financier"] = None
             obj, created = AppelOffres.objects.update_or_create(
                 reference=payload["reference"],
                 defaults={**payload, **timeline},

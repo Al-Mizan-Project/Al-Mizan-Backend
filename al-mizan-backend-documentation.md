@@ -7,6 +7,7 @@
 ## Tables
 
 ### `utilisateurs`
+
 - `id_utilisateur` - int, PK
 - `id_role` - int, FK
 - `id_membre` - int, FK
@@ -16,18 +17,22 @@
 - `updated_at` - datetime
 
 ### `role`
+
 - `id_role` - int, PK
 - `nom_role` - varchar(20)
 
 ### `permission`
+
 - `id_permission` - int, PK
 - `nom_permission` - varchar(20)
 
 ### `Permission_role`
+
 - `id_role` - int, FK
 - `id_permission` - int, FK
 
 ## Endpoints
+
 - `POST /auth/login`
 - `POST /auth/refresh`
 - `POST /auth/logout`
@@ -63,15 +68,15 @@
 ## Tables
 
 ### `Organisation`
+
 - `id_organisation` - int, PK
 - `nom_officiel` - varchar(20)
 - `adresse_siege` - varchar(100)
 - `email_contact` - varchar(100)
 - `type_entite` - varchar(30)
 
-
-
 ### `Operateurs_Economiques`
+
 - `id_operateur_economique` - int, PK
 - `nif` - varchar(100)
 - `registre_commerce_num` - varchar(100)
@@ -80,6 +85,7 @@
 - `rib_bancaire` - varchar(100)
 
 ### `membre`
+
 - `id_membre` - int, PK
 - `id_organisation` - int, FK
 - `prenom` - varchar(100)
@@ -90,17 +96,20 @@
 - `updated_at` - datetime
 
 ### `Tutelle`
+
 - `id_tutelle` - int, PK
 - `nom_tutelle` - varchar(255)
 - `identite_autorite` - varchar(255)
 
 ### `Comission_Externe`
+
 - `id_comission_externe` - int, PK
 - `nom_comission` - varchar(100)
 - `niveau_competance` - enum(Communale, de Wilaya, Sectorielle, Nationale)
 - `seuils_competence_financiere` - varchar(255)
 
 ## Endpoints
+
 - `GET /organisations`
 - `POST /organisations`
 - `GET /organisations/{organisation_id}`
@@ -137,33 +146,38 @@
 ## Tables
 
 ### `Comission_evaluation`
+
 - `id_comission` - int, PK
 - `id_service` - int, FK
 - `nom_comission` - varchar(255)
 - `categorie` - varchar(255)
 
 ### `Comission_interne`
+
 - `id_comission_interne` - int, PK
 - `id_service` - int, FK
 - `nom_comission` - varchar(255)
 - `type_comission` - enum(parmanante, adhoc)
 
 ### `Membres_Commission_evaluation`
+
 - `id_membre` - int, FK
 - `id_comission` - int, FK
 
 ### `Membres_Commission_interne`
+
 - `id_membre` - int, FK
 - `id_commision_interne` - int, FK
 
 ### `Services_Contractants`
+
 - `id_service` - int, PK
 - `id_tutelle` - int, FK
 - `categorie` - varchar(255)
 - `code_ordonnateur` - varchar(100)
 
-
 ## Endpoints
+
 - `GET /commissions-evaluation`
 - `POST /commissions-evaluation`
 - `GET /commissions-evaluation/{commission_id}`
@@ -200,6 +214,7 @@
 ## Tables
 
 ### `appels_offres`
+
 - `id_appel_offres` - int, PK
 - `id_service_contractant` - int, FK
 - `reference` - varchar(80)
@@ -225,16 +240,19 @@
 - `updated_at` - datetime
 
 ### `documents_appel`
+
 - `id_document` - int, FK
 - `id_appel_offres` - int, FK
 
 ### `appels_offres_suivis`
+
 - `id` - bigint, PK
 - `id_appel_offres` - int, FK
 - `id_utilisateur` - int
 - `created_at` - datetime
 
 ## Endpoints
+
 - `GET /appels-offres`
 - `POST /appels-offres`
 - `GET /appels-offres/{appel_id}`
@@ -260,6 +278,7 @@
 ## Tables
 
 ### `documents`
+
 - `id_document` - int, PK
 - `related_type` - varchar(30)
 - `nom` - varchar(255)
@@ -272,6 +291,7 @@
 - `uploaded_at` - datetime
 
 ## Endpoints
+
 - `GET /documents`
 - `POST /documents`
 - `GET /documents/{document_id}`
@@ -291,6 +311,7 @@
 ## Tables
 
 ### `soumissions`
+
 - `id_soummision` - int, PK
 - `id_appel_offre` - int, FK
 - `date_soumission` - datetime
@@ -304,10 +325,12 @@
 - `updated_at` - datetime
 
 ### `documents_soumission`
+
 - `id_soummision` - int, FK
 - `id_document` - int, FK
 
 ## Endpoints
+
 - `GET /soumissions`
 - `POST /soumissions`
 - `GET /soumissions/{soumission_id}`
@@ -329,6 +352,7 @@
 ## Tables
 
 ### `Evaluation`
+
 - `id_evalution` - int, PK
 - `id_comission` - int, FK
 - `id_soumission` - int, FK
@@ -339,6 +363,7 @@
 - `updated_at` - datetime
 
 ## Endpoints
+
 - `GET /evaluations`
 - `POST /evaluations`
 - `GET /evaluations/{evaluation_id}`
@@ -357,6 +382,7 @@
 ## Tables
 
 ### `detection_anomalie_ia`
+
 - `id_detection_anomalie_ia` - int, PK
 - `id_appel_offre` - int
 - `id_soumission` - int
@@ -368,6 +394,7 @@
 - `date_detection` - datetime
 
 ## Endpoints
+
 - `POST /ia/anomalies/detecter`
 - `GET /ia/anomalies`
 - `GET /ia/anomalies/{anomalie_id}`
@@ -375,8 +402,124 @@
 - `GET /ia/anomalies/soumission/{soumission_id}`
 - `PATCH /ia/anomalies/{anomalie_id}/statut-examen`
 - `POST /ia/conformite/verifier-soumission/{soumission_id}`
+- `POST /ia/conformite/verifier-soumission-auto/{soumission_id}`
 - `POST /ia/cdc/rediger`
 - `POST /ia/cdc/reviser`
+
+## Analyse de conformite (IA)
+
+### Objectif
+
+- Evaluer la conformite d'une soumission en comparant les documents requis avec les documents fournis.
+- Produire un statut de conformite et un rapport detaille, puis synchroniser le statut vers les services Soumissions et Documents.
+
+### Endpoint manuel
+
+`POST /ia/conformite/verifier-soumission/{soumission_id}`
+
+Payload attendu:
+
+```json
+{
+  "required_documents": ["rc", "nif", "attestation_fiscale"],
+  "provided_documents": [
+    { "id_document": 33, "type_document": "rc", "is_valid": true },
+    { "type_document": "nif", "is_valid": true }
+  ]
+}
+```
+
+Notes:
+
+- `required_documents` et `provided_documents` sont optionnels, mais au moins l'un d'eux doit permettre une analyse utile.
+- `is_valid` est interprete comme suit: si `false`, le document est considere invalide. Si absent, il est traite comme valide.
+
+### Endpoint automatique
+
+`POST /ia/conformite/verifier-soumission-auto/{soumission_id}`
+
+Payload attendu:
+
+```json
+{
+  "id_appel_offre": 77,
+  "provided_document_ids": [9001, 9002],
+  "required_document_ids": [501, 502],
+  "required_documents": ["rc", "nif"],
+  "enforce_validity_checks": true,
+  "perform_ocr": true
+}
+```
+
+Regles:
+
+- `id_appel_offre` et `provided_document_ids` sont obligatoires.
+- Si `required_documents` est fourni, il est utilise tel quel (pas de fetch externe).
+- Si `required_documents` est absent et `required_document_ids` est absent, le service recupere les pieces requises via Appels.
+- `enforce_validity_checks=true` applique la validite basee sur `ia_verif_statut` (Documents).
+- `perform_ocr=true` tente d'extraire du texte pour inferer le type des documents fournis.
+
+### Logique de statut
+
+- `PIECES_MANQUANTES` si des documents requis manquent.
+- `NON_CONFORME` si des documents fournis sont invalides.
+- `CONFORME` si tous les documents requis sont presentes et valides.
+
+Le rapport de conformite retourne:
+
+```json
+{
+  "required_count": 3,
+  "provided_count": 2,
+  "missing_documents": ["attestation_fiscale"],
+  "invalid_documents": [],
+  "conformite_statut": "PIECES_MANQUANTES"
+}
+```
+
+### Reponse (extrait)
+
+```json
+{
+  "id_soumission": 501,
+  "conformite_statut": "CONFORME",
+  "conformite_rapport": {
+    "required_count": 1,
+    "provided_count": 1,
+    "missing_documents": [],
+    "invalid_documents": [],
+    "conformite_statut": "CONFORME"
+  },
+  "next_action": "EVALUATION_TECHNIQUE",
+  "integrations": {
+    "soumission_sync": { "ok": true, "status_code": 200 },
+    "documents_sync": [{ "id_document": 33, "ok": true, "status_code": 200 }]
+  }
+}
+```
+
+Pour l'endpoint automatique, la reponse inclut en plus:
+
+- `id_appel_offre`
+- `analysis_context.required_documents`
+- `analysis_context.required_document_ids`
+- `analysis_context.provided_document_ids`
+- `analysis_context.provided_documents_detected`
+- `analysis_context.ocr` (enabled, processed, succeeded)
+- `analysis_context.missing_metadata_required_ids` / `missing_metadata_provided_ids`
+
+### Integration inter-services
+
+- PATCH Soumissions: `/api/soumissions/{soumission_id}/conformite/`
+  - `conformite_statut`, `conformite_rapport`
+- PATCH Documents: `/api/documents/{id_document}/ia-metadata/`
+  - `ia_verif_statut`: `VALID` si conforme, sinon `ANOMALY`
+  - `ia_verif_details`: rapport serialize (JSON)
+- Les appels inter-services utilisent les entetes internes (ex: `X-Internal-Service-Token`).
+
+### Types de documents reconnus (exemples)
+
+- `rc`, `nif`, `nis`, `ai`, `cnas`, `casnos`, `attestation_fiscale`, `declaration_probite`, `offre_technique`, `offre_financiere`
 
 ---
 
@@ -385,6 +528,7 @@
 ## Tables
 
 ### `Validation`
+
 - `id_validation` - int, PK
 - `id_organisation` - int, FK
 - `id_soumission` - int, FK
@@ -395,6 +539,7 @@
 - `updated_at` - datetime
 
 ### `contrats`
+
 - `id_contrat` - int, PK
 - `id_soumission` - int, FK
 - `id_service_contractants` - int, FK
@@ -405,10 +550,12 @@
 - `updated_at` - datetime
 
 ### `documents_contrats`
+
 - `id_document` - int, FK
 - `id_contrat` - int, FK
 
 ## Endpoints
+
 - `GET /validations`
 - `POST /validations`
 - `GET /validations/{validation_id}`
@@ -434,6 +581,7 @@
 ## Tables
 
 ### `recours`
+
 - `id_recours` - int, PK
 - `id_operateur_economique` - int, FK
 - `id_validation` - int, FK
@@ -445,10 +593,12 @@
 - `traite_par` - int
 
 ### `documents_recours`
+
 - `id_recours` - int, FK
 - `id_document` - int, FK
 
 ## Endpoints
+
 - `GET /recours`
 - `POST /recours`
 - `GET /recours/{recours_id}`
@@ -470,6 +620,7 @@
 ## Tables
 
 ### `notifications`
+
 - `id` - int, PK
 - `utilisateur_id` - int, FK
 - `type_notification` - varchar(50)
@@ -485,6 +636,7 @@
 - `read_at` - datetime
 
 ## Endpoints
+
 - `GET /notifications`
 - `POST /notifications`
 - `GET /notifications/{notification_id}`
@@ -503,6 +655,7 @@
 ## Tables
 
 ### `journaux_audit`
+
 - `id_journaux_audit` - int, PK
 - `utilisateur_id` - int, FK
 - `action` - varchar(100)
@@ -515,6 +668,7 @@
 - `details_action` - text
 
 ## Endpoints
+
 - `GET /journaux-audit/list`
 - `POST /journaux-audit/create`
 - `GET /journaux-audit/{log_id}`
@@ -526,6 +680,7 @@
 ---
 
 # Common Endpoints
+
 - `GET /health`
 - `GET /ready`
 - `GET /openapi.json`

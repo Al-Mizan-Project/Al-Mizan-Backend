@@ -3,6 +3,7 @@ from django.db.models import Q
 from rest_framework.exceptions import NotFound, ValidationError
 
 from auth_service.models import Permission, PermissionRole, Role, Utilisateur, UtilisateurPermission
+from auth_service.rbac import ROLE_PERMISSIONS, normalize_role_name
 
 from .cache import bump_cache_version
 
@@ -42,6 +43,7 @@ def get_permission_or_404(permission_id):
 
 def update_user_role(user_id, role):
     user = get_user_or_404(user_id)
+    _sync_fixed_role_permissions(role)
     user.id_role = role
     user.save(update_fields=["id_role", "updated_at"])
     bump_cache_version()
@@ -95,6 +97,23 @@ def _permissions_by_names(permission_names):
     return permissions
 
 
+def _sync_fixed_role_permissions(role):
+    role_name = normalize_role_name(role.nom_role)
+    permission_names = ROLE_PERMISSIONS.get(role_name)
+    if permission_names is None:
+        return None
+    permissions = []
+    for permission_name in permission_names:
+        permission, _ = Permission.objects.get_or_create(nom_permission=permission_name)
+        permissions.append(permission)
+    PermissionRole.objects.filter(id_role=role).delete()
+    PermissionRole.objects.bulk_create(
+        [PermissionRole(id_role=role, id_permission=permission) for permission in permissions],
+        ignore_conflicts=True,
+    )
+    return permissions
+
+
 @transaction.atomic
 def replace_user_permissions(user_id, permission_ids=None, permission_names=None):
     user = get_user_or_404(user_id)
@@ -135,12 +154,17 @@ def remove_user_permission(user_id, permission_id):
 
 def list_role_permissions(role_id):
     role = get_role_or_404(role_id)
+    _sync_fixed_role_permissions(role)
     return Permission.objects.filter(role_links__id_role=role).distinct().order_by("id_permission")
 
 
 @transaction.atomic
 def replace_role_permissions(role_id, permission_ids):
     role = get_role_or_404(role_id)
+    fixed_permissions = _sync_fixed_role_permissions(role)
+    if fixed_permissions is not None:
+        bump_cache_version()
+        return Permission.objects.filter(role_links__id_role=role).distinct().order_by("id_permission")
     if permission_ids:
         permissions = list(Permission.objects.filter(id_permission__in=permission_ids))
         if len(permissions) != len(set(permission_ids)):
@@ -159,6 +183,8 @@ def replace_role_permissions(role_id, permission_ids):
 
 def add_role_permission(role_id, permission_id):
     role = get_role_or_404(role_id)
+    if normalize_role_name(role.nom_role) in ROLE_PERMISSIONS:
+        raise ValidationError({"role": ["Les permissions de ce rôle sont fixes."]})
     permission = get_permission_or_404(permission_id)
     PermissionRole.objects.get_or_create(id_role=role, id_permission=permission)
     bump_cache_version()
@@ -166,6 +192,8 @@ def add_role_permission(role_id, permission_id):
 
 def remove_role_permission(role_id, permission_id):
     role = get_role_or_404(role_id)
+    if normalize_role_name(role.nom_role) in ROLE_PERMISSIONS:
+        raise ValidationError({"role": ["Les permissions de ce rôle sont fixes."]})
     permission = get_permission_or_404(permission_id)
     deleted_count, _ = PermissionRole.objects.filter(id_role=role, id_permission=permission).delete()
     if deleted_count == 0:
