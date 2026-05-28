@@ -2,6 +2,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
  
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.test import TestCase
 from rest_framework.test import APIClient
  
@@ -344,6 +345,53 @@ class TestDetectAnomaliesAppel(TestCase):
         self.assertIn("MONTANT_INVALID", types_by_id.get(1, []))
         self.assertIn("MONTANT_INVALID", types_by_id.get(2, []))
         self.assertNotIn("MONTANT_INVALID", types_by_id.get(3, []))
+
+    def test_detects_mixed_anomalies_and_updates_global_summary(self):
+        soumissions = [
+            _make_soumission(1, "3500000", date_soumission="2026-05-09T10:00:00"),
+            _make_soumission(2, "600000", date_soumission="2026-05-11T09:00:00"),
+            _make_soumission(3, "1000000", date_soumission="2026-05-09T11:00:00"),
+        ]
+        appel = {
+            "montant_estime": "1000000",
+            "date_limite_soumission": "2026-05-10T23:59:00",
+        }
+
+        result = detect_anomalies_appel(soumissions, appel)
+        types_by_id = {}
+        for anomaly in result["anomalies"]:
+            types_by_id.setdefault(anomaly["id_soumission"], []).append(anomaly["type_anomalie"])
+
+        self.assertIn("MONTANT_TROP_ELEVE", types_by_id.get(1, []))
+        self.assertIn("MONTANT_TROP_BAS", types_by_id.get(2, []))
+        self.assertIn("SOUMISSION_HORS_DELAI", types_by_id.get(2, []))
+        self.assertEqual(result["resume_global"]["total_anomalies"], 3)
+        self.assertEqual(result["resume_global"]["score_severite_global"], 40)
+        self.assertEqual(result["resume_global"]["niveau_global"], "MOYEN")
+
+    def test_detects_rotation_for_current_soumissionnaires(self):
+        soumissions = [
+            _make_soumission(1, "900000", id_soumissionnaire=10),
+            _make_soumission(2, "950000", id_soumissionnaire=20),
+            _make_soumission(3, "1100000", id_soumissionnaire=30),
+        ]
+        historical_wins = [
+            {"id_appel_offre": 1, "id_soumissionnaire": 10, "id_soumission": 100},
+            {"id_appel_offre": 2, "id_soumissionnaire": 20, "id_soumission": 200},
+            {"id_appel_offre": 3, "id_soumissionnaire": 10, "id_soumission": 300},
+            {"id_appel_offre": 4, "id_soumissionnaire": 20, "id_soumission": 400},
+        ]
+
+        result = detect_anomalies_appel(soumissions, BASE_APPEL, historical_wins=historical_wins)
+        rotation_anomalies = [
+            anomaly for anomaly in result["anomalies"]
+            if anomaly["type_anomalie"] == "ROTATION_SOUMISSIONNAIRES"
+        ]
+
+        self.assertEqual({a["id_soumission"] for a in rotation_anomalies}, {1, 2})
+        for anomaly in rotation_anomalies:
+            self.assertEqual(anomaly["soumissions_impliquees"], [1, 2])
+        self.assertEqual(result["resume_global"]["total_anomalies"], 2)
  
  
 # ===========================================================================
@@ -596,10 +644,19 @@ class SaucissonnageDetectionTests(TestCase):
 class IaServiceApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.user = User.objects.create_user(username="ia-user", password="testpassword")
+        self.client.force_authenticate(user=self.user)
         self.authenticate_internal()
 
     def authenticate_internal(self):
         self.client.credentials(HTTP_X_INTERNAL_SERVICE_TOKEN=settings.INTERNAL_SERVICE_TOKEN)
+
+    def test_anomalies_endpoints_require_authenticated_user(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get("/ia/anomalies")
+
+        self.assertEqual(response.status_code, 403)
 
     def test_health_endpoint(self):
         response = self.client.get("/health")
