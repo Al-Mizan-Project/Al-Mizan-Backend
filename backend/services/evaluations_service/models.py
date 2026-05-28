@@ -331,3 +331,43 @@ class Evaluation(models.Model):
                 name="unique_evaluation_par_membre"
             )
         ]
+
+# ── Comité Technique ──────────────────────────────────────────────────────────
+
+class AssignationCT(models.Model):
+    """SC assigns a CT user to a commission — separate from COPEO membership."""
+    id_comission = models.ForeignKey(
+        ComissionEvaluation, on_delete=models.CASCADE, related_name="assignations_ct"
+    )
+    id_utilisateur = models.IntegerField()  # CT member user id
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "assignation_ct"
+        unique_together = [["id_comission", "id_utilisateur"]]
+
+
+class RapportCT(models.Model):
+    """Technical analysis report produced by CT, delivered to COPEO."""
+    AVIS_CHOICES = [
+        ('favorable', 'Favorable'),
+        ('reserve', 'Avec réserves'),
+        ('defavorable', 'Défavorable'),
+    ]
+    id_comission = models.ForeignKey(
+        ComissionEvaluation, on_delete=models.CASCADE, related_name="rapports_ct"
+    )
+    submitted_by = models.IntegerField()  # id_utilisateur CT
+    methodologie = models.TextField(blank=True, default="")
+    equipe = models.TextField(blank=True, default="")
+    materiels = models.TextField(blank=True, default="")
+    anomalies = models.TextField(blank=True, default="")
+    avis_global = models.CharField(max_length=15, choices=AVIS_CHOICES, null=True, blank=True)
+    submitted = models.BooleanField(default=False)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rapport_ct"
+        unique_together = [["id_comission", "submitted_by"]]

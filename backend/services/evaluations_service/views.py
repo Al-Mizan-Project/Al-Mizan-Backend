@@ -9,7 +9,7 @@ from .models import (
     RegistreReception, RegistreIntegriteConfirmation,
     SeanceOuverture, PliOuverture, ParapheMembre,
     ConformiteOffer, CapacitesOffer,
-    EvalTechniqueOffer, EvalFinanciereOffer,
+    EvalTechniqueOffer, EvalFinanciereOffer,AssignationCT, RapportCT,
     ClassementEntry, ProcesVerbal, SignaturePV, SCDecision,
 )
 from .serializers import (
@@ -20,6 +20,7 @@ from .serializers import (
     CapacitesOfferSerializer,
     EvalTechniqueOfferSerializer, LockTechniqueSerializer,
     EvalFinanciereOfferSerializer,
+    RapportCTSerializer,
     ClassementEntrySerializer, EcarterProvisionalSerializer,
     ProcesVerbalSerializer, SignerPVSerializer,
     SCDecisionSerializer, SCDecisionCreateSerializer,
@@ -148,6 +149,14 @@ class DemarrerSeanceView(APIView):
         seance.started_at = now
         seance.anomalie = anomalie
         seance.save()
+        # Auto-create PliOuverture stubs from registre entries
+        from .models import RegistreReception
+        entries = RegistreReception.objects.filter(id_comission=id_comission, hors_delai=False).order_by('numero_ordre')
+        for entry in entries:
+         PliOuverture.objects.get_or_create(
+         seance=seance,
+         id_soumission=entry.id_soumission,
+     )
         return Response(SeanceOuvertureSerializer(seance).data, status=status.HTTP_201_CREATED)
 
 
@@ -165,6 +174,12 @@ class CloturerSeanceView(APIView):
         seance.statut = 'closed'
         seance.closed_at = timezone.now()
         seance.save()
+        # After seance.save() in CloturerSeanceView.post:
+        ProcesVerbal.objects.get_or_create(
+         id_comission=id_comission,
+         type_pv='ouverture',
+         defaults={'locked': False}
+)
         return Response(SeanceOuvertureSerializer(seance).data)
 
 
@@ -181,16 +196,27 @@ class OuvrirPliView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         pli, created = PliOuverture.objects.get_or_create(
-            seance=seance,
-            id_soumission=serializer.validated_data['id_soumission'],
-            defaults={
-                'opened_at': timezone.now(),
-                'montant_declare': serializer.validated_data.get('montant_declare'),
-            }
-        )
+         seance=seance,
+         id_soumission=serializer.validated_data['id_soumission'],
+         defaults={
+          'opened_at': timezone.now(),
+          'montant_declare': serializer.validated_data.get('montant_declare'),
+    }
+)
+        
         if not created:
-            return Response({"error": "Pli déjà ouvert."}, status=status.HTTP_400_BAD_REQUEST)
-
+         if pli.opened_at is not None:
+          return Response({"error": "Pli déjà ouvert."}, status=status.HTTP_400_BAD_REQUEST)
+    # stub exists but not yet opened — open it now
+         pli.opened_at = timezone.now()
+         if not pli.montant_declare:
+           from soumissions_app.models import Soumission
+           try:
+            s = Soumission.objects.get(id_soumission=pli.id_soumission)
+            pli.montant_declare = s.montant_financier
+           except Soumission.DoesNotExist:
+            pass
+         pli.save()
         return Response({
             "id_soumission": pli.id_soumission,
             "opened_at": pli.opened_at,
@@ -617,7 +643,58 @@ class SCDecisionView(APIView):
         )
         return Response(SCDecisionSerializer(decision).data, status=status.HTTP_201_CREATED)
 
+# ── Comité Technique ──────────────────────────────────────────────────────────
 
+class CTCommissionView(APIView):
+    """GET /ct/commission/?utilisateur=<id> — CT fetches their assigned commission."""
+    def get(self, request):
+        id_utilisateur = request.query_params.get('utilisateur')
+        if not id_utilisateur:
+            return Response({"error": "utilisateur param required"}, status=status.HTTP_400_BAD_REQUEST)
+        assignation = AssignationCT.objects.filter(
+            id_utilisateur=id_utilisateur
+        ).select_related('id_comission').first()
+        if not assignation:
+            return Response({"error": "Aucune assignation CT trouvée"}, status=status.HTTP_404_NOT_FOUND)
+        c = assignation.id_comission
+        return Response({
+            'id_comission': c.id_comission,
+            'nom_comission': c.nom_comission,
+            'categorie': c.categorie,
+        })
+
+
+class RapportCTView(APIView):
+    """
+    GET  /commissions/<id>/rapport-ct/         — COPEO reads the CT report
+    POST /commissions/<id>/rapport-ct/         — CT saves/submits their report
+    """
+    def get(self, request, id_comission):
+        rapport = RapportCT.objects.filter(id_comission=id_comission).first()
+        if not rapport:
+            return Response(None)
+        return Response(RapportCTSerializer(rapport).data)
+
+    def post(self, request, id_comission):
+        c = _get_commission_or_404(id_comission)
+        if not c:
+            return Response({"error": "Commission introuvable"}, status=status.HTTP_404_NOT_FOUND)
+        id_utilisateur = request.data.get('submitted_by')
+        if not id_utilisateur:
+            return Response({"error": "submitted_by requis"}, status=status.HTTP_400_BAD_REQUEST)
+        rapport, _ = RapportCT.objects.get_or_create(
+            id_comission=c,
+            submitted_by=id_utilisateur,
+        )
+        for field in ['methodologie', 'equipe', 'materiels', 'anomalies', 'avis_global']:
+            if field in request.data:
+                setattr(rapport, field, request.data[field])
+        if request.data.get('submitted'):
+            rapport.submitted = True
+            from django.utils import timezone
+            rapport.submitted_at = timezone.now()
+        rapport.save()
+        return Response(RapportCTSerializer(rapport).data)
 # ── Legacy endpoints kept for backward compat ────────────────────────────────
 
 class EvaluationView(APIView):
@@ -662,3 +739,126 @@ class EvaluationDetailView(APIView):
             return Response({"error": "Évaluation non trouvée"}, status=status.HTTP_404_NOT_FOUND)
         e.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+    
+    
+class CommissionStateView(APIView):
+    """
+    GET /commissions/<id_comission>/state/
+    Aggregates full commission state into one payload for frontend polling.
+    """
+    def get(self, request, id_comission):
+        c = _get_commission_or_404(id_comission)
+        rapport_ct = RapportCT.objects.filter(id_comission=id_comission).first()
+        if not c:
+            return Response({"error": "Commission introuvable"}, status=status.HTTP_404_NOT_FOUND)
+        from appels_service.models import AppelOffres
+        appel = AppelOffres.objects.filter(commission_id=str(id_comission)).first()
+        registre = RegistreReception.objects.filter(id_comission=id_comission).order_by('numero_ordre')
+        integrite = RegistreIntegriteConfirmation.objects.filter(id_comission=id_comission).first()
+
+        seance = SeanceOuverture.objects.filter(id_comission=id_comission).first()
+        plis = list(PliOuverture.objects.filter(seance=seance)) if seance else []
+        all_paraphes = list(ParapheMembre.objects.filter(pli__seance=seance)) if seance else []
+
+        conformites = ConformiteOffer.objects.filter(id_comission=id_comission)
+        capacites = CapacitesOffer.objects.filter(id_comission=id_comission)
+        evals_tech = EvalTechniqueOffer.objects.filter(id_comission=id_comission)
+        evals_fin = EvalFinanciereOffer.objects.filter(id_comission=id_comission)
+        classement = ClassementEntry.objects.filter(id_comission=id_comission).order_by('rang')
+
+        pv_ouverture = ProcesVerbal.objects.filter(id_comission=id_comission, type_pv='ouverture').first()
+        pv_evaluation = ProcesVerbal.objects.filter(id_comission=id_comission, type_pv='evaluation').first()
+        sc_decision = SCDecision.objects.filter(id_comission=id_comission).order_by('-decided_at').first()
+
+        membres = MembresCommissionEvaluation.objects.filter(id_comission=id_comission)
+
+        from soumissions_app.models import Soumission as SoumissionModel
+
+        soumission_map = {
+            s.id_soumission: s
+            for s in SoumissionModel.objects.filter(
+            id_soumission__in=[p.id_soumission for p in plis]
+      )
+}
+        registre_map = {r.id_soumission: r for r in registre}
+
+        plis_data = []
+        for p in plis:
+          s = soumission_map.get(p.id_soumission)
+          r = registre_map.get(p.id_soumission)
+          plis_data.append({
+        'id': p.id,
+        'id_soumission': p.id_soumission,
+        'nom_oe': r.nom_oe if r else None,
+        'opened_at': p.opened_at,
+        'montant_declare': str(p.montant_declare) if p.montant_declare else (
+            str(s.montant_financier) if s and s.montant_financier else None
+        ),
+        'document_ids': s.document_ids if s else [],
+        'paraphes': [
+            {'id_utilisateur': ph.id_utilisateur, 'paraphed_at': ph.paraphed_at}
+            for ph in all_paraphes if ph.pli_id == p.id
+        ],
+    })
+
+        payload = {
+            'commission': ComissionEvaluationSerializer(c).data,
+            'rapport_ct': RapportCTSerializer(rapport_ct).data if rapport_ct else None,
+            'membres': [
+                {'id': m.id, 'id_utilisateur': m.id_utilisateur, 'role_label': m.role_label}
+                for m in membres
+            ],
+            'registre': {
+                'entries': RegistreReceptionSerializer(registre, many=True).data,
+                'integrite_confirmed': integrite is not None,
+                'integrite_confirmed_at': integrite.confirmed_at if integrite else None,
+            },
+            'seance': {
+                'data': SeanceOuvertureSerializer(seance).data if seance else None,
+                'plis': plis_data,
+            },
+            'conformites': ConformiteOfferSerializer(conformites, many=True).data,
+            'capacites': CapacitesOfferSerializer(capacites, many=True).data,
+            'evals_technique': EvalTechniqueOfferSerializer(evals_tech, many=True).data,
+            'evals_financiere': EvalFinanciereOfferSerializer(evals_fin, many=True).data,
+            'classement': ClassementEntrySerializer(classement, many=True).data,
+            'pvs': {
+                'ouverture': ProcesVerbalSerializer(pv_ouverture).data if pv_ouverture else None,
+                'evaluation': ProcesVerbalSerializer(pv_evaluation).data if pv_evaluation else None,
+            },
+            'sc_decision': SCDecisionSerializer(sc_decision).data if sc_decision else None,
+            'appel': {
+             'methodology': appel.methodology if appel else 'weighted',
+             'poids_technique': int(appel.poids_technique) if appel else 60,
+             'poids_financier': int(appel.poids_financier) if appel else 40,
+             'seuil_technique': int(appel.seuil_technique) if appel else 70,
+             'montant_estime': float(appel.montant_estime) if appel else None,
+} if appel else None,
+        }
+
+        return Response(payload)
+    
+class CommissionByMembreView(APIView):
+    """
+    GET /commissions/?membre=<id_utilisateur>
+    Returns the commission the logged-in member belongs to.
+    """
+    def get(self, request):
+        id_utilisateur = request.query_params.get('membre')
+        if not id_utilisateur:
+            return Response({"error": "membre param required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        membership = MembresCommissionEvaluation.objects.filter(
+            id_utilisateur=id_utilisateur
+        ).select_related('id_comission').first()
+        
+        if not membership:
+            return Response({"error": "Aucune commission trouvée pour ce membre"}, status=status.HTTP_404_NOT_FOUND)
+        
+        commission = membership.id_comission
+        return Response({
+            'id_comission': commission.id_comission,
+            'nom_comission': commission.nom_comission,
+            'categorie': commission.categorie,
+            'role_label': membership.role_label,
+        })

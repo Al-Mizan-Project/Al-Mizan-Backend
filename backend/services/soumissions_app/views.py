@@ -452,3 +452,20 @@ class SoumissionAffecterView(APIView):
         "id_comission": id_comission,
         "created": created,
      }, status=status.HTTP_201_CREATED)
+
+class SoumissionsByCommissionView(APIView):
+    """
+    GET /soumissions/by-commission/<id_comission>/
+    Returns all soumissions assigned to a given commission.
+    """
+    def get(self, request, id_comission):
+        soumission_ids = SoumissionEvaluateur.objects.filter(
+            id_comission=id_comission
+        ).values_list('soumission_id', flat=True)
+
+        queryset = Soumission.objects.filter(
+            id_soumission__in=soumission_ids
+        ).order_by('-date_soumission')
+
+        serializer = SoumissionListSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

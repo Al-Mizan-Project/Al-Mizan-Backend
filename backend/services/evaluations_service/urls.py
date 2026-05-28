@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     HealthView,
     CommissionDetailView,
+    CommissionStateView, 
     RegistreReceptionListView, ConfirmerIntegriteView,
     SeanceOuvertureView, DemarrerSeanceView, CloturerSeanceView,
     OuvrirPliView, ParapherPliView,
@@ -12,7 +13,8 @@ from .views import (
     ClassementView, CalculerClassementView, EcarterProvisionalView,
     PVView, SignerPVView, LockPVView,
     SoumettreAuSCView, SCDecisionView,
-    # Legacy
+     CommissionByMembreView,
+     CTCommissionView, RapportCTView,
     EvaluationView, EvaluationDetailView,
 )
 
@@ -21,6 +23,10 @@ urlpatterns = [
 
     # Commission
     path('commissions/<int:id_comission>/', CommissionDetailView.as_view()),
+    path('commissions/<int:id_comission>/state/', CommissionStateView.as_view()),  # ADD THIS
+    path('commissions/', CommissionByMembreView.as_view()),  # add — note no id, query param based
+    path('ct/commission/', CTCommissionView.as_view()),
+    path('commissions/<int:id_comission>/rapport-ct/', RapportCTView.as_view()),
 
     # Step 1 — Registre
     path('commissions/<int:id_comission>/registre/', RegistreReceptionListView.as_view()),

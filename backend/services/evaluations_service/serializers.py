@@ -151,3 +151,16 @@ class SCDecisionCreateSerializer(serializers.Serializer):
         if attrs['decision'] == 'rejected' and not attrs.get('motif_rejet', '').strip():
             raise serializers.ValidationError({"motif_rejet": "Motif obligatoire en cas de rejet."})
         return attrs
+    
+
+class AssignationCTSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AssignationCT
+        fields = ['id', 'id_comission', 'id_utilisateur', 'assigned_at']
+
+class RapportCTSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RapportCT
+        fields = ['id', 'id_comission', 'submitted_by', 'methodologie', 'equipe',
+                  'materiels', 'anomalies', 'avis_global', 'submitted', 'submitted_at',
+                  'created_at', 'updated_at']
