@@ -3,7 +3,7 @@ from .models import (
     ComissionEvaluation, MembresCommissionEvaluation, Evaluation,
     RegistreReception, RegistreIntegriteConfirmation,
     SeanceOuverture, PliOuverture, ParapheMembre,
-    ConformiteOffer, CapacitesOffer,
+    ConformiteOffer, CapacitesOffer, AssignationCT ,RapportCT ,
     EvalTechniqueOffer, EvalFinanciereOffer,
     ClassementEntry, ProcesVerbal, SignaturePV, SCDecision,
 )

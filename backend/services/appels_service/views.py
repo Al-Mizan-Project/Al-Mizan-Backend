@@ -1,7 +1,7 @@
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -100,6 +100,11 @@ class CachedRetrieveMixin:
 class AppelOffresListCreateView(CachedListMixin, ListCreateAPIView):
     cache_namespace = "appels-offres"
 
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
     def get_queryset(self):
         statut = self.request.query_params.get("statut", "").strip() or None
         search = self.request.query_params.get("search", "").strip() or None
@@ -130,6 +135,11 @@ class AppelOffresRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDes
     lookup_field = "id_appel_offres"
     lookup_url_kwarg = "appel_id"
 
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
     def get_queryset(self):
         return appels_offres_queryset(request=self.request)
 
@@ -147,8 +157,16 @@ class AppelOffresRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDes
         bump_cache_version()
 
 
+# ── Achats Simples ────────────────────────────────────────────────────
+
+
 class AchatSimpleListCreateView(CachedListMixin, ListCreateAPIView):
     cache_namespace = "achats-simples"
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         statut = self.request.query_params.get("statut", "").strip() or None
@@ -175,6 +193,11 @@ class AchatSimpleRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDes
     lookup_field = "id_achat_simple"
     lookup_url_kwarg = "achat_id"
 
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
     def get_queryset(self):
         return achats_simples_queryset()
 
@@ -193,9 +216,12 @@ class AchatSimpleRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDes
 
 
 # ── Appel workflow actions ────────────────────────────────────────────
+# These always require authentication
 
 
 class AppelOffresPublierView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, appel_id):
         appel = action_publier(appel_id)
         bump_cache_version()
@@ -203,6 +229,8 @@ class AppelOffresPublierView(APIView):
 
 
 class AppelOffresCloturerDepotView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, appel_id):
         appel = action_cloturer_depot(appel_id)
         bump_cache_version()
@@ -210,6 +238,8 @@ class AppelOffresCloturerDepotView(APIView):
 
 
 class AppelOffresOuvrirPlisView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, appel_id):
         appel = action_ouvrir_plis(appel_id)
         bump_cache_version()
@@ -217,13 +247,15 @@ class AppelOffresOuvrirPlisView(APIView):
 
 
 class AppelOffresAnnulerView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, appel_id):
         appel = action_annuler(appel_id)
         bump_cache_version()
         return Response(AppelOffresSerializer(appel).data)
 
 
-# ── Validation workflow actions ─────────────────────────────────────
+# ── Validation workflow actions ───────────────────────────────────────
 
 
 def _resolve_validated_by(request):
@@ -234,6 +266,8 @@ def _resolve_validated_by(request):
 
 
 class AppelOffresSoumettreValidationView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, appel_id):
         validated_by = _resolve_validated_by(request)
         appel = action_soumettre_validation(appel_id, validated_by=validated_by)
@@ -242,6 +276,8 @@ class AppelOffresSoumettreValidationView(APIView):
 
 
 class AppelOffresValiderView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, appel_id):
         validated_by = _resolve_validated_by(request)
         appel = action_valider(appel_id, validated_by=validated_by)
@@ -250,6 +286,8 @@ class AppelOffresValiderView(APIView):
 
 
 class AppelOffresRefuserView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, appel_id):
         validated_by = _resolve_validated_by(request)
         appel = action_refuser(appel_id, validated_by=validated_by)
@@ -261,6 +299,11 @@ class AppelOffresRefuserView(APIView):
 
 
 class AppelOffresDocumentsView(APIView):
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
     def get(self, request, appel_id):
         query_string = request.META.get("QUERY_STRING", "")
         cached = read_cached("appel-documents", str(appel_id), query_string)
@@ -273,6 +316,8 @@ class AppelOffresDocumentsView(APIView):
 
 
 class AppelOffresDocumentDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, appel_id, document_id):
         add_document_to_appel(appel_id=appel_id, document_id=document_id)
         bump_cache_version()
@@ -284,13 +329,18 @@ class AppelOffresDocumentDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-# ── Filter by service contractant ─────────────────────────────────────
+# ── Filter by service contractant ────────────────────────────────────
 
 
 class ServiceContractantAppelsView(CachedListMixin, ListCreateAPIView):
     cache_namespace = "service-appels"
     serializer_class = AppelOffresSerializer
     http_method_names = ["get", "head", "options"]
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         return appels_by_service_queryset(self.kwargs["service_id"])
@@ -312,6 +362,11 @@ class ServiceContractantAchatsSimplesView(CachedListMixin, ListCreateAPIView):
     serializer_class = AchatSimpleSerializer
     http_method_names = ["get", "head", "options"]
 
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
     def get_queryset(self):
         return achats_simples_by_service_queryset(self.kwargs["service_id"])
 
@@ -327,6 +382,9 @@ class ServiceContractantAchatsSimplesView(CachedListMixin, ListCreateAPIView):
         return response
 
 
+# ── User watched appels ───────────────────────────────────────────────
+
+
 def _assert_user_scope(request, user_id):
     auth_user_id = getattr(request.user, "id_utilisateur", None)
     if auth_user_id is not None and int(auth_user_id) != int(user_id):
@@ -334,6 +392,8 @@ def _assert_user_scope(request, user_id):
 
 
 class UserWatchedAppelsView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, user_id):
         _assert_user_scope(request, user_id)
         watched = list_watched_appels_for_user(user_id)
@@ -342,6 +402,8 @@ class UserWatchedAppelsView(APIView):
 
 
 class UserWatchedAppelDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, user_id, appel_id):
         _assert_user_scope(request, user_id)
         watched = is_appel_watched_by_user(appel_id=appel_id, user_id=user_id)
