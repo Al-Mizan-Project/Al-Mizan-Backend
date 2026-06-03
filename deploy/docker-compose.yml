@@ -111,6 +111,8 @@ services:
         condition: service_started
       create_bucket:
         condition: service_completed_successfully
+    volumes:
+      - ../backend:/app
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     restart: unless-stopped
@@ -148,6 +150,8 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-admin_almizan}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-SecurePassword123!}
       MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-almizan-documents}
+    volumes:
+      - ../backend:/app
     depends_on:
       postgres:
         condition: service_healthy
