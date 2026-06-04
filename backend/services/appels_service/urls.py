@@ -23,7 +23,6 @@ from .views import (
     CommissionExterneDossiersView,
     CommissionAppelsUnifiedView,
 )
-from .debug_views import DebugAuthView
 
 
 from rest_framework.views import APIView
@@ -38,8 +37,7 @@ class CacheFlushView(APIView):
         return Response({"status": "cache flushed"})
 
 urlpatterns = [
-    # Debug endpoint
-    path("debug/auth", DebugAuthView.as_view()),
+    
     # Achats simples - dedicated endpoints
     path("achats-simples", AchatSimpleListCreateView.as_view()),
     path("achats-simples/<int:achat_id>", AchatSimpleRetrieveUpdateDeleteView.as_view()),
