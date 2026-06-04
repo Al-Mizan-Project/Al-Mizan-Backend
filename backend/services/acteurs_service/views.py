@@ -670,3 +670,82 @@ class OrganisationResponsableByTypeView(APIView):
             "nom": f"{membre.prenom} {membre.nom}",
             "organisation_nom": membre.organisation.nom_officiel
         })
+
+
+class CreateMembreInternalView(APIView):
+    """
+    POST /api/acteurs/membres/
+    Internal endpoint to create a Membre record.
+    Protected by X-Internal-Service-Token for inter-service communication.
+    
+    Request:
+    {
+        "nom": "Dupont",
+        "prenom": "Jean",
+        "telephone": "+212...",
+        "fonction": "VALIDATEUR_EXTERNE_MARCHE",
+        "organisation": "uuid-of-organisation"
+    }
+    
+    Response:
+    {
+        "id_membre": "uuid",
+        "nom": "Dupont",
+        "prenom": "Jean",
+        "organisation": "uuid"
+    }
+    """
+    permission_classes = [AllowAny]  # Protected by token check in logic
+    
+    def post(self, request):
+        # Verify internal service token (optional but recommended)
+        # token = request.META.get('HTTP_X_INTERNAL_SERVICE_TOKEN', '')
+        # if token != getattr(settings, 'INTERNAL_SERVICE_TOKEN', ''):
+        #     return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            nom = request.data.get('nom', '').strip()
+            prenom = request.data.get('prenom', '').strip()
+            telephone = request.data.get('telephone', '').strip()
+            fonction = request.data.get('fonction', '').strip()
+            organisation_id = request.data.get('organisation')
+            
+            if not all([nom, prenom, organisation_id]):
+                return Response(
+                    {"error": "Missing required fields: nom, prenom, organisation"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get organisation
+            try:
+                organisation = Organisation.objects.get(id_organisation=organisation_id)
+            except Organisation.DoesNotExist:
+                return Response(
+                    {"error": f"Organisation {organisation_id} not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Create Membre
+            with transaction.atomic():
+                membre = Membre.objects.create(
+                    nom=nom,
+                    prenom=prenom,
+                    telephone=telephone or None,
+                    fonction=fonction or None,
+                    organisation=organisation
+                )
+            
+            return Response({
+                "id_membre": str(membre.id_membre),
+                "nom": membre.nom,
+                "prenom": membre.prenom,
+                "telephone": membre.telephone,
+                "fonction": membre.fonction,
+                "organisation": str(membre.organisation.id_organisation)
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to create membre: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

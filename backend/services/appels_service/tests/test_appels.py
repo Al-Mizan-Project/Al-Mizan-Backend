@@ -418,6 +418,145 @@ class AppelOffresDocumentsTest(AppelsServiceTestCase):
         self.assertEqual(response.status_code, 204)
         self.assertEqual(DocumentsAppel.objects.count(), 0)
 
+
+class CommissionDashboardEndpointsTest(AppelsServiceTestCase):
+    def setUp(self):
+        super().setUp()
+
+        self.service = self._create_service_contractant()
+        self.internal_member_id = 123
+        self.external_member_id = 456
+
+        from contractant_service.models import MembresCommissionInterne, MembresCommissionExterne
+
+        MembresCommissionInterne.objects.create(
+            id_membre=self.internal_member_id,
+            id_service=self.service,
+        )
+
+        # Use the first external commission created in the base test setup.
+        external_commission = CommissionExterne.objects.first()
+        MembresCommissionExterne.objects.create(
+            id_membre=self.external_member_id,
+            id_comission_externe=external_commission,
+        )
+
+    def _create_service_contractant(self):
+        from contractant_service.models import ServiceContractant
+
+        return ServiceContractant.objects.create(
+            id_tutelle=1,
+            categorie="Test",
+            code_ordonnateur="ORD-123",
+        )
+
+    def test_commission_interne_dashboard_returns_en_attente(self):
+        appel = make_appel(
+            commission_id=str(self.service.id_service),
+            reference="AO-CI-001",
+            statut="non_valide",
+        )
+
+        response = self.client.get(f"/appels-offres/commission-interne/dossiers?user_id={self.internal_member_id}")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertIn("stats", payload)
+        self.assertEqual(payload["stats"]["enAttente"], 1)
+        self.assertEqual(payload["stats"]["pret"], 0)
+        self.assertEqual(len(payload["appels"]), 1)
+        self.assertEqual(payload["appels"][0]["status"], "En Attente")
+
+    def test_commission_externe_dashboard_returns_empty_for_missing_membership(self):
+        response = self.client.get("/appels-offres/commission-externe/dossiers?user_id=999")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["appels"], [])
+        self.assertEqual(payload["stats"]["enAttente"], 0)
+        self.assertIn("detail", payload)
+
+    def test_commission_externe_dashboard_returns_matching_appel(self):
+        external_commission = CommissionExterne.objects.first()
+        appel = make_appel(
+            reference="AO-CE-001",
+            commission_id=str(external_commission.organisation_id),
+            statut="non_valide",
+        )
+
+        response = self.client.get(f"/appels-offres/commission-externe/dossiers?user_id={self.external_member_id}")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["appels"]), 1)
+        self.assertEqual(payload["appels"][0]["status"], "En Attente")
+
+    def test_commission_externe_dashboard_accepts_uuid_user_id(self):
+        external_commission = CommissionExterne.objects.first()
+        make_appel(
+            reference="AO-CE-002",
+            commission_id=str(external_commission.organisation_id),
+            statut="non_valide",
+        )
+
+        # Use a UUID whose last segment encodes the external member integer ID 456.
+        user_uuid = "00000000-0000-0000-0000-0000000001c8"
+        response = self.client.get(f"/appels-offres/commission-externe/dossiers?user_id={user_uuid}")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["appels"]), 1)
+        self.assertEqual(payload["appels"][0]["status"], "En Attente")
+
+    def test_commission_unified_dashboard_internal_role(self):
+        make_appel(
+            commission_id=str(self.service.id_service),
+            reference="AO-UN-INT-001",
+            statut="non_valide",
+        )
+
+        response = self.client.get(
+            f"/appels-offres/commission/dossiers?user_id={self.internal_member_id}&role=RESP_VALID_INTERN"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["stats"]["enAttente"], 1)
+        self.assertEqual(payload["appels"][0]["status"], "En Attente")
+
+    def test_commission_unified_dashboard_internal_role_with_membre_id(self):
+        make_appel(
+            commission_id=str(self.service.id_service),
+            reference="AO-UN-INT-002",
+            statut="non_valide",
+        )
+
+        response = self.client.get(
+            f"/appels-offres/commission/dossiers?membre_id={self.internal_member_id}&role=RESP_VALID_INTERN"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["stats"]["enAttente"], 1)
+        self.assertEqual(payload["appels"][0]["status"], "En Attente")
+
+    def test_commission_unified_dashboard_external_role(self):
+        external_commission = CommissionExterne.objects.first()
+        make_appel(
+            reference="AO-UN-EXT-001",
+            commission_id=str(external_commission.organisation_id),
+            statut="non_valide",
+        )
+
+        response = self.client.get(
+            f"/appels-offres/commission/dossiers?user_id={self.external_member_id}&role=RESP_CM"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["stats"]["enAttente"], 1)
+        self.assertEqual(payload["appels"][0]["status"], "En Attente")
+
+
+class AppelOffresDocumentsExtraTest(AppelsServiceTestCase):
+    def setUp(self):
+        super().setUp()
+        self.appel = make_appel(reference="AO-DOC-002")
+
     def test_remove_document_not_found(self):
         response = self.client.delete(
             f"/appels-offres/{self.appel.id_appel_offres}/documents/99999"

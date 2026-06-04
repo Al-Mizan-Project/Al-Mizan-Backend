@@ -39,6 +39,7 @@ def apply_user_claims(token, user):
     token["permissions"] = user_permission_names(user)
 
 
+
 class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
