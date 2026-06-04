@@ -13,6 +13,7 @@ class AttributionSerializer(serializers.ModelSerializer):
     """Full read serializer — used for list and detail views."""
 
     soumission_id = serializers.SerializerMethodField()
+    id_soumissionnaire = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
     delayDays = serializers.SerializerMethodField()
     validationDeadline = serializers.SerializerMethodField()
@@ -23,6 +24,15 @@ class AttributionSerializer(serializers.ModelSerializer):
             soumission = obj.soumission
             if soumission is not None:
                 return soumission.id_soumission
+        except Exception:
+            pass
+        return None
+
+    def get_id_soumissionnaire(self, obj):
+        try:
+            soumission = obj.soumission
+            if soumission is not None:
+                return soumission.id_soumissionnaire
         except Exception:
             pass
         return None
@@ -71,6 +81,7 @@ class AttributionSerializer(serializers.ModelSerializer):
             "id",
             "service_contractant_id",
             "soumission_id",
+            "id_soumissionnaire",
             "appel_id",
             "commission_id",
             "validated_by",

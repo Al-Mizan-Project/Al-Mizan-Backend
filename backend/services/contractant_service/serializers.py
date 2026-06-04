@@ -161,10 +161,14 @@ class MembresCommissionEvaluationSerializer(serializers.ModelSerializer):
 class MembresCommissionInterneSerializer(serializers.ModelSerializer):
     id_service = serializers.IntegerField(source="id_service_id", read_only=True)
     id_utilisateur = serializers.SerializerMethodField()
+    nom = serializers.SerializerMethodField()
+    prenom = serializers.SerializerMethodField()
+    fonction = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
 
     class Meta:
         model = MembresCommissionInterne
-        fields = ["id", "id_membre", "id_service", "id_utilisateur"]
+        fields = ["id", "id_membre", "id_service", "id_utilisateur", "nom", "prenom", "fonction", "role"]
         read_only_fields = ["id"]
     
     def get_id_utilisateur(self, obj):
@@ -176,14 +180,50 @@ class MembresCommissionInterneSerializer(serializers.ModelSerializer):
         except Exception:
             return None
 
+    def get_nom(self, obj):
+        try:
+            from acteurs_service.models import Membre
+            membre = Membre.objects.filter(id_membre=obj.id_membre).first()
+            return membre.nom if membre else None
+        except Exception:
+            return None
+
+    def get_prenom(self, obj):
+        try:
+            from acteurs_service.models import Membre
+            membre = Membre.objects.filter(id_membre=obj.id_membre).first()
+            return membre.prenom if membre else None
+        except Exception:
+            return None
+
+    def get_fonction(self, obj):
+        try:
+            from acteurs_service.models import Membre
+            membre = Membre.objects.filter(id_membre=obj.id_membre).first()
+            return membre.fonction if membre else None
+        except Exception:
+            return None
+
+    def get_role(self, obj):
+        try:
+            from auth_service.models import Utilisateur
+            user = Utilisateur.objects.select_related('id_role').filter(id_membre=obj.id_membre).first()
+            return user.id_role.nom_role if user and user.id_role else None
+        except Exception:
+            return None
+
 
 class MembresCommissionExterneSerializer(serializers.ModelSerializer):
     id_commission_externe = serializers.UUIDField(source="id_comission_externe_id", read_only=True)
     id_utilisateur = serializers.SerializerMethodField()
+    nom = serializers.SerializerMethodField()
+    prenom = serializers.SerializerMethodField()
+    fonction = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
 
     class Meta:
         model = MembresCommissionExterne
-        fields = ["id", "id_membre", "id_commission_externe", "id_utilisateur"]
+        fields = ["id", "id_membre", "id_commission_externe", "id_utilisateur", "nom", "prenom", "fonction", "role"]
         read_only_fields = ["id"]
     
     def get_id_utilisateur(self, obj):
@@ -192,5 +232,37 @@ class MembresCommissionExterneSerializer(serializers.ModelSerializer):
             from auth_service.models import Utilisateur
             user = Utilisateur.objects.filter(id_membre=obj.id_membre).first()
             return user.id_utilisateur if user else None
+        except Exception:
+            return None
+
+    def get_nom(self, obj):
+        try:
+            from acteurs_service.models import Membre
+            membre = Membre.objects.filter(id_membre=obj.id_membre).first()
+            return membre.nom if membre else None
+        except Exception:
+            return None
+
+    def get_prenom(self, obj):
+        try:
+            from acteurs_service.models import Membre
+            membre = Membre.objects.filter(id_membre=obj.id_membre).first()
+            return membre.prenom if membre else None
+        except Exception:
+            return None
+
+    def get_fonction(self, obj):
+        try:
+            from acteurs_service.models import Membre
+            membre = Membre.objects.filter(id_membre=obj.id_membre).first()
+            return membre.fonction if membre else None
+        except Exception:
+            return None
+
+    def get_role(self, obj):
+        try:
+            from auth_service.models import Utilisateur
+            user = Utilisateur.objects.select_related('id_role').filter(id_membre=obj.id_membre).first()
+            return user.id_role.nom_role if user and user.id_role else None
         except Exception:
             return None
