@@ -13,7 +13,7 @@ from .models import (
     ClassementEntry, ProcesVerbal, SignaturePV, SCDecision,
 )
 from .serializers import (
-    ComissionEvaluationSerializer, EvaluationSerializer,
+    ComissionEvaluationSerializer, MembresCommissionSerializer, AssignationCTSerializer, EvaluationSerializer,
     RegistreReceptionSerializer, ConfirmerIntegriteSerializer,
     SeanceOuvertureSerializer, OuvrirPliSerializer, ParapheSerializer,
     ConformiteOfferSerializer, DemandeComplementSerializer,
@@ -50,6 +50,53 @@ class CommissionDetailView(APIView):
         if not c:
             return Response({"error": "Commission introuvable"}, status=status.HTTP_404_NOT_FOUND)
         return Response(ComissionEvaluationSerializer(c).data)
+
+    def delete(self, request, id_comission):
+        c = _get_commission_or_404(id_comission)
+        if not c:
+            return Response({"error": "Commission introuvable"}, status=status.HTTP_404_NOT_FOUND)
+        c.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CommissionMembresView(APIView):
+    """GET/POST /commissions/{id_comission}/membres/ — manage COPEO members."""
+
+    def get(self, request, id_comission):
+        c = _get_commission_or_404(id_comission)
+        if not c:
+            return Response({"error": "Commission introuvable"}, status=status.HTTP_404_NOT_FOUND)
+        membres = MembresCommissionEvaluation.objects.filter(id_comission=c).order_by("id", "id_utilisateur")
+        return Response(MembresCommissionSerializer(membres, many=True).data)
+
+    def post(self, request, id_comission):
+        c = _get_commission_or_404(id_comission)
+        if not c:
+            return Response({"error": "Commission introuvable"}, status=status.HTTP_404_NOT_FOUND)
+        data = request.data.copy()
+        data["id_comission"] = id_comission
+        serializer = MembresCommissionSerializer(data=data)
+        if serializer.is_valid():
+            membership, _ = MembresCommissionEvaluation.objects.update_or_create(
+                id_comission=c,
+                id_utilisateur=serializer.validated_data["id_utilisateur"],
+                defaults={"role_label": serializer.validated_data.get("role_label", "membre")},
+            )
+            return Response(MembresCommissionSerializer(membership).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CommissionMembreDetailView(APIView):
+    """DELETE /commissions/{id_comission}/membres/{id_utilisateur}/."""
+
+    def delete(self, request, id_comission, id_utilisateur):
+        deleted, _ = MembresCommissionEvaluation.objects.filter(
+            id_comission_id=id_comission,
+            id_utilisateur=id_utilisateur,
+        ).delete()
+        if deleted == 0:
+            return Response({"error": "Membre introuvable dans cette commission"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ── Step 1: Registre de réception ────────────────────────────────────────────
@@ -646,11 +693,16 @@ class SCDecisionView(APIView):
 # ── Comité Technique ──────────────────────────────────────────────────────────
 
 class CTCommissionView(APIView):
-    """GET /ct/commission/?utilisateur=<id> — CT fetches their assigned commission."""
+    """GET/POST/DELETE /ct/commission/ — fetch or manage CT assignment."""
+
     def get(self, request):
         id_utilisateur = request.query_params.get('utilisateur')
+        id_comission = request.query_params.get('id_comission')
+        if id_comission:
+            assignations = AssignationCT.objects.filter(id_comission_id=id_comission).order_by("id_utilisateur")
+            return Response(AssignationCTSerializer(assignations, many=True).data)
         if not id_utilisateur:
-            return Response({"error": "utilisateur param required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "utilisateur or id_comission param required"}, status=status.HTTP_400_BAD_REQUEST)
         assignation = AssignationCT.objects.filter(
             id_utilisateur=id_utilisateur
         ).select_related('id_comission').first()
@@ -662,6 +714,29 @@ class CTCommissionView(APIView):
             'nom_comission': c.nom_comission,
             'categorie': c.categorie,
         })
+
+    def post(self, request):
+        serializer = AssignationCTSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        assignment, _ = AssignationCT.objects.get_or_create(
+            id_comission=serializer.validated_data["id_comission"],
+            id_utilisateur=serializer.validated_data["id_utilisateur"],
+        )
+        return Response(AssignationCTSerializer(assignment).data, status=status.HTTP_201_CREATED)
+
+    def delete(self, request):
+        id_comission = request.data.get("id_comission") or request.query_params.get("id_comission")
+        id_utilisateur = request.data.get("id_utilisateur") or request.query_params.get("id_utilisateur")
+        if not id_comission or not id_utilisateur:
+            return Response({"error": "id_comission and id_utilisateur are required"}, status=status.HTTP_400_BAD_REQUEST)
+        deleted, _ = AssignationCT.objects.filter(
+            id_comission_id=id_comission,
+            id_utilisateur=id_utilisateur,
+        ).delete()
+        if deleted == 0:
+            return Response({"error": "Assignation CT introuvable"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class RapportCTView(APIView):
@@ -840,13 +915,18 @@ class CommissionStateView(APIView):
     
 class CommissionByMembreView(APIView):
     """
-    GET /commissions/?membre=<id_utilisateur>
-    Returns the commission the logged-in member belongs to.
+    GET /commissions/?membre=<id_utilisateur> or ?service_id=<id_service>
+    POST /commissions/
     """
     def get(self, request):
         id_utilisateur = request.query_params.get('membre')
+        service_id = request.query_params.get('service_id')
+        if service_id:
+            commissions = ComissionEvaluation.objects.filter(id_service=service_id).order_by("id_comission")
+            return Response(ComissionEvaluationSerializer(commissions, many=True).data)
+
         if not id_utilisateur:
-            return Response({"error": "membre param required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "membre or service_id param required"}, status=status.HTTP_400_BAD_REQUEST)
         
         membership = MembresCommissionEvaluation.objects.filter(
             id_utilisateur=id_utilisateur
@@ -862,3 +942,10 @@ class CommissionByMembreView(APIView):
             'categorie': commission.categorie,
             'role_label': membership.role_label,
         })
+
+    def post(self, request):
+        serializer = ComissionEvaluationSerializer(data=request.data)
+        if serializer.is_valid():
+            commission = serializer.save()
+            return Response(ComissionEvaluationSerializer(commission).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
