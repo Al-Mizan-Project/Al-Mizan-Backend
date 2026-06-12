@@ -35,6 +35,7 @@ class SoumissionListSerializer(serializers.ModelSerializer):
     reference_ao = serializers.SerializerMethodField()
     titre_ao = serializers.SerializerMethodField()
     progression = serializers.SerializerMethodField()
+    nom_operateur = serializers.SerializerMethodField()
 
     class Meta:
         model = Soumission
@@ -43,6 +44,7 @@ class SoumissionListSerializer(serializers.ModelSerializer):
             "reference",
             "id_appel_offre",
             "id_soumissionnaire",
+            "nom_operateur",
             "offre_financiere_chiffree_url",
             "document_ids",
             "statut",
@@ -55,6 +57,19 @@ class SoumissionListSerializer(serializers.ModelSerializer):
             "progression",
             "rapport",
         ]
+
+    def get_nom_operateur(self, obj):
+        try:
+            from auth_service.models import Utilisateur
+            from acteurs_service.models import Membre
+            user = Utilisateur.objects.filter(id_utilisateur=obj.id_soumissionnaire).first()
+            if user and user.id_membre:
+                membre = Membre.objects.select_related('organisation').filter(id_membre=user.id_membre).first()
+                if membre and membre.organisation:
+                    return membre.organisation.nom_officiel
+        except Exception:
+            pass
+        return None
 
     def get_reference(self, obj):
         year = obj.date_soumission.year

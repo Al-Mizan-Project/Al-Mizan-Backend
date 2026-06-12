@@ -22,14 +22,21 @@ def list_service_membre_ids(service_id):
 
     from contractant_service.models import MembresCommissionEvaluation, MembresCommissionInterne
 
-    eval_ids = set(
+    # Get membres from evaluation commissions (UUIDs)
+    eval_ids = list(
         MembresCommissionEvaluation.objects.filter(
             id_comission__id_service=service,
-        ).values_list("id_membre", flat=True)
+        ).values_list("id_membre", flat=True).distinct()
     )
-    interne_ids = set(
+    
+    # Get membres from internal commissions (Integers)
+    interne_ids = list(
         MembresCommissionInterne.objects.filter(
-            id_commision_interne__id_service=service,
-        ).values_list("id_membre", flat=True)
+            id_service=service,
+        ).values_list("id_membre", flat=True).distinct()
     )
-    return sorted(eval_ids | interne_ids)
+    
+    # Combine both lists, converting to strings for consistency
+    all_ids = [str(mid) for mid in eval_ids] + [str(mid) for mid in interne_ids]
+    
+    return list(dict.fromkeys(all_ids))  # Remove duplicates while preserving order

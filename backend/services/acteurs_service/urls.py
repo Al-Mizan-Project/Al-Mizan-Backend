@@ -6,7 +6,7 @@ from .views import (
     CreerCommissionExterneView, ListCommissionExterneView,
     ListOperateurEconomiqueView,
     CreerResponsableView, CreateMembreByResponsableView, MembreDetailView ,ListMembresOrganisationView , SoumettreDemandeOperateurView,
-    OrganisationResponsableByTypeView
+    OrganisationResponsableByTypeView, CreateMembreInternalView
 )
 
 urlpatterns = [
@@ -53,6 +53,8 @@ urlpatterns = [
     
     # Création d'un collaborateur (Par le Responsable)
     path('membres/creer-collaborateur/', CreateMembreByResponsableView.as_view(), name='responsable-creer-membre'),
+    
+    path('membres/', CreateMembreInternalView.as_view(), name='create-membre-internal'),
     
     # Récupération du responsable par type d'entité
     path('organisations/by-type/<str:entite_type>/responsable/', OrganisationResponsableByTypeView.as_view(), name='responsable-by-type'),

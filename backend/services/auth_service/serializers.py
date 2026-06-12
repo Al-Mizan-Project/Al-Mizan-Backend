@@ -45,6 +45,7 @@ def apply_user_claims(token, user):
     token["must_change_password"] = bool(user.must_change_password)
 
 
+
 class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role

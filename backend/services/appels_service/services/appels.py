@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from appels_service.models import AppelOffres, AppelOffresSuivi, DocumentsAppel
 from appels_service.services.procedure_rules import get_procedure_rules, resolve_validation_routing
+from notifications_service.models import Notification
 
 
 # ── Execution status transitions ─────────────────────────────────────
@@ -37,9 +38,18 @@ _EXECUTION_TRANSITIONS = {
 
 
 def appels_offres_queryset(statut=None, service_id=None, search=None, request=None):
-    queryset = AppelOffres.objects.prefetch_related("operateurs_invites").order_by("-created_at")
+    queryset = AppelOffres.objects.prefetch_related("operateurs_invites", "suivis").order_by("-created_at")
     if statut:
-        queryset = queryset.filter(statut=statut)
+        if isinstance(statut, str) and ',' in statut:
+            statuts = [s.strip() for s in statut.split(',')]
+            # Case-insensitive match using __iexact for each, combined with Q
+            from django.db.models import Q
+            q = Q()
+            for s in statuts:
+                q |= Q(statut__iexact=s)
+            queryset = queryset.filter(q)
+        else:
+            queryset = queryset.filter(statut__iexact=statut)
     if service_id is not None:
         queryset = queryset.filter(id_service_contractant=service_id)
     if search:
@@ -154,7 +164,7 @@ def _filter_queryset_for_request(queryset, request):
             "Consultation",
         }
         return (
-            queryset.filter(statut="valide")
+            queryset.filter(statut__iexact="valide")
             .filter(
                 Q(type_procedure__in=public_types)
                 | (
@@ -172,7 +182,7 @@ def _filter_queryset_for_request(queryset, request):
         commission_id = _get_commission_id(request)
         if not commission_id:
             return queryset.none()
-        return queryset.filter(statut="non_valide", commission_id=commission_id)
+        return queryset.filter(statut__iexact="non_valide", commission_id=commission_id)
 
     return queryset
 
@@ -249,7 +259,7 @@ def action_valider(appel_id, validated_by):
     rules = get_procedure_rules(appel.type_procedure)
     if not rules.requires_validation:
         raise ValidationError({"type_procedure": ["Cette procedure ne passe pas en validation."]})
-    if appel.statut != "non_valide":
+    if str(appel.statut).lower() != "non_valide":
         raise ValidationError({"statut": ["Seuls les appels non valides peuvent etre valides."]})
     if not validated_by:
         raise ValidationError({"validated_by": ["Le membre validateur est obligatoire."]})
@@ -264,7 +274,7 @@ def action_refuser(appel_id, validated_by):
     rules = get_procedure_rules(appel.type_procedure)
     if not rules.requires_validation:
         raise ValidationError({"type_procedure": ["Cette procedure ne passe pas en validation."]})
-    if appel.statut != "non_valide":
+    if str(appel.statut).lower() != "non_valide":
         raise ValidationError({"statut": ["Seuls les appels non valides peuvent etre refuses."]})
     if not validated_by:
         raise ValidationError({"validated_by": ["Le membre validateur est obligatoire."]})
@@ -332,3 +342,49 @@ def unwatch_appel_for_user(appel_id, user_id):
         id_utilisateur=user_id,
     ).delete()
     return deleted > 0
+
+
+def affect_validator_to_appel(appel_id, validator_id):
+    """
+    Affecte un validateur à un appel d'offres, crée une entrée de suivi et notifie le validateur.
+    
+    Args:
+        appel_id: ID de l'appel d'offres
+        validator_id: ID de l'utilisateur validateur à affecter
+    
+    Returns:
+        Le tuple (appel, suivi, notification)
+    """
+    if not validator_id:
+        raise ValidationError({"validator_id": ["Le validateur est obligatoire."]})
+    
+    appel = get_appel_or_404(appel_id)
+    
+    # Mettre à jour le champ validated_by
+    appel.validated_by = str(validator_id)
+    appel.save(update_fields=["validated_by", "updated_at"])
+    
+    # Créer une entrée de suivi pour le validateur
+    suivi, _ = AppelOffresSuivi.objects.get_or_create(
+        id_appel_offres=appel,
+        id_utilisateur=int(validator_id),
+    )
+
+    # Créer une notification pour le validateur choisi
+    notification = Notification.objects.create(
+        utilisateur_id=int(validator_id),
+        type_notification="AFFECTATION_VALIDATEUR",
+        titre="Nouvelle affectation de validation",
+        message=(
+            f"Vous avez été affecté(e) comme validateur pour l'appel d'offres "
+            f"{appel.reference or appel.id_appel_offres}."
+        ),
+        priorite="haute",
+        categorie="appels",
+        entite_liee_type="appel_offre",
+        entite_liee_id=appel.id_appel_offres,
+        statut="envoyée",
+        sent_at=timezone.now(),
+    )
+
+    return appel, suivi, notification

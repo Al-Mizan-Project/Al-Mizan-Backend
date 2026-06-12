@@ -162,9 +162,24 @@ class DocumentDownloadView(views.APIView):
             
         minio_service = MinioStorageService()
         
-        # Extract object key from storage URL
-        object_name = document.storage_url.split('/')[-1]
+        # Extract object key from storage URL – use the full path after the
+        # leading slash so that keys like "documents/CDC.pdf" are preserved.
+        object_name = document.storage_url.lstrip('/')
         
+        # Verify the file exists in MinIO BEFORE starting the stream.
+        # get_file_stream is a generator so its body only runs when Django
+        # iterates the StreamingHttpResponse – by then headers are already
+        # sent and a failure would crash the socket instead of returning 404.
+        try:
+            minio_service.s3_client.head_object(
+                Bucket=minio_service.bucket, Key=object_name
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"File not found in storage: {str(e)}"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
         try:
             file_stream = minio_service.get_file_stream(object_name)
             response = StreamingHttpResponse(file_stream)

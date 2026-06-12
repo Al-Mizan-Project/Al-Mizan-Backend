@@ -36,6 +36,8 @@ def authenticate_user(email, password):
         "access": str(refresh.access_token), 
         "refresh": str(refresh),
         "user": {
+            "id": user.id_utilisateur,
+            "id_utilisateur": user.id_utilisateur,
             "email": user.email,
             "id_membre": str(user.id_membre) if user.id_membre else None,
             "role": user.id_role.nom_role if user.id_role else None,

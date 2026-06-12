@@ -181,9 +181,84 @@ class AppelOffresOperateurInviteSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class AppelOffresSuiviSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AppelOffresSuivi
+        fields = [
+            "id",
+            "id_appel_offres",
+            "id_utilisateur",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
 class AppelOffresSerializer(serializers.ModelSerializer):
     operateurs_invites = AppelOffresOperateurInviteSerializer(many=True, read_only=True)
+    suivis = AppelOffresSuiviSerializer(many=True, read_only=True)
     location = serializers.CharField(source="localisation", read_only=True)
+    status = serializers.SerializerMethodField()
+    delayDays = serializers.SerializerMethodField()
+    validationDeadline = serializers.SerializerMethodField()
+    assignmentDate = serializers.SerializerMethodField()
+
+    def _get_base_date(self, obj):
+        """Returns the created_at from the suivi matching validated_by, or the appel's own created_at."""
+        validated_by = obj.validated_by
+        if validated_by and hasattr(obj, 'suivis'):
+            try:
+                suivi = obj.suivis.filter(id_utilisateur=int(validated_by)).order_by('created_at').first()
+                if suivi:
+                    return suivi.created_at
+            except (ValueError, TypeError):
+                pass
+            # Fallback: first suivi
+            suivi = obj.suivis.order_by('created_at').first()
+            if suivi:
+                return suivi.created_at
+        return obj.created_at
+
+    def get_assignmentDate(self, obj):
+        base_date = self._get_base_date(obj)
+        return base_date.isoformat() if base_date else None
+
+    def get_validationDeadline(self, obj):
+        from datetime import timedelta
+        base_date = self._get_base_date(obj)
+        if base_date:
+            return (base_date + timedelta(days=7)).isoformat()
+        return None
+
+    def get_status(self, obj):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        statut_str = str(obj.statut).lower()
+        if statut_str not in ["non_valide", "provisoire"]:
+            return obj.statut
+
+        base_date = self._get_base_date(obj)
+        if base_date:
+            deadline = base_date + timedelta(days=7)
+            if timezone.now() > deadline:
+                return "En Retard"
+        return "En Cours"
+
+    def get_delayDays(self, obj):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        statut_str = str(obj.statut).lower()
+        if statut_str not in ["non_valide", "provisoire"]:
+            return None
+
+        base_date = self._get_base_date(obj)
+        if base_date:
+            deadline = base_date + timedelta(days=7)
+            now = timezone.now()
+            if now > deadline:
+                return (now - deadline).days
+        return None
 
     class Meta:
         model = AppelOffres
@@ -223,10 +298,15 @@ class AppelOffresSerializer(serializers.ModelSerializer):
             "id_doc_justification",
             "id_doc_besoin",
             "operateurs_invites",
+            "suivis",
             "statut",
             "etat_execution",
             "created_at",
             "updated_at",
+            "status",
+            "delayDays",
+            "validationDeadline",
+            "assignmentDate",
         ]
         read_only_fields = ["id_appel_offres", "created_at", "updated_at"]
 
