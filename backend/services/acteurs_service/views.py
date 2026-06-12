@@ -455,7 +455,7 @@ class CreateMembreByResponsableView(APIView):
             TypeEntite.COMMISSION_EXTERNE: "VALIDATEUR_EXTERNE_MARCHE",
         }
         allowed_roles = {
-            TypeEntite.SERVICE_CONTRACTANT: {"REDACTEUR_CDC", "EVALUATEUR", "MEMBRE_COMITE_TECHNIQUE", "RESP_VALID_INTERN", "VALIDATEUR_INTERNE_MARCHE", "VALIDATEUR_INTERNE_CDC"},
+            TypeEntite.SERVICE_CONTRACTANT: {"RESP_SC", "REDACTEUR_CDC", "EVALUATEUR", "MEMBRE_COMITE_TECHNIQUE", "RESP_VALID_INTERN", "VALIDATEUR_INTERNE_MARCHE", "VALIDATEUR_INTERNE_CDC"},
             TypeEntite.OPERATEUR_ECONOMIQUE: {"PREPARATEUR_OE"},
             TypeEntite.COMMISSION_EXTERNE: {"VALIDATEUR_EXTERNE_MARCHE", "VALIDATEUR_EXTERNE_CDC"},
         }
@@ -539,6 +539,7 @@ class ListMembresOrganisationView(APIView):
                     for compte in comptes:
                         # On suppose que le service Auth renvoie l'id_membre avec le compte
                         auth_data_dict[compte.get('id_membre')] = {
+                            "id_utilisateur": compte.get('id_utilisateur'),
                             "email": compte.get('email'),
                             "is_active": compte.get('is_active'),
                             "role": compte.get('role'),

@@ -20,3 +20,11 @@ htmlcov/
 
 .env
 .env.example
+
+# Local agent / knowledge-graph artifacts
+.claude/
+.codex/
+AGENTS.md
+CLAUDE.md
+graphify-out/
+.graphify*

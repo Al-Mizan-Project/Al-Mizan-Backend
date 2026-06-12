@@ -462,6 +462,7 @@ class InternalSearchUsersView(APIView):
         for user in users:
             result.append({
                 "id_membre": str(user.id_membre),
+                "id_utilisateur": user.id_utilisateur,
                 "email": user.email,
                 "is_active": user.is_active,
                 "must_change_password": user.must_change_password,

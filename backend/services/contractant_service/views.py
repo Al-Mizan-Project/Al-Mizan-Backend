@@ -361,19 +361,23 @@ class MyServiceView(APIView):
         if not user or not hasattr(user, 'id_membre') or not user.id_membre:
             return Response({"error": "User has no member ID"}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Convert UUID to int (last segment hex)
+        # Convert UUID to the legacy integer used by commission-member junction tables.
+        # Older seed data used decimal text, while newer UI code uses the UUID segment as hex.
         try:
-            id_membre_int = int(str(user.id_membre).split('-')[-1], 16)
+            last_segment = str(user.id_membre).split('-')[-1]
+            id_membre_candidates = [int(last_segment, 16)]
+            if last_segment.isdigit():
+                id_membre_candidates.append(int(last_segment, 10))
         except (ValueError, IndexError):
             return Response({"error": "Invalid member ID format"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Look in Evaluation Commissions
-        m_eval = MembresCommissionEvaluation.objects.filter(id_membre=id_membre_int).first()
+        m_eval = MembresCommissionEvaluation.objects.filter(id_membre__in=id_membre_candidates).first()
         if m_eval:
             return Response({"id_service": m_eval.id_comission.id_service_id})
 
         # Look in Internal Commissions
-        m_int = MembresCommissionInterne.objects.filter(id_membre=id_membre_int).first()
+        m_int = MembresCommissionInterne.objects.filter(id_membre__in=id_membre_candidates).first()
         if m_int:
             return Response({"id_service": m_int.id_commision_interne.id_service_id})
 

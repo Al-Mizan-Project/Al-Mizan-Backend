@@ -456,12 +456,24 @@ class SoumissionAffecterView(APIView):
 class SoumissionsByCommissionView(APIView):
     """
     GET /soumissions/by-commission/<id_comission>/
-    Returns all soumissions assigned to a given commission.
+    Returns soumissions physically registered for a COPEO commission.
     """
     def get(self, request, id_comission):
-        soumission_ids = SoumissionEvaluateur.objects.filter(
-            id_comission=id_comission
-        ).values_list('soumission_id', flat=True)
+        try:
+            from evaluations_service.models import RegistreReception
+            soumission_ids = list(
+                RegistreReception.objects.filter(id_comission_id=id_comission)
+                .order_by("numero_ordre")
+                .values_list("id_soumission", flat=True)
+            )
+        except Exception:
+            soumission_ids = []
+
+        if not soumission_ids:
+            soumission_ids = list(
+                SoumissionEvaluateur.objects.filter(id_comission=id_comission)
+                .values_list('soumission_id', flat=True)
+            )
 
         queryset = Soumission.objects.filter(
             id_soumission__in=soumission_ids

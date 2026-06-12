@@ -83,16 +83,22 @@ class CommissionExterneCreateSerializer(OrganisationCreateSerializer):
 
 class OrganisationListSerializer(serializers.ModelSerializer):
     responsable_nom = serializers.SerializerMethodField()
+    id_operateur_economique = serializers.SerializerMethodField()
 
     class Meta:
         model = Organisation
-        fields = ['id_organisation', 'nom_officiel', 'email_contact', 'responsable_nom']
+        fields = ['id_organisation', 'id_operateur_economique', 'nom_officiel', 'email_contact', 'responsable_nom', 'wilaya', 'secteur']
 
     def get_responsable_nom(self, obj):
         resp = obj.membres.order_by('created_at').first()
         if resp:
             return f"{resp.prenom} {resp.nom}"
         return "Non assigné"
+
+    def get_id_operateur_economique(self, obj):
+        if getattr(obj, "type_entite", None) != "OPERATEUR_ECONOMIQUE":
+            return None
+        return int(str(obj.id_organisation).replace("-", "")[-8:], 16) % 2_000_000_000
 
 
 class OrganisationDetailForMembreSerializer(serializers.ModelSerializer):
