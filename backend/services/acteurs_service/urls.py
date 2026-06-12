@@ -21,6 +21,10 @@ urlpatterns = [
     path('admin/demandes/<uuid:id>/', DemandeOperateurDetailView.as_view(), name='admin-detail-demande'),
     path('admin/demandes/<uuid:id>/approuver/', DemandeApprouverView.as_view(), name='admin-approuver-demande'),
     path('admin/demandes/<uuid:id>/rejeter/', DemandeRejeterView.as_view(), name='admin-rejeter-demande'),
+    path('service-contractant/demandes/', DemandeOperateurListView.as_view(), name='sc-liste-demandes'),
+    path('service-contractant/demandes/<uuid:id>/', DemandeOperateurDetailView.as_view(), name='sc-detail-demande'),
+    path('service-contractant/demandes/<uuid:id>/approuver/', DemandeApprouverView.as_view(), name='sc-approuver-demande'),
+    path('service-contractant/demandes/<uuid:id>/rejeter/', DemandeRejeterView.as_view(), name='sc-rejeter-demande'),
     
     # ==========================================
     # 2. GESTION DES ORGANISATIONS (Par l'Admin)

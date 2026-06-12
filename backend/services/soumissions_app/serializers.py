@@ -124,5 +124,5 @@ class EvaluationCreateSerializer(serializers.Serializer):
 
 
 class AffectationSerializer(serializers.Serializer):
-    evaluateur_ids = serializers.ListField(child=serializers.IntegerField(), min_length=1)
+    id_comission = serializers.IntegerField()
     type_evaluation = serializers.ChoiceField(choices=['technique', 'administrative'])

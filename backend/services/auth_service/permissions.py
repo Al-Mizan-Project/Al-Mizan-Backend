@@ -1,10 +1,11 @@
 from django.conf import settings
 from rest_framework.permissions import BasePermission
 
+from auth_service.rbac import normalize_role_name
 from auth_service.services.access_control import user_permission_names
 
 
-ADMIN_ROLE_NAMES = {"admin", "administrator", "superadmin", "super_admin"}
+ADMIN_ROLE_NAMES = {"ADMIN"}
 
 
 class AuthServicePermission(BasePermission):
@@ -16,7 +17,7 @@ class AuthServicePermission(BasePermission):
         user = request.user
         if not user or not user.is_authenticated:
             return False
-        role_name = getattr(getattr(user, "id_role", None), "nom_role", "").strip().lower()
+        role_name = normalize_role_name(getattr(getattr(user, "id_role", None), "nom_role", ""))
         if role_name in ADMIN_ROLE_NAMES:
             return True
         required_permissions = getattr(view, "required_permissions", {})

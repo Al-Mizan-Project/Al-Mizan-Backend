@@ -11,6 +11,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from auth_service.models import Utilisateur
 from auth_service.serializers import (
     apply_user_claims,
+    consume_account_activation_token,
     consume_password_reset_token,
     revoke_refresh_token,
     store_password_reset_token,
@@ -23,6 +24,8 @@ def authenticate_user(email, password):
     
     if not user or not check_password(password, user.password):
         raise AuthenticationFailed("Invalid credentials")
+    if not user.is_active:
+        raise AuthenticationFailed("Account is not activated")
         
     refresh = RefreshToken.for_user(user)
     apply_user_claims(refresh, user)
@@ -37,7 +40,8 @@ def authenticate_user(email, password):
             "id_utilisateur": user.id_utilisateur,
             "email": user.email,
             "id_membre": str(user.id_membre) if user.id_membre else None,
-            "role": user.id_role.nom_role if user.id_role else None
+            "role": user.id_role.nom_role if user.id_role else None,
+            "must_change_password": bool(user.must_change_password),
         }
     }
 
@@ -54,7 +58,8 @@ def change_password(user, old_password, new_password):
     except DjangoValidationError as exc:
         raise ValidationError({"new_password": list(exc.messages)})
     user.set_password(new_password)
-    user.save(update_fields=["password", "updated_at"])
+    user.must_change_password = False
+    user.save(update_fields=["password", "must_change_password", "updated_at"])
 
 
 def initiate_password_reset(email):
@@ -84,4 +89,18 @@ def complete_password_reset(token, new_password):
     except DjangoValidationError as exc:
         raise ValidationError({"new_password": list(exc.messages)})
     user.set_password(new_password)
-    user.save(update_fields=["password", "updated_at"])
+    user.must_change_password = False
+    user.save(update_fields=["password", "must_change_password", "updated_at"])
+
+
+def activate_account(token):
+    user_id = consume_account_activation_token(token)
+    if not user_id:
+        raise ValidationError({"token": ["Invalid or expired activation token"]})
+    user = Utilisateur.objects.filter(id_utilisateur=user_id).first()
+    if not user:
+        raise NotFound("User not found")
+    user.is_active = True
+    user.must_change_password = True
+    user.save(update_fields=["is_active", "must_change_password", "updated_at"])
+    return user

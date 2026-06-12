@@ -40,6 +40,7 @@ class DemandeOperateur(models.Model):
     # Informations spécifiques à l'opérateur
     nif = models.CharField(max_length=50, default="000000000000000")
     num_registre_commerce = models.CharField(max_length=100, default="RC-DEFAULT")
+    id_service_contractant = models.IntegerField(null=True, blank=True, db_index=True)
     
     statut = models.CharField(
         max_length=20, 
