@@ -122,7 +122,10 @@ class AuthForgotPasswordView(APIView):
     def post(self, request):
         serializer = ForgotPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        payload = initiate_password_reset(serializer.validated_data["email"])
+        payload = initiate_password_reset(
+            serializer.validated_data["email"],
+            serializer.validated_data["language"],
+        )
         return Response(payload)
 
 

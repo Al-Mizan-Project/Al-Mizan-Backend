@@ -1,3 +1,4 @@
+import logging
 import secrets
 
 from django.conf import settings
@@ -11,11 +12,17 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from auth_service.models import Utilisateur
 from auth_service.serializers import (
     apply_user_claims,
+    build_password_reset_url,
     consume_account_activation_token,
     consume_password_reset_token,
+    delete_password_reset_token,
     revoke_refresh_token,
+    send_password_reset_email,
     store_password_reset_token,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def authenticate_user(email, password):
@@ -62,9 +69,9 @@ def change_password(user, old_password, new_password):
     user.save(update_fields=["password", "must_change_password", "updated_at"])
 
 
-def initiate_password_reset(email):
+def initiate_password_reset(email, language):
     payload = {"detail": "If that account exists, a reset flow has been initiated"}
-    user = Utilisateur.objects.only("id_utilisateur").filter(email=email).first()
+    user = Utilisateur.objects.only("id_utilisateur", "email").filter(email=email.strip().lower()).first()
     if user:
         token = secrets.token_urlsafe(48)
         store_password_reset_token(
@@ -72,8 +79,11 @@ def initiate_password_reset(email):
             user.id_utilisateur,
             timeout_seconds=int(getattr(settings, "PASSWORD_RESET_TOKEN_TTL", 900)),
         )
-        if settings.DEBUG:
-            payload["reset_token"] = token
+        try:
+            send_password_reset_email(user, build_password_reset_url(token), language)
+        except Exception:
+            delete_password_reset_token(token)
+            logger.exception("Password reset email delivery failed")
     return payload
 
 
