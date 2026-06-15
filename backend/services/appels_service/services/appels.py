@@ -6,6 +6,8 @@ from appels_service.models import AppelOffres, AppelOffresSuivi, DocumentsAppel
 
 # ── Valid statut transitions ──────────────────────────────────────────
 
+_EXECUTION_STATES = {"brouillon", "publie", "depot_cloture", "plis_ouverts", "annule"}
+
 _TRANSITIONS = {
     "publier": {
         "from": {"brouillon"},
@@ -33,12 +35,22 @@ _TRANSITIONS = {
 # ── Querysets ─────────────────────────────────────────────────────────
 
 
-def appels_offres_queryset(statut=None, service_id=None, search=None):
+def appels_offres_queryset(statut=None, etat_execution=None, service_id=None, search=None, operator_id=None):
     queryset = AppelOffres.objects.prefetch_related("operateurs_invites").order_by("-created_at")
+    if statut in _EXECUTION_STATES and etat_execution is None:
+        etat_execution = statut
+        statut = None
     if statut:
         queryset = queryset.filter(statut=statut)
+    if etat_execution:
+        queryset = queryset.filter(etat_execution=etat_execution)
     if service_id is not None:
         queryset = queryset.filter(id_service_contractant=service_id)
+    if operator_id is not None:
+        queryset = queryset.filter(
+            Q(type_procedure="publique")
+            | Q(operateurs_invites__id_operateur_economique=operator_id)
+        ).distinct()
     if search:
         queryset = queryset.filter(
             Q(reference__icontains=search)
@@ -72,10 +84,14 @@ def get_appel_or_404(appel_id):
 def _apply_transition(appel_id, action_name):
     transition = _TRANSITIONS[action_name]
     appel = get_appel_or_404(appel_id)
-    if appel.statut not in transition["from"]:
-        raise ValidationError({"statut": [transition["error"]]})
-    appel.statut = transition["to"]
-    appel.save(update_fields=["statut", "updated_at"])
+    if appel.etat_execution not in transition["from"]:
+        raise ValidationError({"etat_execution": [transition["error"]]})
+    appel.etat_execution = transition["to"]
+    if action_name == "publier" and appel.statut == "non_valide":
+        appel.statut = "valide"
+        appel.save(update_fields=["etat_execution", "statut", "updated_at"])
+    else:
+        appel.save(update_fields=["etat_execution", "updated_at"])
     return appel
 
 

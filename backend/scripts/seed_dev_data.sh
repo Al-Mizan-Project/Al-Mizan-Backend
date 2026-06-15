@@ -10,6 +10,7 @@ echo "Applying migrations..."
 python manage.py migrate --noinput
 
 echo "Running unified dev seed command..."
+echo "Includes acteurs, contractant, appels, auth, watched appels, soumissions, and notifications."
 python manage.py seed_dev_data "$@"
 
 echo "Seed script completed."

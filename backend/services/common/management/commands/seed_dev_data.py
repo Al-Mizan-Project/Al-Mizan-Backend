@@ -174,7 +174,7 @@ class Command(BaseCommand):
             return 0, AppelOffresSuivi.objects.filter(id_utilisateur=user_id).count()
 
         selected_appels = list(
-            AppelOffres.objects.filter(statut="publie").order_by("id_appel_offres")[:count]
+            AppelOffres.objects.filter(statut="valide", etat_execution="publie").order_by("id_appel_offres")[:count]
         )
 
         if len(selected_appels) < count:

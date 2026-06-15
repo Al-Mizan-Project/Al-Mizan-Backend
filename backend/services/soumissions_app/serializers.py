@@ -35,6 +35,7 @@ class SoumissionListSerializer(serializers.ModelSerializer):
     reference_ao = serializers.SerializerMethodField()
     titre_ao = serializers.SerializerMethodField()
     progression = serializers.SerializerMethodField()
+    state_dates = serializers.SerializerMethodField()
 
     class Meta:
         model = Soumission
@@ -54,6 +55,7 @@ class SoumissionListSerializer(serializers.ModelSerializer):
             "titre_ao",
             "progression",
             "rapport",
+            "state_dates",
         ]
 
     def get_reference(self, obj):
@@ -74,6 +76,45 @@ class SoumissionListSerializer(serializers.ModelSerializer):
 
     def get_rapport(self, obj):
         return self._parse_rapport(obj)
+
+    def get_state_dates(self, obj):
+        state_dates = {}
+        if obj.date_soumission:
+            state_dates["SOUMIS"] = obj.date_soumission.isoformat()
+
+        rapport = self._parse_rapport(obj)
+        if not isinstance(rapport, dict):
+            return state_dates
+
+        accuse = rapport.get("accuse")
+        if isinstance(accuse, dict) and accuse.get("date"):
+            state_dates["ACCUSE_RECEPTION"] = str(accuse["date"])
+
+        ouverture = rapport.get("ouverture")
+        if isinstance(ouverture, dict) and ouverture.get("date"):
+            state_dates["EN_OUVERTURE"] = str(ouverture["date"])
+
+        evaluation = rapport.get("evaluation")
+        if isinstance(evaluation, dict) and evaluation.get("date_debut"):
+            state_dates["EN_EVALUATION"] = str(evaluation["date_debut"])
+
+        resultat = rapport.get("resultat")
+        if isinstance(resultat, dict):
+            for key in (
+                "date_resultat",
+                "date_result",
+                "result_date",
+                "published_at",
+                "date_publication",
+                "date_decision",
+            ):
+                value = resultat.get(key)
+                if value:
+                    state_dates["RESULTAT"] = str(value)
+                    state_dates[str(obj.statut)] = str(value)
+                    break
+
+        return state_dates
 
     def get_reference_ao(self, obj):
         meta = _AO_META.get(obj.id_appel_offre)

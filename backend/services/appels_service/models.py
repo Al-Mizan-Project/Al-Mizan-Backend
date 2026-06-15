@@ -12,13 +12,31 @@ class AppelOffres(models.Model):
         ("public", "Public"),
         ("prive", "Prive"),
     ]
-    STATUT_CHOICES = [
+    TYPE_PROCEDURE_CHOICES = [
+        ("publique", "Publique"),
+        ("restreint", "Restreint"),
+        ("gre_a_gre", "Gre a gre"),
+        ("consultation", "Consultation"),
+    ]
+    STATUT_VALIDATION_CHOICES = [
+        ("non_valide", "Non valide"),
+        ("valide", "Valide"),
+        ("refuse", "Refuse"),
+        ("ferme", "Ferme"),
+    ]
+    ETAT_EXECUTION_CHOICES = [
         ("brouillon", "Brouillon"),
-        ("publie", "Publié"),
-        ("depot_cloture", "Dépôt clôturé"),
+        ("publie", "Publie"),
+        ("depot_cloture", "Depot cloture"),
         ("plis_ouverts", "Plis ouverts"),
-        ("attribue", "Attribué"),
-        ("annule", "Annulé"),
+        ("annule", "Annule"),
+    ]
+    VALIDATION_LEVEL_CHOICES = [
+        ("aucun", "Aucun"),
+        ("interne", "Interne"),
+        ("externe_wilaya", "Externe wilaya"),
+        ("externe_secteur", "Externe secteur"),
+        ("externe_nationale", "Externe nationale"),
     ]
 
     id_appel_offres = models.AutoField(primary_key=True)
@@ -26,7 +44,7 @@ class AppelOffres(models.Model):
     reference = models.CharField(max_length=80, unique=True)
     titre = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
-    type_procedure = models.CharField(max_length=50)
+    type_procedure = models.CharField(max_length=50, choices=TYPE_PROCEDURE_CHOICES)
     type_prestation = models.CharField(
         max_length=20,
         choices=TYPE_PRESTATION_CHOICES,
@@ -43,8 +61,8 @@ class AppelOffres(models.Model):
     date_publication = models.DateTimeField(null=True, blank=True)
     date_limite_soumission = models.DateTimeField(null=True, blank=True)
     date_ouverture_plis = models.DateTimeField(null=True, blank=True)
-    poids_technique = models.IntegerField(default=50)
-    poids_financier = models.IntegerField(default=50)
+    poids_technique = models.IntegerField(null=True, blank=True, default=50)
+    poids_financier = models.IntegerField(null=True, blank=True, default=50)
     required_docs_admin = models.JSONField(default=list, blank=True)
     required_docs_tech = models.JSONField(default=list, blank=True)
     required_docs_fin = models.JSONField(default=list, blank=True)
@@ -52,7 +70,11 @@ class AppelOffres(models.Model):
     qualification_category = models.CharField(max_length=120, blank=True, default="")
     minimum_experience_years = models.IntegerField(default=0)
     participation_conditions = models.JSONField(default=list, blank=True)
-    statut = models.CharField(max_length=30, choices=STATUT_CHOICES, default="brouillon")
+    validation_level = models.CharField(max_length=30, choices=VALIDATION_LEVEL_CHOICES, default="aucun")
+    commission_id = models.IntegerField(null=True, blank=True)
+    validated_by = models.IntegerField(null=True, blank=True)
+    statut = models.CharField(max_length=30, choices=STATUT_VALIDATION_CHOICES, default="non_valide")
+    etat_execution = models.CharField(max_length=30, choices=ETAT_EXECUTION_CHOICES, default="brouillon")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -36,6 +36,35 @@ from .services.appels import (
 from .services.health import check_readiness
 
 
+def _operator_scope_id(request):
+    auth = getattr(request, "auth", None)
+    for key in ("id_operateur_economique", "operateur_id", "user_id", "id_utilisateur"):
+        if hasattr(auth, "get"):
+            value = auth.get(key)
+            if value not in (None, ""):
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    pass
+
+    user = getattr(request, "user", None)
+    if not getattr(user, "is_authenticated", False):
+        return None
+    for attr in ("id_operateur_economique", "operateur_id", "id_utilisateur", "id"):
+        value = getattr(user, attr, None)
+        if value not in (None, ""):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                pass
+    return None
+
+
+def _cache_scope_key(request):
+    operator_id = _operator_scope_id(request)
+    return f"operator={operator_id}" if operator_id is not None else "operator=all"
+
+
 # ── Health / Ready ────────────────────────────────────────────────────
 
 
@@ -66,7 +95,7 @@ class CachedListMixin:
     cache_namespace = ""
 
     def list(self, request, *args, **kwargs):
-        query_string = request.META.get("QUERY_STRING", "")
+        query_string = f"{request.META.get('QUERY_STRING', '')}|{_cache_scope_key(request)}"
         cached = read_cached(self.cache_namespace, "list", query_string)
         if cached is not None:
             return Response(cached)
@@ -81,7 +110,7 @@ class CachedRetrieveMixin:
 
     def retrieve(self, request, *args, **kwargs):
         identifier = str(kwargs.get(self.lookup_url_kwarg or self.lookup_field))
-        query_string = request.META.get("QUERY_STRING", "")
+        query_string = f"{request.META.get('QUERY_STRING', '')}|{_cache_scope_key(request)}"
         cached = read_cached(self.cache_namespace, identifier, query_string)
         if cached is not None:
             return Response(cached)
@@ -99,13 +128,20 @@ class AppelOffresListCreateView(CachedListMixin, ListCreateAPIView):
 
     def get_queryset(self):
         statut = self.request.query_params.get("statut", "").strip() or None
+        etat_execution = self.request.query_params.get("etat_execution", "").strip() or None
         search = self.request.query_params.get("search", "").strip() or None
         service_id_raw = self.request.query_params.get("service_id")
         try:
             service_id = int(service_id_raw) if service_id_raw not in (None, "") else None
         except ValueError:
             service_id = None
-        return appels_offres_queryset(statut=statut, service_id=service_id, search=search)
+        return appels_offres_queryset(
+            statut=statut,
+            etat_execution=etat_execution,
+            service_id=service_id,
+            search=search,
+            operator_id=_operator_scope_id(self.request),
+        )
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -123,7 +159,7 @@ class AppelOffresRetrieveUpdateDeleteView(CachedRetrieveMixin, RetrieveUpdateDes
     lookup_url_kwarg = "appel_id"
 
     def get_queryset(self):
-        return appels_offres_queryset()
+        return appels_offres_queryset(operator_id=_operator_scope_id(self.request))
 
     def get_serializer_class(self):
         if self.request.method in {"PATCH", "PUT"}:

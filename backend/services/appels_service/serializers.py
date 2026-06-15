@@ -151,8 +151,12 @@ class AppelOffresSerializer(serializers.ModelSerializer):
             "qualification_category",
             "minimum_experience_years",
             "participation_conditions",
+            "validation_level",
+            "commission_id",
+            "validated_by",
             "operateurs_invites",
             "statut",
+            "etat_execution",
             "created_at",
             "updated_at",
         ]
@@ -160,6 +164,7 @@ class AppelOffresSerializer(serializers.ModelSerializer):
 
 
 class _AppelOffresWriteSerializer(serializers.ModelSerializer):
+    type_procedure = serializers.CharField()
     operateurs_invites = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
         required=False,
@@ -177,34 +182,47 @@ class _AppelOffresWriteSerializer(serializers.ModelSerializer):
     def validate_id_service_contractant(self, value):
         return _validate_service_contractant(value)
 
+    def validate_type_procedure(self, value):
+        raw = (value or "").strip().lower()
+        if raw in {"publique", "public"} or "ouvert" in raw:
+            return "publique"
+        if raw in {"restreint", "restreinte"} or "restreint" in raw:
+            return "restreint"
+        if raw in {"gre_a_gre", "gre a gre", "gré à gré"}:
+            return "gre_a_gre"
+        if raw == "consultation" or "consult" in raw:
+            return "consultation"
+        raise serializers.ValidationError("Unsupported type_procedure")
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
 
-        visibilite = attrs.get(
-            "visibilite",
-            getattr(self.instance, "visibilite", "public"),
+        type_procedure = attrs.get(
+            "type_procedure",
+            getattr(self.instance, "type_procedure", "publique"),
         )
         operateurs_invites = attrs.get("operateurs_invites")
+        requires_invites = type_procedure in {"restreint", "consultation", "gre_a_gre"}
 
-        if visibilite == "prive":
+        if requires_invites:
             if operateurs_invites is None:
                 if self.instance is None:
                     raise serializers.ValidationError(
-                        {"operateurs_invites": ["At least one invited operator is required for private AO."]}
+                        {"operateurs_invites": ["At least one invited operator is required for this procedure."]}
                     )
                 existing_count = self.instance.operateurs_invites.count()
                 if existing_count == 0:
                     raise serializers.ValidationError(
-                        {"operateurs_invites": ["At least one invited operator is required for private AO."]}
+                        {"operateurs_invites": ["At least one invited operator is required for this procedure."]}
                     )
             elif len(operateurs_invites) == 0:
                 raise serializers.ValidationError(
-                    {"operateurs_invites": ["At least one invited operator is required for private AO."]}
+                    {"operateurs_invites": ["At least one invited operator is required for this procedure."]}
                 )
 
-        if visibilite == "public" and operateurs_invites:
+        if type_procedure == "publique" and operateurs_invites:
             raise serializers.ValidationError(
-                {"operateurs_invites": ["Invited operators can only be set for private AO."]}
+                {"operateurs_invites": ["Invited operators can only be set for restricted, consultation or gre_a_gre procedures."]}
             )
 
         return attrs
@@ -238,12 +256,16 @@ class AppelOffresCreateSerializer(_AppelOffresWriteSerializer):
             "qualification_category",
             "minimum_experience_years",
             "participation_conditions",
+            "validation_level",
+            "commission_id",
+            "validated_by",
             "operateurs_invites",
             "statut",
+            "etat_execution",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id_appel_offres", "statut", "created_at", "updated_at"]
+        read_only_fields = ["id_appel_offres", "etat_execution", "created_at", "updated_at"]
 
     def create(self, validated_data):
         operateurs_invites = validated_data.pop("operateurs_invites", [])
@@ -280,6 +302,10 @@ class AppelOffresUpdateSerializer(_AppelOffresWriteSerializer):
             "qualification_category",
             "minimum_experience_years",
             "participation_conditions",
+            "validation_level",
+            "commission_id",
+            "validated_by",
+            "statut",
             "operateurs_invites",
         ]
 
@@ -287,7 +313,7 @@ class AppelOffresUpdateSerializer(_AppelOffresWriteSerializer):
         operateurs_invites = validated_data.pop("operateurs_invites", None)
         appel = super().update(instance, validated_data)
 
-        if appel.visibilite == "public":
+        if appel.type_procedure == "publique":
             AppelOffresOperateurInvite.objects.filter(id_appel_offres=appel).delete()
         elif operateurs_invites is not None:
             _sync_operateurs_invites(appel, operateurs_invites)

@@ -279,6 +279,9 @@ class RecoursService:
     # ---------------------------
 
     def _to_response_dto(self, recours: Recours) -> RecoursResponseDTO:
+        state_dates = {"DEPOSE": str(recours.date_depot)}
+        if recours.date_decision:
+            state_dates["DECISION_PRISE"] = str(recours.date_decision)
         return RecoursResponseDTO(
             id_recours=recours.id_recours,
             id_operateur_economique=recours.id_operateur_economique,
@@ -297,6 +300,9 @@ class RecoursService:
             objet=recours.objet or "",
             explications=recours.explications or "",
             document_ids=list(recours.document_ids or []),
+            date_fin_instruction=None,
+            state_history=[],
+            state_dates=state_dates,
         )
 
     def _resolve_id_validation(self, soumission_id: int):

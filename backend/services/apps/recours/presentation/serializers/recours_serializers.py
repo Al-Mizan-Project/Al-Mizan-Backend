@@ -52,5 +52,8 @@ class RecoursResponseSerializer(serializers.Serializer):
     decision = serializers.CharField(allow_null=True)
     date_depot = serializers.CharField()
     date_limite = serializers.CharField()
+    date_fin_instruction = serializers.CharField(allow_null=True, required=False)
     date_decision = serializers.CharField(allow_null=True)
     traite_par = serializers.IntegerField(allow_null=True)
+    state_history = serializers.ListField(child=serializers.DictField(), required=False)
+    state_dates = serializers.DictField(child=serializers.CharField(), required=False)

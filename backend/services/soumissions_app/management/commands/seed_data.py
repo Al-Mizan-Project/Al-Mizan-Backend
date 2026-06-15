@@ -37,6 +37,7 @@ def _rapport_attribue():
         "ouverture": {"date": "2026-02-15 10:00", "nb_offres": 6},
         "evaluation": {"date_debut": "2026-02-18"},
         "resultat": {
+            "date_resultat": "2026-05-10 10:30",
             "score_technique": 52,
             "max_technique": 60,
             "score_financier": 35,
@@ -56,6 +57,7 @@ def _rapport_non_retenu():
         "ouverture": {"date": "2026-02-10 09:30", "nb_offres": 5},
         "evaluation": {"date_debut": "2026-02-12"},
         "resultat": {
+            "date_resultat": "2026-05-01 15:45",
             "score_technique": 38,
             "max_technique": 60,
             "score_financier": 28,
@@ -78,6 +80,7 @@ def _rapport_infructueux():
         "ouverture": {"date": "2026-03-01 14:30", "nb_offres": 3},
         "evaluation": {"date_debut": "2026-03-05"},
         "resultat": {
+            "date_resultat": "2026-04-28 11:20",
             "motif": (
                 "Aucune offre conforme recue - les soumissions presentaient "
                 "des non-conformites substantielles"

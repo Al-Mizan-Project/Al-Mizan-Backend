@@ -38,6 +38,12 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
 - ReDoc: `http://127.0.0.1:8080/docs/redoc/`
 - OpenAPI schema: `http://127.0.0.1:8080/openapi.json`
 
+For Android/mobile setup, use the dedicated runbook:
+
+```text
+backend/README_MOBILE_APP.md
+```
+
 ## Useful Commands
 
 Start or rebuild:
@@ -96,10 +102,23 @@ cd backend
 sh scripts/seed_dev_data.sh --flush
 ```
 
+Mobile-focused seed wrapper:
+
+```bash
+cd backend
+sh scripts/seed_mobile_app.sh
+```
+
 Docker run:
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec backend sh -c "cd /app && sh scripts/seed_dev_data.sh --flush"
+```
+
+Mobile-focused Docker run:
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec backend sh scripts/seed_mobile_app.sh
 ```
 
 Optional flags:
@@ -124,4 +143,3 @@ Default test credentials created by the seed flow:
 - `redis`: cache, throttling, broker
 - `minio`: object storage
 - `celery`: optional worker profile
-

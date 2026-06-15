@@ -11,6 +11,9 @@ class RecoursCreateDTO:
     objet: str = ""
     explications: str = ""
     document_ids: List[int] = field(default_factory=list)
+    date_fin_instruction: Optional[str] = None
+    state_history: List[dict] = field(default_factory=list)
+    state_dates: dict = field(default_factory=dict)
     id_validation: Optional[int] = None
 
 

@@ -12,7 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 
-from appels_service.models import AppelOffres, DocumentsAppel
+from appels_service.models import AppelOffres, AppelOffresOperateurInvite, DocumentsAppel
 
 
 APPELS = [
@@ -21,7 +21,7 @@ APPELS = [
         "reference": "AO-2026-001",
         "titre": "Fourniture de matériel informatique",
         "description": "Acquisition de postes de travail et périphériques pour les directions.",
-        "type_procedure": "Appel d'offres ouvert",
+        "type_procedure": "publique",
         "wilaya": "Alger",
         "montant_estime": "15000000.00",
         "poids_technique": 40,
@@ -43,7 +43,7 @@ APPELS = [
         "reference": "AO-2026-002",
         "titre": "Travaux de réhabilitation du siège",
         "description": "Rénovation des locaux administratifs.",
-        "type_procedure": "Appel d'offres restreint",
+        "type_procedure": "restreint",
         "wilaya": "Blida",
         "montant_estime": "85000000.00",
         "poids_technique": 60,
@@ -65,7 +65,7 @@ APPELS = [
         "reference": "AO-2026-003",
         "titre": "Prestation de services de gardiennage",
         "description": "Surveillance et sécurité des bâtiments.",
-        "type_procedure": "Consultation",
+        "type_procedure": "consultation",
         "wilaya": "Oran",
         "montant_estime": "5400000.00",
         "poids_technique": 50,
@@ -84,7 +84,7 @@ APPELS = [
         "reference": "AO-2026-004",
         "titre": "Acquisition de véhicules de service",
         "description": "Achat de véhicules pour le parc automobile.",
-        "type_procedure": "Appel d'offres ouvert",
+        "type_procedure": "publique",
         "wilaya": "Constantine",
         "montant_estime": "32000000.00",
         "poids_technique": 30,
@@ -103,7 +103,7 @@ APPELS = [
         "reference": "AO-2026-005",
         "titre": "Fourniture de produits de nettoyage",
         "description": "Produits d'entretien pour les locaux.",
-        "type_procedure": "Consultation",
+        "type_procedure": "consultation",
         "wilaya": "Sétif",
         "montant_estime": "1200000.00",
         "poids_technique": 50,
@@ -122,7 +122,7 @@ APPELS = [
         "reference": "AO-2026-006",
         "titre": "Maintenance du parc bureautique",
         "description": "Contrat annuel de maintenance preventive et curative.",
-        "type_procedure": "Consultation",
+        "type_procedure": "gre_a_gre",
         "wilaya": "Tizi Ouzou",
         "montant_estime": "4800000.00",
         "poids_technique": 50,
@@ -141,7 +141,7 @@ APPELS = [
         "reference": "AO-2026-007",
         "titre": "Déploiement d'un réseau fibre inter-sites",
         "description": "Mise en place d'une infrastructure fibre entre les sites régionaux.",
-        "type_procedure": "Appel d'offres ouvert",
+        "type_procedure": "publique",
         "wilaya": "Annaba",
         "montant_estime": "42000000.00",
         "poids_technique": 65,
@@ -163,7 +163,7 @@ APPELS = [
         "reference": "AO-2026-008",
         "titre": "Acquisition d'une solution ERP",
         "description": "Licence, intégration et accompagnement au déploiement d'un ERP.",
-        "type_procedure": "Appel d'offres restreint",
+        "type_procedure": "restreint",
         "wilaya": "Alger",
         "montant_estime": "98000000.00",
         "poids_technique": 70,
@@ -185,7 +185,7 @@ APPELS = [
         "reference": "AO-2026-009",
         "titre": "Travaux d'extension de réseau d'assainissement",
         "description": "Extension et renouvellement de tronçons vétustes.",
-        "type_procedure": "Appel d'offres ouvert",
+        "type_procedure": "publique",
         "wilaya": "Béjaïa",
         "montant_estime": "76000000.00",
         "poids_technique": 55,
@@ -204,7 +204,7 @@ APPELS = [
         "reference": "AO-2026-010",
         "titre": "Fourniture de papier et consommables d'impression",
         "description": "Approvisionnement annuel des directions centrales.",
-        "type_procedure": "Consultation",
+        "type_procedure": "consultation",
         "wilaya": "Mostaganem",
         "montant_estime": "3900000.00",
         "poids_technique": 35,
@@ -223,7 +223,7 @@ APPELS = [
         "reference": "AO-2026-011",
         "titre": "Audit énergétique des bâtiments administratifs",
         "description": "Campagne d'audit et recommandations d'optimisation énergétique.",
-        "type_procedure": "Consultation",
+        "type_procedure": "consultation",
         "wilaya": "Tlemcen",
         "montant_estime": "6700000.00",
         "poids_technique": 60,
@@ -242,7 +242,7 @@ APPELS = [
         "reference": "AO-2026-012",
         "titre": "Services cloud pour plateforme documentaire",
         "description": "Hébergement, sauvegarde et supervision de la plateforme documentaire.",
-        "type_procedure": "Appel d'offres restreint",
+        "type_procedure": "restreint",
         "wilaya": "Alger",
         "montant_estime": "25500000.00",
         "poids_technique": 75,
@@ -276,12 +276,48 @@ DOCUMENTS = [
     (11, 113),
 ]
 
+INVITED_OPERATORS_BY_REFERENCE = {
+    "AO-2026-002": [2, 10],
+    "AO-2026-003": [2, 11],
+    "AO-2026-006": [2],
+    "AO-2026-008": [2, 12],
+    "AO-2026-010": [2],
+    "AO-2026-011": [2, 13],
+    "AO-2026-012": [2, 14],
+}
+
+VALIDATION_LEVEL_BY_REFERENCE = {
+    "AO-2026-001": "interne",
+    "AO-2026-002": "externe_wilaya",
+    "AO-2026-003": "aucun",
+    "AO-2026-004": "externe_secteur",
+    "AO-2026-005": "externe_nationale",
+    "AO-2026-006": "aucun",
+    "AO-2026-007": "interne",
+    "AO-2026-008": "externe_wilaya",
+    "AO-2026-009": "externe_secteur",
+    "AO-2026-010": "interne",
+    "AO-2026-011": "externe_nationale",
+    "AO-2026-012": "aucun",
+}
+
+EXECUTION_TO_VALIDATION_STATUS = {
+    "brouillon": "non_valide",
+    "publie": "valide",
+    "depot_cloture": "valide",
+    "plis_ouverts": "valide",
+    "attribue": "ferme",
+    "annule": "refuse",
+}
+
 
 class Command(BaseCommand):
     help = "Seed the appels database with sample data."
 
     @staticmethod
     def _timeline_for_status(statut, now):
+        if statut == "attribue":
+            statut = "plis_ouverts"
         if statut == "brouillon":
             return {
                 "date_publication": None,
@@ -318,6 +354,68 @@ class Command(BaseCommand):
             "date_ouverture_plis": None,
         }
 
+    @staticmethod
+    def _normalize_appel_data(data, timeline):
+        reference = data["reference"]
+        raw_execution = data.get("etat_execution") or data.get("statut", "brouillon")
+        etat_execution = "plis_ouverts" if raw_execution == "attribue" else raw_execution
+        validation_level = data.get(
+            "validation_level",
+            VALIDATION_LEVEL_BY_REFERENCE.get(reference, "aucun"),
+        )
+        invited_ids = data.get(
+            "operateurs_invites",
+            INVITED_OPERATORS_BY_REFERENCE.get(reference, []),
+        )
+
+        defaults = {
+            **data,
+            **timeline,
+            "etat_execution": etat_execution,
+            "statut": data.get(
+                "statut_validation",
+                EXECUTION_TO_VALIDATION_STATUS.get(raw_execution, "non_valide"),
+            ),
+            "validation_level": validation_level,
+            "commission_id": None if validation_level in {"aucun", "interne"} else 1000 + int(reference.rsplit("-", 1)[-1]),
+            "validated_by": None if validation_level in {"aucun", "interne"} else 2000 + int(reference.rsplit("-", 1)[-1]),
+        }
+        defaults.pop("statut_validation", None)
+        defaults.pop("operateurs_invites", None)
+
+        if defaults["type_procedure"] == "gre_a_gre":
+            defaults["date_limite_soumission"] = None
+            defaults["date_ouverture_plis"] = None
+            defaults["poids_technique"] = None
+            defaults["poids_financier"] = None
+        elif reference == "AO-2026-003":
+            defaults["poids_technique"] = None
+            defaults["poids_financier"] = None
+
+        return defaults, invited_ids
+
+    @staticmethod
+    def _sync_invited_operators(appel, invited_ids):
+        target_ids = set(invited_ids)
+        AppelOffresOperateurInvite.objects.filter(id_appel_offres=appel).exclude(
+            id_operateur_economique__in=target_ids
+        ).delete()
+        existing_ids = set(
+            AppelOffresOperateurInvite.objects.filter(id_appel_offres=appel)
+            .values_list("id_operateur_economique", flat=True)
+        )
+        missing_ids = target_ids - existing_ids
+        if missing_ids:
+            AppelOffresOperateurInvite.objects.bulk_create(
+                [
+                    AppelOffresOperateurInvite(
+                        id_appel_offres=appel,
+                        id_operateur_economique=operator_id,
+                    )
+                    for operator_id in sorted(missing_ids)
+                ]
+            )
+
     def add_arguments(self, parser):
         parser.add_argument(
             "--flush",
@@ -328,11 +426,12 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **options):
         if options["flush"]:
+            AppelOffresOperateurInvite.objects.all().delete()
             DocumentsAppel.objects.all().delete()
             AppelOffres.objects.all().delete()
             sequence_sql = connection.ops.sequence_reset_sql(
                 no_style(),
-                [AppelOffres, DocumentsAppel],
+                [AppelOffres, AppelOffresOperateurInvite, DocumentsAppel],
             )
             with connection.cursor() as cursor:
                 for sql in sequence_sql:
@@ -343,10 +442,12 @@ class Command(BaseCommand):
         appel_objects = []
         for data in APPELS:
             timeline = self._timeline_for_status(data["statut"], now)
+            defaults, invited_ids = self._normalize_appel_data(data, timeline)
             obj, created = AppelOffres.objects.update_or_create(
                 reference=data["reference"],
-                defaults={**data, **timeline},
+                defaults=defaults,
             )
+            self._sync_invited_operators(obj, invited_ids)
             appel_objects.append(obj)
             if created:
                 self.stdout.write(self.style.SUCCESS(f"  Created AppelOffres: {obj.reference}"))
