@@ -79,6 +79,20 @@ class UserNotificationsView(APIView):
         return Response(serializer.data)
 
 
+class MyNotificationsView(APIView):
+    """
+    GET /notifications/me - Lister les notifications de l'utilisateur connecte
+    """
+    def get(self, request):
+        user_id = getattr(request.user, "pk", None)
+        if not user_id:
+            return Response({"error": "Authentification requise"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        notifications = Notification.objects.filter(utilisateur_id=user_id).order_by('-created_at')
+        serializer = NotificationSerializer(notifications, many=True)
+        return Response(serializer.data)
+
+
 class SendNotificationView(APIView):
     """
     POST /notifications/{notification_id}/envoyer - Marquer une notification comme envoyée
@@ -134,6 +148,27 @@ class MarkAllUserNotificationsReadView(APIView):
         notifications_to_update.update(statut="lue", read_at=now)
         
         return Response({"message": f"{count} notifications marquées comme lues"})
+
+
+class MarkAllMyNotificationsReadView(APIView):
+    """
+    POST /notifications/me/marquer-tout-lu - Marquer mes notifications comme lues
+    """
+    def post(self, request):
+        user_id = getattr(request.user, "pk", None)
+        if not user_id:
+            return Response({"error": "Authentification requise"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        notifications_to_update = Notification.objects.filter(utilisateur_id=user_id, read_at__isnull=True)
+        count = notifications_to_update.count()
+
+        if count == 0:
+            return Response({"message": "Aucune notification a marquer comme lue"}, status=status.HTTP_200_OK)
+
+        now = timezone.now()
+        notifications_to_update.update(statut="lue", read_at=now)
+
+        return Response({"message": f"{count} notifications marquees comme lues"})
 
 
 class MassSendNotificationsView(APIView):
