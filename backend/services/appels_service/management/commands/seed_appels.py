@@ -9,10 +9,12 @@ from django.core.management.base import BaseCommand
 from django.core.management.color import no_style
 from django.db import connection
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
 
 from appels_service.models import AppelOffres, AppelOffresOperateurInvite, DocumentsAppel
+from documents_service.models import Document
 
 
 APPELS = [
@@ -416,6 +418,22 @@ class Command(BaseCommand):
                 ]
             )
 
+    @staticmethod
+    def _document_links():
+        real_pdf_ids = list(
+            Document.objects.filter(type_document="pdf")
+            .filter(Q(visible_after__isnull=True) | Q(visible_after__lte=timezone.now()))
+            .order_by("id_document")
+            .values_list("id_document", flat=True)
+        )
+        if not real_pdf_ids:
+            return DOCUMENTS
+
+        return [
+            (appel_idx, real_pdf_ids[position % len(real_pdf_ids)])
+            for position, (appel_idx, _fallback_doc_id) in enumerate(DOCUMENTS)
+        ]
+
     def add_arguments(self, parser):
         parser.add_argument(
             "--flush",
@@ -454,7 +472,7 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(f"  Updated (exists): {obj.reference}")
 
-        for appel_idx, doc_id in DOCUMENTS:
+        for appel_idx, doc_id in self._document_links():
             appel = appel_objects[appel_idx]
             link, created = DocumentsAppel.objects.get_or_create(
                 id_appel_offres=appel,

@@ -8,11 +8,62 @@ import uuid
 
 TEST_OPERATOR_ID = 1
 
+
+def _escape_pdf_text(value):
+    return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _pdf_bytes(title):
+    text = _escape_pdf_text(title)
+    stream = f"BT /F1 12 Tf 36 108 Td ({text}) Tj ET".encode("latin-1")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 320 160] "
+            b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
+        ),
+        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+
+    body = b"%PDF-1.4\n"
+    offsets = []
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(body))
+        body += f"{index} 0 obj\n".encode("ascii") + obj + b"\nendobj\n"
+
+    xref_position = len(body)
+    body += f"xref\n0 {len(objects) + 1}\n".encode("ascii")
+    body += b"0000000000 65535 f \n"
+    for offset in offsets:
+        body += f"{offset:010d} 00000 n \n".encode("ascii")
+    body += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_position}\n%%EOF\n"
+    ).encode("ascii")
+    return body
+
 class Command(BaseCommand):
     help = 'Seeds the database and MinIO with sample documents for testing API endpoints'
 
+    def add_arguments(self, parser):
+        parser.add_argument("--flush", action="store_true", help="Delete existing document metadata before seeding")
+        parser.add_argument(
+            "--operator-id",
+            type=int,
+            default=TEST_OPERATOR_ID,
+            help="Operator id assigned to seeded soumission documents",
+        )
+
     def handle(self, *args, **kwargs):
         self.stdout.write("Starting to seed documents...")
+
+        if kwargs["flush"]:
+            deleted, _ = Document.objects.all().delete()
+            self.stdout.write(self.style.WARNING(f"Deleted {deleted} existing document rows."))
+
+        operator_id = kwargs["operator_id"]
         
         minio_service = MinioStorageService()
         
@@ -20,7 +71,7 @@ class Command(BaseCommand):
             {
                 "nom": "cahier_des_charges_v1.pdf",
                 "related_type": "appel_offre",
-                "content": b"Fake Cahier des Charges Content generated for Al-Mizan Appel Offre.",
+                "content": _pdf_bytes("Al-Mizan cahier des charges"),
                 "type": "pdf",
                 "ia_statut": "VALID",
                 "encrypted": False,
@@ -35,17 +86,17 @@ class Command(BaseCommand):
                 "ia_statut": "PENDING",
                 "encrypted": True,
                 "visible_after": timezone.now() + timedelta(days=2), # Hidden for 2 days
-                "id_operateur_economique": TEST_OPERATOR_ID
+                "id_operateur_economique": operator_id
             },
             {
                 "nom": "offre_technique_entrepriseA.pdf",
                 "related_type": "soumission",
-                "content": b"Fake Technical specs and architecture proposed by Enterprise A.",
+                "content": _pdf_bytes("Al-Mizan accuse de reception"),
                 "type": "pdf",
                 "ia_statut": "VALID",
                 "encrypted": False,
                 "visible_after": timezone.now() - timedelta(days=5), # Visible since 5 days ago
-                "id_operateur_economique": TEST_OPERATOR_ID
+                "id_operateur_economique": operator_id
             },
             {
                 "nom": "contrat_final_signe.docx",

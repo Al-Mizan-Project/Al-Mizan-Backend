@@ -70,6 +70,26 @@ class DocumentApiTests(APITestCase):
         content = b"".join(response.streaming_content)
         self.assertEqual(content, b"Chunk 1Chunk 2")
 
+    def test_download_url_alias_returns_download_endpoint(self):
+        doc = Document.objects.create(
+            related_type="appel_offre",
+            nom="cdc.pdf",
+            type_document="pdf",
+            storage_url="almizan-documents/uuid-cdc.pdf",
+            hash_sha256="hash-cdc",
+        )
+        url = reverse('document_download_url_alias', kwargs={'id_document': doc.id_document})
+
+        response = self.client.get(url, HTTP_HOST='10.0.2.2:8000')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id_document"], doc.id_document)
+        self.assertEqual(response.data["storage_url"], doc.storage_url)
+        self.assertEqual(
+            response.data["download_url"],
+            f"http://10.0.2.2:8000/api/documents/{doc.id_document}/",
+        )
+
     @patch('documents_service.views.MinioStorageService.stream_zip_downloads')
     def test_download_bulk_zip(self, mock_zip_stream):
         # Arrange
@@ -215,5 +235,4 @@ class DocumentApiTests(APITestCase):
         download_url = reverse('document_download_single', kwargs={'id_document': hidden_doc.id_document})
         response = self.client.get(download_url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
 

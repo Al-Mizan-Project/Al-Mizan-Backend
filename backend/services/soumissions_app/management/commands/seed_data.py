@@ -2,6 +2,8 @@ from decimal import Decimal
 import json
 
 from django.core.management.base import BaseCommand, CommandError
+from django.db.models import Q
+from django.utils import timezone
 
 from appels_service.models import AppelOffres
 from auth_service.models import Role, Utilisateur
@@ -147,6 +149,8 @@ class Command(BaseCommand):
         for idx, appel_id in enumerate(appel_ids, start=1):
             statut, montant, rapport_fn = SEED_RECORDS[(idx - 1) % len(SEED_RECORDS)]
             rapport = rapport_fn() if rapport_fn else None
+            if rapport and document_ids:
+                rapport = self._attach_accuse_download_url(rapport, document_ids[0])
 
             payload = {
                 "offre_financiere_chiffree_url": (
@@ -235,5 +239,15 @@ class Command(BaseCommand):
             Document.objects.filter(
                 id_operateur_economique=operator_id,
                 related_type="soumission",
-            ).values_list("id_document", flat=True)[:2]
+                type_document="pdf",
+            )
+            .filter(Q(visible_after__isnull=True) | Q(visible_after__lte=timezone.now()))
+            .values_list("id_document", flat=True)[:2]
         )
+
+    @staticmethod
+    def _attach_accuse_download_url(rapport_json, document_id):
+        rapport = json.loads(rapport_json)
+        accuse = rapport.setdefault("accuse", {})
+        accuse.setdefault("download_url", f"/api/documents/{document_id}/")
+        return json.dumps(rapport)

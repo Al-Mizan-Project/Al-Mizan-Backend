@@ -49,9 +49,6 @@ class Command(BaseCommand):
         self.stdout.write("Seeding contractant service data...")
         call_command("seed_contractant", flush=flush)
 
-        self.stdout.write("Seeding appels service data...")
-        call_command("seed_appels", flush=flush)
-
         admin_membre_id, contractant_membre_id = self._resolve_membre_ids(
             admin_override=options.get("admin_membre_id"),
             contractant_override=options.get("contractant_membre_id"),
@@ -76,6 +73,17 @@ class Command(BaseCommand):
         ).first()
         if not contractant_user:
             raise CommandError("Unable to locate contractant seed user after seed_auth")
+
+        if options["with_documents"]:
+            self.stdout.write("Seeding document metadata + MinIO objects...")
+            call_command(
+                "seed_documents",
+                flush=flush,
+                operator_id=contractant_user.id_utilisateur,
+            )
+
+        self.stdout.write("Seeding appels service data...")
+        call_command("seed_appels", flush=flush)
 
         watched_created, watched_total = self._seed_watched_appels(
             user_id=contractant_user.id_utilisateur,
@@ -107,10 +115,6 @@ class Command(BaseCommand):
             user_id=contractant_user.id_utilisateur,
             count=options["notifications_count"],
         )
-
-        if options["with_documents"]:
-            self.stdout.write("Seeding document metadata + MinIO objects...")
-            call_command("seed_documents")
 
         self.stdout.write(
             self.style.SUCCESS(

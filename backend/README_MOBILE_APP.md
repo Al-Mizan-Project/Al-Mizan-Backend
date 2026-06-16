@@ -5,7 +5,7 @@ Use this path when running the backend for the Android mobile app. It uses Docke
 Current backend branch:
 
 ```bash
-feature/operator-document-ownership
+feature/mobile-backend-integration
 ```
 
 ## 1. Prepare the environment
@@ -67,7 +67,7 @@ To customize volumes:
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec backend sh scripts/seed_mobile_app.sh --flush --soumissions-count 5 --notifications-count 8 --watched-count 3
 ```
 
-To include document objects after MinIO is healthy:
+To test PDF downloads, include document objects after MinIO is healthy. This creates real PDF bytes in MinIO, links them to appels-offres, and adds receipt download URLs to seeded soumissions:
 
 ```powershell
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec backend sh scripts/seed_mobile_app.sh --flush --with-documents
@@ -127,7 +127,7 @@ Full database reset:
 ```powershell
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml down -v
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
-docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec backend sh scripts/seed_mobile_app.sh
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec backend sh scripts/seed_mobile_app.sh --flush --with-documents
 ```
 
 ## Local Python fallback
