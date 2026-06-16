@@ -1,7 +1,12 @@
+import hashlib
+import secrets
+from urllib.parse import urlencode
+
 from django.conf import settings
 from django.contrib.auth import password_validation
 from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
@@ -9,9 +14,9 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 import requests
-import hashlib
 
-from .models import Utilisateur, Role, Permission, PermissionRole, UtilisateurPermission
+from .models import Utilisateur, Role, Permission, PermissionRole
+from .rbac import normalize_role_name, permissions_for_role
 from .services.access_control import user_permission_names
 
 
@@ -37,6 +42,8 @@ def apply_user_claims(token, user):
     token["email"] = user.email
     token["role"] = user.id_role.nom_role
     token["permissions"] = user_permission_names(user)
+    token["must_change_password"] = bool(user.must_change_password)
+
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -63,7 +70,7 @@ class UtilisateurSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Utilisateur
-        fields = ["id_utilisateur", "id_role", "id_membre", "email", "is_active", "created_at", "updated_at"]
+        fields = ["id_utilisateur", "id_role", "id_membre", "email", "is_active", "must_change_password", "created_at", "updated_at"]
         read_only_fields = ["id_utilisateur", "created_at", "updated_at"]
 
 
@@ -97,7 +104,7 @@ class UtilisateurUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Utilisateur
-        fields = ["id_utilisateur", "id_role", "id_membre", "email", "is_active", "created_at", "updated_at"]
+        fields = ["id_utilisateur", "id_role", "id_membre", "email", "is_active", "must_change_password", "created_at", "updated_at"]
 
     def validate_id_membre(self, value):
         return validate_membre_reference(value)
@@ -119,6 +126,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class ForgotPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
+    language = serializers.ChoiceField(choices=["en", "fr", "ar"], default="fr")
 
 
 class ResetPasswordSerializer(serializers.Serializer):
@@ -200,9 +208,96 @@ def consume_password_reset_token(raw_token):
     return int(user_id)
 
 
+def delete_password_reset_token(raw_token):
+    digest = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    cache.delete(f"auth:pwdreset:{digest}")
+
+
+def store_account_activation_token(raw_token, user_id, timeout_seconds=None):
+    digest = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    timeout = timeout_seconds or int(getattr(settings, "ACCOUNT_ACTIVATION_TTL", 86400))
+    cache.set(f"auth:activate:{digest}", str(user_id), timeout=timeout)
+
+
+def consume_account_activation_token(raw_token):
+    digest = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    key = f"auth:activate:{digest}"
+    user_id = cache.get(key)
+    if not user_id:
+        return None
+    cache.delete(key)
+    return int(user_id)
+
+
+def build_activation_url(token):
+    base_url = getattr(settings, "ACCOUNT_ACTIVATION_URL", "").rstrip("/")
+    return f"{base_url}?{urlencode({'token': token})}"
+
+
+def build_password_reset_url(token):
+    base_url = getattr(settings, "FRONTEND_PASSWORD_RESET_URL", "").rstrip("/")
+    return f"{base_url}?{urlencode({'token': token})}"
+
+
+PASSWORD_RESET_EMAILS = {
+    "en": {
+        "subject": "Reset your Al-Mizan password",
+        "lines": [
+            "We received a request to reset your password.",
+            "Reset link: {reset_url}",
+            "If you did not request this, you can ignore this email.",
+        ],
+    },
+    "fr": {
+        "subject": "Reinitialisation de votre mot de passe Al-Mizan",
+        "lines": [
+            "Une demande de reinitialisation de mot de passe a ete recue.",
+            "Lien de reinitialisation: {reset_url}",
+            "Si vous n'etes pas a l'origine de cette demande, ignorez cet email.",
+        ],
+    },
+    "ar": {
+        "subject": "إعادة تعيين كلمة مرور الميزان",
+        "lines": [
+            "تلقينا طلبا لإعادة تعيين كلمة المرور الخاصة بك.",
+            "رابط إعادة التعيين: {reset_url}",
+            "إذا لم تطلب ذلك، يمكنك تجاهل هذه الرسالة.",
+        ],
+    },
+}
+
+
+def send_password_reset_email(user, reset_url, language):
+    content = PASSWORD_RESET_EMAILS[language]
+    send_mail(
+        subject=content["subject"],
+        message="\n".join(line.format(reset_url=reset_url) for line in content["lines"]),
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
+
+
+def send_activation_email(user, activation_url, temporary_password=None):
+    lines = [
+        "Votre compte Al-Mizan a ete cree.",
+        f"Lien d'activation: {activation_url}",
+    ]
+    if temporary_password:
+        lines.append(f"Mot de passe temporaire: {temporary_password}")
+    lines.append("Vous devrez changer ce mot de passe apres votre premiere connexion.")
+    send_mail(
+        subject="Activation de votre compte Al-Mizan",
+        message="\n".join(lines),
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+        recipient_list=[user.email],
+        fail_silently=True,
+    )
+
+
 class InternalActeurRegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     id_membre = serializers.CharField()
     role_nom = serializers.CharField(required=False) # Le nom du rôle en texte (ex: "SERVICE Contractant")
     role = serializers.CharField(required=False, write_only=True)
@@ -210,9 +305,10 @@ class InternalActeurRegisterSerializer(serializers.Serializer):
     permissions = serializers.ListField(
         child=serializers.CharField(), required=False, default=list
     )
+    send_activation = serializers.BooleanField(required=False, default=True)
 
     def validate(self, attrs):
-        role_name = attrs.get("role_nom") or attrs.get("role")
+        role_name = normalize_role_name(attrs.get("role_nom") or attrs.get("role"))
         if not role_name:
             raise serializers.ValidationError({"role_nom": ["This field is required."]})
         try:
@@ -233,25 +329,31 @@ class InternalActeurRegisterSerializer(serializers.Serializer):
         role = validated_data.pop('role_nom')
         validated_data.pop("role", None)
         validated_data.pop("permission", None)
-        permissions_noms = validated_data.pop('permissions', [])
+        validated_data.pop('permissions', [])
+        send_activation = validated_data.pop("send_activation", True)
+        raw_password = validated_data.get("password") or secrets.token_urlsafe(12)
+        self.temporary_password = raw_password
         
         with transaction.atomic():
             user = Utilisateur(
                 email=validated_data['email'],
                 id_membre=validated_data['id_membre'],
-                id_role=role
+                id_role=role,
+                is_active=not send_activation,
+                must_change_password=send_activation,
             )
-            user.set_password(validated_data['password'])
+            user.set_password(raw_password)
             user.save()
 
-            for permission_name in permissions_noms:
-                permission_name = str(permission_name).strip()
-                if not permission_name:
-                    continue
+            for permission_name in permissions_for_role(role.nom_role):
                 permission, _ = Permission.objects.get_or_create(nom_permission=permission_name)
-                UtilisateurPermission.objects.get_or_create(
-                    id_utilisateur=user,
-                    id_permission=permission,
-                )
+                PermissionRole.objects.get_or_create(id_role=role, id_permission=permission)
+
+        self.activation_url = None
+        if send_activation:
+            token = secrets.token_urlsafe(48)
+            store_account_activation_token(token, user.id_utilisateur)
+            self.activation_url = build_activation_url(token)
+            send_activation_email(user, self.activation_url, temporary_password=raw_password)
 
         return user

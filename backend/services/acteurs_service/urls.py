@@ -6,7 +6,7 @@ from .views import (
     CreerCommissionExterneView, ListCommissionExterneView,
     ListOperateurEconomiqueView,
     CreerResponsableView, CreateMembreByResponsableView, MembreDetailView ,ListMembresOrganisationView , SoumettreDemandeOperateurView,
-    OrganisationResponsableByTypeView
+    OrganisationResponsableByTypeView, CreateMembreInternalView
 )
 
 urlpatterns = [
@@ -21,6 +21,10 @@ urlpatterns = [
     path('admin/demandes/<uuid:id>/', DemandeOperateurDetailView.as_view(), name='admin-detail-demande'),
     path('admin/demandes/<uuid:id>/approuver/', DemandeApprouverView.as_view(), name='admin-approuver-demande'),
     path('admin/demandes/<uuid:id>/rejeter/', DemandeRejeterView.as_view(), name='admin-rejeter-demande'),
+    path('service-contractant/demandes/', DemandeOperateurListView.as_view(), name='sc-liste-demandes'),
+    path('service-contractant/demandes/<uuid:id>/', DemandeOperateurDetailView.as_view(), name='sc-detail-demande'),
+    path('service-contractant/demandes/<uuid:id>/approuver/', DemandeApprouverView.as_view(), name='sc-approuver-demande'),
+    path('service-contractant/demandes/<uuid:id>/rejeter/', DemandeRejeterView.as_view(), name='sc-rejeter-demande'),
     
     # ==========================================
     # 2. GESTION DES ORGANISATIONS (Par l'Admin)
@@ -49,6 +53,8 @@ urlpatterns = [
     
     # Création d'un collaborateur (Par le Responsable)
     path('membres/creer-collaborateur/', CreateMembreByResponsableView.as_view(), name='responsable-creer-membre'),
+    
+    path('membres/', CreateMembreInternalView.as_view(), name='create-membre-internal'),
     
     # Récupération du responsable par type d'entité
     path('organisations/by-type/<str:entite_type>/responsable/', OrganisationResponsableByTypeView.as_view(), name='responsable-by-type'),

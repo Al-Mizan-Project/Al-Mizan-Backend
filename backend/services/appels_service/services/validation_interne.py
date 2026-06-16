@@ -1,0 +1,213 @@
+import datetime
+from django.utils import timezone
+from appels_service.models import AppelOffres
+from contractant_service.models import MembresCommissionInterne
+from rest_framework.exceptions import PermissionDenied
+
+
+def normalize_membre_id(membre_id):
+    """Normalize membre_id to the DB-compatible type.
+
+    Some installations still store `id_membre` as an integer value derived from the last
+    hex segment of the UUID, while the JWT claim may contain a full UUID string.
+    """
+    if membre_id is None:
+        return None
+
+    # If it's already a UUID instance, keep it
+    try:
+        from uuid import UUID
+        if isinstance(membre_id, UUID):
+            return membre_id
+    except Exception:
+        pass
+
+    # If it's a string that looks like a UUID, return a UUID object (DB expects UUIDField)
+    if isinstance(membre_id, str):
+        if '-' in membre_id:
+            try:
+                from uuid import UUID
+                return UUID(membre_id)
+            except Exception:
+                # Not a valid UUID string; fall through and return as-is
+                return membre_id
+
+    # Fallback: return value unchanged (could be numeric or other form)
+    return membre_id
+
+
+def get_commission_interne_dashboard_data(membre_id):
+    """
+    Récupère et catégorise les appels d'offres pour le responsable de la commission interne.
+    """
+    original_membre_id = membre_id
+    membre_id = normalize_membre_id(membre_id)
+
+    # Adapt the query value to the DB field type (some installations use UUIDField, others IntegerField)
+    def _adapt_for_model(val, model):
+        field = model._meta.get_field('id_membre')
+        ftype = field.get_internal_type()
+        try:
+            from uuid import UUID
+        except Exception:
+            UUID = None
+
+        if val is None:
+            return None
+
+        if ftype == 'UUIDField':
+            if UUID and isinstance(val, str) and '-' in val:
+                try:
+                    return UUID(val)
+                except Exception:
+                    return val
+            if UUID and hasattr(val, 'hex'):
+                return val
+            return val
+
+        if ftype in ('IntegerField', 'AutoField', 'BigIntegerField', 'SmallIntegerField'):
+            # If we got a UUID instance, convert last hex segment to int
+            try:
+                if UUID and isinstance(val, UUID):
+                    return int(str(val).split('-')[-1], 16)
+            except Exception:
+                pass
+            # If we got a UUID-like string, convert by taking last hex segment
+            if isinstance(val, str) and '-' in val:
+                try:
+                    return int(val.split('-')[-1], 16)
+                except Exception:
+                    pass
+            try:
+                return int(val)
+            except Exception:
+                return val
+
+        return val
+
+    adapted_query_val = _adapt_for_model(membre_id, MembresCommissionInterne)
+
+    # 1. Vérifier que l'utilisateur est bien membre d'une commission interne
+    membre_commission = MembresCommissionInterne.objects.filter(id_membre=adapted_query_val).first()
+    
+    if not membre_commission:
+        raise PermissionDenied("Vous n'êtes pas assigné à un service contractant en tant que responsable de commission interne.")
+        
+    id_service = membre_commission.id_service_id
+    
+    # 2. Récupérer les Appels d'Offres du service en comparant le champ commission_id
+    # au service responsable. Seuls les dossiers réellement attribués à la commission
+    # interne doivent être retournés.
+    from django.db.models import Q
+    appels = (
+        AppelOffres.objects.filter(
+            Q(commission_id=str(id_service))
+            | Q(commission_id=id_service)
+        )
+        .prefetch_related('suivis', 'operateurs_invites')
+    )
+    
+    # Délai de validation par défaut (7 jours par exemple)
+    DELAI_VALIDATION_DAYS = 7
+    now = timezone.now()
+    
+    result_appels = []
+    stats = {
+        "enAttente": 0,
+        "enCours": 0,
+        "enRetard": 0,
+        "pret": 0,
+    }
+    
+    for appel in appels:
+        # Déterminer l'opérateur économique pertinent (choisi ou le premier invité, etc.)
+        economic_operator = str(appel.id_operateur_choisi) if appel.id_operateur_choisi else "Non spécifié"
+        if not appel.id_operateur_choisi and appel.operateurs_invites.exists():
+            economic_operator = f"Multiple ({appel.operateurs_invites.count()} invités)"
+
+        suivis = list(appel.suivis.all())
+        suivi_created_at = suivis[0].created_at if suivis else None
+        
+        # Calcul de la date limite
+        # Prefer an explicit validation deadline on the appel if available
+        # (field names vary across installations). Fallback to first suivi + default days.
+        validation_deadline = None
+        # check common variant names
+        for attr in ('date_limite_validation', 'validation_deadline', 'date_limite_validation_at', 'date_limite_validation_dt'):
+            val = getattr(appel, attr, None)
+            if val:
+                validation_deadline = val
+                break
+
+        if not validation_deadline and suivi_created_at:
+            validation_deadline = suivi_created_at + datetime.timedelta(days=DELAI_VALIDATION_DAYS)
+
+        # Logique des états (strictement selon vos règles)
+        computed_status = "Inconnu"
+        delay_days = 0
+
+        statut_val = (appel.statut or '').lower()
+
+        # d. Prêt à publier: statut in (valide, refuse, ferme)
+        if statut_val in ('valide', 'refuse', 'ferme'):
+            computed_status = 'Prêt'
+            stats['pret'] += 1
+        elif statut_val == 'non_valide':
+            # a. En attente d'affectation: no suivis, validated_by is NULL, statut = NON_VALIDE
+            if not suivis and (appel.validated_by is None or appel.validated_by == ''):
+                computed_status = 'En Attente'
+                stats['enAttente'] += 1
+            # b. En cours de validation: suivi exists, NOW <= deadline, statut = NON_VALIDE
+            elif suivis and validation_deadline and now <= validation_deadline:
+                computed_status = 'En Cours'
+                stats['enCours'] += 1
+            # c. En retard: suivi exists, NOW > deadline, statut = NON_VALIDE
+            elif suivis and validation_deadline and now > validation_deadline:
+                computed_status = 'En Retard'
+                delay_days = (now - validation_deadline).days
+                stats['enRetard'] += 1
+            else:
+                # fallback: if suivis exists but no deadline, treat as En Cours;
+                # if no suivis but validated_by present, mark En Cours as well
+                if suivis or (appel.validated_by is not None and appel.validated_by != ''):
+                    computed_status = 'En Cours'
+                    stats['enCours'] += 1
+                else:
+                    computed_status = 'En Attente'
+                    stats['enAttente'] += 1
+        else:
+            # Any other unexpected statut -> keep 'Inconnu' and do not increment totals
+            computed_status = 'Inconnu'
+
+        result_appels.append({
+            "id": f"ID-{appel.id_appel_offres}",
+            "rawId": appel.id_appel_offres,
+            "reference": appel.reference,
+            "economicOperator": economic_operator,
+            "submissionDate": appel.created_at.date().isoformat(),
+            "validationDeadline": validation_deadline.date().isoformat() if validation_deadline else "-",
+            "status": computed_status,
+            "etape": appel.etat_execution.replace('_', ' ').capitalize(),
+            "delayDays": delay_days,
+            "validator": appel.validated_by if appel.validated_by else "Non assigné",
+            "has_suivi": bool(suivis),
+            "suivi_count": len(suivis),
+            "suivis": [
+                {"id_utilisateur": s.id_utilisateur, "created_at": s.created_at.isoformat()} for s in suivis
+            ]
+        })
+        
+    # Calcul des pourcentages
+    total = sum(stats.values())
+    pct = lambda n: round((n / total) * 100) if total > 0 else 0
+    stats.update({
+        "enAttentePct": pct(stats["enAttente"]),
+        "enCoursPct": pct(stats["enCours"]),
+        "enRetardPct": pct(stats["enRetard"]),
+        "pretPct": pct(stats["pret"]),
+    })
+
+    return {
+        "stats": stats,
+        "appels": result_appels
+    }

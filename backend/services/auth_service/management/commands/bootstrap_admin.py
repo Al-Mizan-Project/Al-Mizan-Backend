@@ -1,8 +1,10 @@
 import os
+import uuid
 
 from django.core.management.base import BaseCommand, CommandError
 
 from auth_service.models import Role, Utilisateur
+from auth_service.rbac import normalize_role_name
 
 
 def as_bool(value):
@@ -20,7 +22,7 @@ class Command(BaseCommand):
 
         email = os.getenv("INITIAL_ADMIN_EMAIL", "").strip().lower()
         password = os.getenv("INITIAL_ADMIN_PASSWORD", "")
-        role_name = os.getenv("INITIAL_ADMIN_ROLE", "admin").strip()
+        role_name = normalize_role_name(os.getenv("INITIAL_ADMIN_ROLE", "ADMIN"))
         membre_id_raw = os.getenv("INITIAL_ADMIN_MEMBRE_ID", "1").strip()
 
         if not email:
@@ -30,11 +32,12 @@ class Command(BaseCommand):
         if not role_name:
             raise CommandError("INITIAL_ADMIN_ROLE must not be empty")
         try:
-            membre_id = int(membre_id_raw)
+            membre_id_int = int(membre_id_raw)
         except ValueError as exc:
             raise CommandError("INITIAL_ADMIN_MEMBRE_ID must be an integer") from exc
-        if membre_id < 1:
+        if membre_id_int < 1:
             raise CommandError("INITIAL_ADMIN_MEMBRE_ID must be >= 1")
+        membre_id = uuid.UUID(int=membre_id_int)
 
         role, _ = Role.objects.get_or_create(nom_role=role_name)
         user, _ = Utilisateur.objects.get_or_create(
@@ -47,5 +50,7 @@ class Command(BaseCommand):
         user.id_role = role
         user.id_membre = membre_id
         user.set_password(password)
-        user.save(update_fields=["id_role", "id_membre", "password", "updated_at"])
+        user.is_active = True
+        user.must_change_password = False
+        user.save(update_fields=["id_role", "id_membre", "password", "is_active", "must_change_password", "updated_at"])
         self.stdout.write(f"Initial admin ready: {email}")

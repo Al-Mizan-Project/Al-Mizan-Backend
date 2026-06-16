@@ -2,6 +2,7 @@ import logging
 
 from rest_framework.permissions import BasePermission
 from django.utils import timezone
+from auth_service.rbac import normalize_role_name
 
 from .services.integrations import validate_appel_offre
 
@@ -17,10 +18,10 @@ class IsCommissionMember(BasePermission):
 
     def has_permission(self, request, view):
         token_payload = getattr(request, "auth", None) or {}
-        role = token_payload.get("role", "")
+        role = normalize_role_name(token_payload.get("role", ""))
 
         # Admin / commission roles are always allowed
-        if role in ("admin", "commission", "president_commission", "chef_commission"):
+        if role in ("ADMIN", "EVALUATEUR", "RESP_CM", "VALIDATEUR_EXTERNE_MARCHE", "VALIDATEUR_EXTERNE_CDC", "MEMBRE_COMITE_TECHNIQUE"):
             return True
 
         id_appel_offre = view.kwargs.get("id_appel_offre")
@@ -70,10 +71,10 @@ class CanOpenBids(BasePermission):
     def has_permission(self, request, view):
         token_payload = getattr(request, "auth", None) or {}
         permissions = token_payload.get("permissions", [])
-        role = token_payload.get("role", "")
+        role = normalize_role_name(token_payload.get("role", ""))
 
         # Check permission claim
-        if "OUVERTURE_PLIS" not in permissions and role not in ("admin",):
+        if "pli:open" not in permissions and "OUVERTURE_PLIS" not in permissions and role not in ("ADMIN",):
             return False
 
         id_appel_offre = view.kwargs.get("id_appel_offre")

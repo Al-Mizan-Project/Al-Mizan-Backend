@@ -425,42 +425,59 @@ class SoumissionAffecterView(APIView):
     permission_classes = [IsCommissionMember]   # Reuse existing permission
 
     def post(self, request, soumission_id):
-        soum = get_object_or_404(Soumission, id_soumission=soumission_id)
+     soum = get_object_or_404(Soumission, id_soumission=soumission_id)
 
-        # Check soumission status (allow only if not already closed)
-        if soum.statut not in [SoumissionStatut.SOUMIS, SoumissionStatut.EN_EVALUATION]:
-            return Response(
-                {"error": "La soumission n'est pas en phase d'affectation."},
-                status=status.HTTP_400_BAD_REQUEST
+     if soum.statut not in [SoumissionStatut.SOUMIS, SoumissionStatut.EN_EVALUATION]:
+        return Response({"error": "La soumission n'est pas en phase d'affectation."}, status=status.HTTP_400_BAD_REQUEST)
+
+     serializer = AffectationSerializer(data=request.data)
+     if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+     id_comission = serializer.validated_data['id_comission']
+
+    # Assign commission to soumission — one commission per soumission
+     obj, created = SoumissionEvaluateur.objects.update_or_create(
+        soumission=soum,
+        defaults={'id_comission': id_comission}
+    )
+
+     if soum.statut == SoumissionStatut.SOUMIS:
+        soum.statut = SoumissionStatut.EN_EVALUATION
+        soum.save()
+
+     return Response({
+        "message": "Commission affectée",
+        "soumission_id": soum.id_soumission,
+        "id_comission": id_comission,
+        "created": created,
+     }, status=status.HTTP_201_CREATED)
+
+class SoumissionsByCommissionView(APIView):
+    """
+    GET /soumissions/by-commission/<id_comission>/
+    Returns soumissions physically registered for a COPEO commission.
+    """
+    def get(self, request, id_comission):
+        try:
+            from evaluations_service.models import RegistreReception
+            soumission_ids = list(
+                RegistreReception.objects.filter(id_comission_id=id_comission)
+                .order_by("numero_ordre")
+                .values_list("id_soumission", flat=True)
+            )
+        except Exception:
+            soumission_ids = []
+
+        if not soumission_ids:
+            soumission_ids = list(
+                SoumissionEvaluateur.objects.filter(id_comission=id_comission)
+                .values_list('soumission_id', flat=True)
             )
 
-        serializer = AffectationSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        queryset = Soumission.objects.filter(
+            id_soumission__in=soumission_ids
+        ).order_by('-date_soumission')
 
-        evaluateur_ids = serializer.validated_data['evaluateur_ids']
-        type_eval = serializer.validated_data['type_evaluation']
-
-        created_assignments = []
-        for eid in evaluateur_ids:
-            obj, created = SoumissionEvaluateur.objects.get_or_create(
-                soumission=soum,
-                evaluateur_id=eid,
-                type_evaluation=type_eval
-            )
-            created_assignments.append({
-                "soumission_id": soum.id_soumission,
-                "evaluateur_id": eid,
-                "type": type_eval,
-                "created": created
-            })
-
-        # Optionally update soumission status to EN_EVALUATION if it was SOUMIS
-        if soum.statut == SoumissionStatut.SOUMIS:
-            soum.statut = SoumissionStatut.EN_EVALUATION
-            soum.save()
-
-        return Response({
-            "message": "Affectation réussie",
-            "assignments": created_assignments
-        }, status=status.HTTP_201_CREATED)
+        serializer = SoumissionListSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

@@ -1,40 +1,44 @@
 from django.urls import path
 
 from .views import (
-    ValidationListCreateView,
-    ValidationRetrieveUpdateDeleteView,
-    ValidationApproveView,
-    ValidationRejectView,
-    ContratListCreateView,
-    ContratRetrieveUpdateDeleteView,
-    ContratSignView,
-    ContratDocumentsListView,
-    ContratDocumentDetailView,
-    SoumissionContratView,
-    AffectationDetailView,
-    ValidationTransmitView,
+    AttributionProvisoireListView,
+    AttributionDetailView,
+    AffecterAttributionView,
+    ValiderAttributionView,
+    AttributionDefinitiveListView,
+    AttributionDefinitiveDetailView,
+    ValidatorAttributionsView,
 )
 
 urlpatterns = [
-    # Validations
-    path("validations/", ValidationListCreateView.as_view()),
-    path("validations/<int:validation_id>/", ValidationRetrieveUpdateDeleteView.as_view()),
-    path("validations/<int:validation_id>/approuver/", ValidationApproveView.as_view()),
-    path("validations/<int:validation_id>/rejeter/", ValidationRejectView.as_view()),
+    # -----------------------------------------------------------------------
+    # Validations  →  attributions provisoires
+    # -----------------------------------------------------------------------
 
-    # Contrats
-    path("contrats", ContratListCreateView.as_view()),
-    path("contrats/<int:contrat_id>", ContratRetrieveUpdateDeleteView.as_view()),
-    path("contrats/<int:contrat_id>/signer", ContratSignView.as_view()),
+    # GET  /attributions-provisoires/?commission_id=X&validation_level=interne
+    path("attributions-provisoires/", AttributionProvisoireListView.as_view()),
 
-    # Contrat documents
-    path("contrats/<int:contrat_id>/documents", ContratDocumentsListView.as_view()),
-    path("contrats/<int:contrat_id>/documents/<int:document_id>", ContratDocumentDetailView.as_view()),
 
-    # Cross-entity
-    path("soumissions/<int:soumission_id>/contrat", SoumissionContratView.as_view()),
-    
-    # --- ADDITION FOR AFFECTATION ---
-    path("affectation-details/<int:soumission_id>/", AffectationDetailView.as_view()),
-    path("transmettre-dossier/", ValidationTransmitView.as_view()),
+
+    # GET  /attributions-provisoires/<id>/   → détail complet enrichi
+    path("attributions-provisoires/<int:attribution_provisoire_id>/", AttributionDetailView.as_view()),
+
+    # POST /attributions-provisoires/<id>/affecter/  → affecter validated_by
+    path("attributions-provisoires/<int:attribution_provisoire_id>/affecter/", AffecterAttributionView.as_view()),
+
+    # POST /attributions-provisoires/<id>/valider/    → valider (→ definitive)
+    path("attributions-provisoires/<int:attribution_provisoire_id>/valider/", ValiderAttributionView.as_view()),
+
+    # -----------------------------------------------------------------------
+    # Contrats  →  attributions definitives
+    # -----------------------------------------------------------------------
+
+    # GET  /attributions-definitives?service_contractant_id=X
+    path("attributions-definitives/", AttributionDefinitiveListView.as_view()),
+
+    # GET  /attributions-definitives/<id>
+    path("attributions-definitives/<int:attribution_definitive_id>/", AttributionDefinitiveDetailView.as_view()),
+
+    # GET  /validator-attributions/?user_id=X
+    path("validator-attributions/", ValidatorAttributionsView.as_view()),
 ]

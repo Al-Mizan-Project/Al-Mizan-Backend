@@ -9,7 +9,8 @@ from .views import (
     SoumissionDocumentsView,
     SoumissionTerminerEvaluationView,
     SoumissionWithdrawView,
-    SoumissionAffecterView,          # <-- added
+    SoumissionAffecterView,      
+    SoumissionsByCommissionView,    
 )
 
 urlpatterns = [
@@ -22,4 +23,6 @@ urlpatterns = [
     path('<int:soumission_id>/terminer-evaluation/', SoumissionTerminerEvaluationView.as_view(), name='soumission-terminer-evaluation'),
     path('<int:soumission_id>/conformite/', SoumissionConformitePatchView.as_view(), name='soumission-conformite-patch'),
     path('<int:soumission_id>/affecter/', SoumissionAffecterView.as_view(), name='soumission-affecter'),   # <-- added
+    path('by-commission/<int:id_comission>/', SoumissionsByCommissionView.as_view(), name='soumissions-by-commission'),  # ADD THIS
+
 ]

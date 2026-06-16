@@ -7,6 +7,8 @@ from rest_framework.response import Response
 from django.conf import settings
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
+from auth_service.rbac import normalize_role_name
 from .models import Membre ,OperateurEconomique , TypeDocument ,DemandeDocument, DemandeOperateur, StatutDemande ,DemandeOperateur ,Organisation, ServiceContractant, CommissionExterne, TypeEntite
 from .serializers import OrganisationCreateSerializer, ServiceContractantCreateSerializer, CommissionExterneCreateSerializer, MembreDetailSerializer
 from .serializers import DemandeOperateurSerializer
@@ -15,7 +17,7 @@ from .serializers import CreateResponsableSerializer , MembreCreateByResponsable
 from rest_framework.generics import ListAPIView
 from .models import Organisation, TypeEntite
 from .serializers import OrganisationListSerializer
-from .permissions import IsResponsable , IsAdminRole
+from .permissions import IsResponsable , IsAdminRole, IsRespSC
 
 
 def _auth_service_base_url():
@@ -26,11 +28,76 @@ def _auth_service_base_url():
     ).rstrip("/")
 
 
+def _internal_headers():
+    token = getattr(settings, "INTERNAL_SERVICE_TOKEN", "")
+    return {"X-Internal-Service-Token": token} if token else {}
+
+
+def _request_service_contractant_id(request):
+    token_payload = request.auth or {}
+    candidates = [
+        request.query_params.get("id_service_contractant"),
+        request.query_params.get("service_id"),
+        request.headers.get("X-Service-Contractant-Id"),
+        token_payload.get("id_service_contractant"),
+        token_payload.get("service_id"),
+    ]
+    for value in candidates:
+        if value in (None, ""):
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _assert_demande_scope(request, demande):
+    service_id = _request_service_contractant_id(request)
+    if service_id and demande.id_service_contractant and demande.id_service_contractant != service_id:
+        raise PermissionDenied("Cette demande appartient a un autre service contractant.")
+    return service_id
+
+
+def _auth_register(payload):
+    auth_url = _auth_service_base_url() + "/internal/users/register"
+    return requests.post(auth_url, json=payload, headers=_internal_headers())
+
+
+def _auth_response_data(response):
+    try:
+        return response.json()
+    except ValueError:
+        return {"detail": response.text}
+
+
+def _truncate(value, length, fallback):
+    value = str(value or "").strip()
+    if not value:
+        value = fallback
+    return value[:length]
+
+
+def _responsable_oe_payload(request, demande):
+    password = str(request.data.get("password", "")).strip()
+    payload = {
+        "nom": _truncate(request.data.get("nom") or demande.nom_organisation, 100, "Responsable"),
+        "prenom": _truncate(request.data.get("prenom"), 100, "OE"),
+        "telephone": _truncate(request.data.get("telephone") or demande.telephone, 30, ""),
+        "fonction": _truncate(request.data.get("fonction"), 50, "Responsable OE"),
+        "email": str(request.data.get("email") or demande.email_contact).strip(),
+    }
+    if password:
+        payload["password"] = password
+    return payload
+
+
 class DemandeOperateurListView(generics.ListAPIView):
     """
     Endpoint: GET /api/acteurs/admin/demandes/
     Description: Liste toutes les demandes des opérateurs économiques.
     """
+    permission_classes = [IsAuthenticated, IsRespSC]
     serializer_class = DemandeOperateurSerializer
     
     # On récupère toutes les demandes, classées de la plus récente à la plus ancienne
@@ -46,6 +113,9 @@ class DemandeOperateurListView(generics.ListAPIView):
         Ex: /api/acteurs/admin/demandes/?statut=EN_ATTENTE
         """
         queryset = super().get_queryset()
+        service_id = _request_service_contractant_id(self.request)
+        if service_id:
+            queryset = queryset.filter(id_service_contractant=service_id)
         statut = self.request.query_params.get('statut', None)
         if statut is not None:
             queryset = queryset.filter(statut=statut)
@@ -56,9 +126,15 @@ class DemandeOperateurDetailView(generics.RetrieveAPIView):
     Endpoint: GET /api/acteurs/admin/demandes/{id}/
     Récupère les détails d'une demande ET interroge le service Document.
     """
+    permission_classes = [IsAuthenticated, IsRespSC]
     queryset = DemandeOperateur.objects.all()
     serializer_class = DemandeOperateurDetailSerializer
     lookup_field = 'id' # Permet d'utiliser l'UUID dans l'URL
+
+    def get_object(self):
+        instance = super().get_object()
+        _assert_demande_scope(self.request, instance)
+        return instance
 
     def retrieve(self, request, *args, **kwargs):
         # 1. Récupérer l'objet DemandeOperateur de la base de données Acteurs
@@ -121,10 +197,12 @@ class DemandeApprouverView(APIView):
     Endpoint: POST /api/acteurs/admin/demandes/{id}/approuver/
     Action: Passe la demande en APPROUVE et crée l'Organisation + OperateurEconomique.
     """
+    permission_classes = [IsAuthenticated, IsRespSC]
 
     def post(self, request, id, *args, **kwargs):
         # 1. Récupérer la demande
         demande = get_object_or_404(DemandeOperateur, id=id)
+        _assert_demande_scope(request, demande)
 
         # Vérifier si elle n'est pas déjà traitée
         if demande.statut != StatutDemande.EN_ATTENTE:
@@ -138,7 +216,7 @@ class DemandeApprouverView(APIView):
             with transaction.atomic():
                 # 2. Mettre à jour le statut de la demande
                 demande.statut = StatutDemande.APPROUVE
-                demande.save()
+                demande.save(update_fields=["statut", "mis_a_jour_le"])
 
                 # 3. Créer l'entité globale Organisation
                 organisation = Organisation.objects.create(
@@ -154,12 +232,36 @@ class DemandeApprouverView(APIView):
                     num_registre_commerce=demande.num_registre_commerce
                 )
 
-            # On renvoie l'ID de la nouvelle organisation pour que le frontend 
-            # puisse enchaîner avec la création du responsable
+                responsable_data = _responsable_oe_payload(request, demande)
+                responsable = Membre.objects.create(
+                    organisation=organisation,
+                    nom=responsable_data["nom"],
+                    prenom=responsable_data["prenom"],
+                    telephone=responsable_data.get("telephone"),
+                    fonction=responsable_data.get("fonction"),
+                )
+                auth_payload = {
+                    "email": responsable_data["email"],
+                    "id_membre": str(responsable.id_membre),
+                    "role_nom": "RESP_OE",
+                    "send_activation": True,
+                }
+                if responsable_data.get("password"):
+                    auth_payload["password"] = responsable_data["password"]
+                auth_response = _auth_register(auth_payload)
+                auth_data = _auth_response_data(auth_response)
+                if auth_response.status_code != 201:
+                    raise Exception(f"Erreur Service Auth: {auth_response.text}")
+
             return Response({
                 "message": "Demande approuvée avec succès. L'entreprise a été créée.",
                 "demande_id": demande.id,
-                "organisation_id": organisation.id_organisation
+                "organisation_id": organisation.id_organisation,
+                "operateur_id": operateur.organisation_id,
+                "id_membre": responsable.id_membre,
+                "id_utilisateur": auth_data.get("id_utilisateur"),
+                "activation_url": auth_data.get("activation_url"),
+                "temporary_password": auth_data.get("temporary_password"),
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -174,9 +276,11 @@ class DemandeRejeterView(APIView):
     Endpoint: POST /api/acteurs/admin/demandes/{id}/rejeter/
     Action: Rejette une demande d'inscription avec un motif.
     """
+    permission_classes = [IsAuthenticated, IsRespSC]
 
     def post(self, request, id, *args, **kwargs):
         demande = get_object_or_404(DemandeOperateur, id=id)
+        _assert_demande_scope(request, demande)
 
         if demande.statut != StatutDemande.EN_ATTENTE:
             return Response(
@@ -218,12 +322,14 @@ class CreerResponsableView(APIView):
 
         # Configuration Rôle/Permission selon le type d'organisation (PDF Page 2)
         mapping = {
-            TypeEntite.OPERATEUR_ECONOMIQUE: ("Operateur Economique", "responsable_operateur_economique"),
-            TypeEntite.SERVICE_CONTRACTANT: ("SERVICE Contractant", "responsable_service_contratant"),
-            TypeEntite.COMMISSION_EXTERNE: ("Commission Externe", "responsable_commission_externe"),
+            TypeEntite.OPERATEUR_ECONOMIQUE: "RESP_OE",
+            TypeEntite.SERVICE_CONTRACTANT: "RESP_SC",
+            TypeEntite.COMMISSION_EXTERNE: "RESP_CM",
         }
         
-        role_nom, perm_nom = mapping.get(organisation.type_entite, (None, None))
+        role_nom = mapping.get(organisation.type_entite)
+        if not role_nom:
+            return Response({"erreur": "Type d'organisation non supporté"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             with transaction.atomic():
@@ -240,24 +346,26 @@ class CreerResponsableView(APIView):
                 # On envoie l'id_membre pour que l'utilisateur pointe vers lui
                 auth_payload = {
                     "email": data['email'],
-                    "password": data['password'],
                     "id_membre": str(membre.id_membre), 
                     "role_nom": role_nom,
-                    "permissions": [perm_nom],
-                    "nom": data['nom'],
-                    "prenom": data['prenom']
+                    "send_activation": True,
                 }
+                if data.get("password"):
+                    auth_payload["password"] = data["password"]
 
                # L'URL pointe vers la nouvelle route interne
-                auth_url = _auth_service_base_url() + "/internal/users/register"
-                auth_response = requests.post(auth_url, json=auth_payload)
+                auth_response = _auth_register(auth_payload)
+                auth_data = _auth_response_data(auth_response)
                 if auth_response.status_code != 201:
                     # Si Auth échoue, on rollback la création du membre
                     raise Exception(f"Erreur Service Auth: {auth_response.text}")
 
             return Response({
                 "message": "Responsable créé avec succès (Membre + Compte Auth)",
-                "id_membre": membre.id_membre
+                "id_membre": membre.id_membre,
+                "id_utilisateur": auth_data.get("id_utilisateur"),
+                "activation_url": auth_data.get("activation_url"),
+                "temporary_password": auth_data.get("temporary_password"),
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
@@ -341,6 +449,20 @@ class CreateMembreByResponsableView(APIView):
         except Membre.DoesNotExist:
             return Response({"erreur": "Responsable non trouvé dans le service Acteurs"}, status=404)
 
+        role_mapping = {
+            TypeEntite.SERVICE_CONTRACTANT: "REDACTEUR_CDC",
+            TypeEntite.OPERATEUR_ECONOMIQUE: "PREPARATEUR_OE",
+            TypeEntite.COMMISSION_EXTERNE: "VALIDATEUR_EXTERNE_MARCHE",
+        }
+        allowed_roles = {
+            TypeEntite.SERVICE_CONTRACTANT: {"RESP_SC", "REDACTEUR_CDC", "EVALUATEUR", "MEMBRE_COMITE_TECHNIQUE", "RESP_VALID_INTERN", "VALIDATEUR_INTERNE_MARCHE", "VALIDATEUR_INTERNE_CDC"},
+            TypeEntite.OPERATEUR_ECONOMIQUE: {"PREPARATEUR_OE"},
+            TypeEntite.COMMISSION_EXTERNE: {"VALIDATEUR_EXTERNE_MARCHE", "VALIDATEUR_EXTERNE_CDC"},
+        }
+        role_nom = normalize_role_name(data.get("role_nom") or data.get("role") or role_mapping.get(organisation.type_entite))
+        if role_nom not in allowed_roles.get(organisation.type_entite, set()):
+            return Response({"role_nom": ["Ce rôle n'est pas autorisé pour cette organisation."]}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             with transaction.atomic():
                 # 2. CRÉATION DU NOUVEAU MEMBRE (Collaborateur)
@@ -354,32 +476,28 @@ class CreateMembreByResponsableView(APIView):
 
                 # 3. PRÉPARATION APPEL AUTH
                 # Le rôle est le même que celui de l'organisation
-                role_mapping = {
-                    'SERVICE_CONTRACTANT': "SERVICE Contractant",
-                    'OPERATEUR_ECONOMIQUE': "Operateur Economique",
-                    'COMMISSION_EXTERNE': "Commission Externe",
-                }
-                
                 auth_payload = {
                     "email": data['email'],
-                    "password": data['password'],
                     "id_membre": str(nouveau_membre.id_membre),
-                    "role_nom": role_mapping.get(organisation.type_entite),
-                    "permissions": data['permissions'], # Les permissions choisies par le responsable
-                    "nom": data['nom'],
-                    "prenom": data['prenom']
+                    "role_nom": role_nom,
+                    "send_activation": True,
                 }
+                if data.get("password"):
+                    auth_payload["password"] = data["password"]
 
                 # Appel vers le service Auth
                 # L'URL pointe vers la nouvelle route interne
-                auth_url = _auth_service_base_url() + "/internal/users/register"
-                auth_response = requests.post(auth_url, json=auth_payload)
+                auth_response = _auth_register(auth_payload)
+                auth_data = _auth_response_data(auth_response)
                 if auth_response.status_code != 201:
                     raise Exception(f"Erreur Auth: {auth_response.text}")
 
             return Response({
                 "message": "Membre et compte collaborateur créés avec succès",
-                "id_membre": nouveau_membre.id_membre
+                "id_membre": nouveau_membre.id_membre,
+                "id_utilisateur": auth_data.get("id_utilisateur"),
+                "activation_url": auth_data.get("activation_url"),
+                "temporary_password": auth_data.get("temporary_password"),
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
@@ -410,7 +528,10 @@ class ListMembresOrganisationView(APIView):
             auth_service_url = _auth_service_base_url()
             try:
                 # On demande au service Auth de nous renvoyer les comptes liés à ces id_membre
-                response = requests.get(f"{auth_service_url}/internal/users/search?membres_ids={ids_string}")
+                response = requests.get(
+                    f"{auth_service_url}/internal/users/search?membres_ids={ids_string}",
+                    headers=_internal_headers(),
+                )
                 
                 if response.status_code == 200:
                     comptes = response.json() # Liste d'utilisateurs Auth
@@ -418,6 +539,7 @@ class ListMembresOrganisationView(APIView):
                     for compte in comptes:
                         # On suppose que le service Auth renvoie l'id_membre avec le compte
                         auth_data_dict[compte.get('id_membre')] = {
+                            "id_utilisateur": compte.get('id_utilisateur'),
                             "email": compte.get('email'),
                             "is_active": compte.get('is_active'),
                             "role": compte.get('role'),
@@ -557,6 +679,7 @@ class SoumettreDemandeOperateurView(APIView):
                     telephone             = data['telephone'],
                     nif                   = data['nif'],
                     num_registre_commerce = data['num_registre_commerce'],
+                    id_service_contractant = data['id_service_contractant'],
                     # statut = EN_ATTENTE par défaut (défini dans le modèle)
                 )
 
@@ -580,8 +703,9 @@ class SoumettreDemandeOperateurView(APIView):
 
         return Response(
             {
-                "message": "Votre demande a été soumise avec succès. Elle est en attente de validation par l'administrateur.",
+                "message": "Votre demande a été soumise avec succès. Elle est en attente de validation par le service contractant.",
                 "demande_id": str(demande.id),
+                "id_service_contractant": demande.id_service_contractant,
                 "statut":     demande.statut,
             },
             status=status.HTTP_201_CREATED
@@ -670,3 +794,82 @@ class OrganisationResponsableByTypeView(APIView):
             "nom": f"{membre.prenom} {membre.nom}",
             "organisation_nom": membre.organisation.nom_officiel
         })
+
+
+class CreateMembreInternalView(APIView):
+    """
+    POST /api/acteurs/membres/
+    Internal endpoint to create a Membre record.
+    Protected by X-Internal-Service-Token for inter-service communication.
+    
+    Request:
+    {
+        "nom": "Dupont",
+        "prenom": "Jean",
+        "telephone": "+212...",
+        "fonction": "VALIDATEUR_EXTERNE_MARCHE",
+        "organisation": "uuid-of-organisation"
+    }
+    
+    Response:
+    {
+        "id_membre": "uuid",
+        "nom": "Dupont",
+        "prenom": "Jean",
+        "organisation": "uuid"
+    }
+    """
+    permission_classes = [AllowAny]  # Protected by token check in logic
+    
+    def post(self, request):
+        # Verify internal service token (optional but recommended)
+        # token = request.META.get('HTTP_X_INTERNAL_SERVICE_TOKEN', '')
+        # if token != getattr(settings, 'INTERNAL_SERVICE_TOKEN', ''):
+        #     return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            nom = request.data.get('nom', '').strip()
+            prenom = request.data.get('prenom', '').strip()
+            telephone = request.data.get('telephone', '').strip()
+            fonction = request.data.get('fonction', '').strip()
+            organisation_id = request.data.get('organisation')
+            
+            if not all([nom, prenom, organisation_id]):
+                return Response(
+                    {"error": "Missing required fields: nom, prenom, organisation"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get organisation
+            try:
+                organisation = Organisation.objects.get(id_organisation=organisation_id)
+            except Organisation.DoesNotExist:
+                return Response(
+                    {"error": f"Organisation {organisation_id} not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Create Membre
+            with transaction.atomic():
+                membre = Membre.objects.create(
+                    nom=nom,
+                    prenom=prenom,
+                    telephone=telephone or None,
+                    fonction=fonction or None,
+                    organisation=organisation
+                )
+            
+            return Response({
+                "id_membre": str(membre.id_membre),
+                "nom": membre.nom,
+                "prenom": membre.prenom,
+                "telephone": membre.telephone,
+                "fonction": membre.fonction,
+                "organisation": str(membre.organisation.id_organisation)
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to create membre: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

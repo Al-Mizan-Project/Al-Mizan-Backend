@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from acteurs_service.models import Membre, OperateurEconomique, Organisation, Tutelle
+from acteurs_service.models import Membre, OperateurEconomique, Organisation
 
 
 ORGANISATIONS = [
@@ -9,19 +9,19 @@ ORGANISATIONS = [
         "nom_officiel": "TECHBUILD SARL",
         "adresse_siege": "Alger Centre",
         "email_contact": "contact@techbuild.dz",
-        "type_entite": "Privee",
+        "type_entite": "SERVICE_CONTRACTANT",
     },
     {
         "nom_officiel": "BATIPRO SPA",
         "adresse_siege": "Oran Akid",
         "email_contact": "contact@batipro.dz",
-        "type_entite": "Privee",
+        "type_entite": "OPERATEUR_ECONOMIQUE",
     },
     {
         "nom_officiel": "NETSERV EURL",
         "adresse_siege": "Constantine",
         "email_contact": "contact@netserv.dz",
-        "type_entite": "Privee",
+        "type_entite": "OPERATEUR_ECONOMIQUE",
     },
 ]
 
@@ -56,31 +56,14 @@ MEMBRES = [
     },
 ]
 
-TUTELLES = [
-    {
-        "nom_tutelle": "Ministere Habitat",
-        "identite_autorite": "Direction Centrale",
-    },
-    {
-        "nom_tutelle": "Wilaya Alger",
-        "identite_autorite": "Secretariat General",
-    },
-]
-
 OPERATEURS = [
     {
         "nif": "001234567890123",
-        "registre_commerce_num": "16B1234567",
-        "casnos_vrt": "CASNOS-001",
-        "cnas_vrt": "CNAS-001",
-        "rib_bancaire": "007999990000111122223333",
+        "num_registre_commerce": "16B1234567",
     },
     {
         "nif": "001234567890124",
-        "registre_commerce_num": "31B7654321",
-        "casnos_vrt": "CASNOS-002",
-        "cnas_vrt": "CNAS-002",
-        "rib_bancaire": "007999990000222233334444",
+        "num_registre_commerce": "31B7654321",
     },
 ]
 
@@ -101,17 +84,7 @@ class Command(BaseCommand):
             Membre.objects.all().delete()
             OperateurEconomique.objects.all().delete()
             Organisation.objects.all().delete()
-            Tutelle.objects.all().delete()
             self.stdout.write(self.style.WARNING("Flushed acteurs seed data."))
-
-        tutelles_created = 0
-        for payload in TUTELLES:
-            _, created = Tutelle.objects.update_or_create(
-                nom_tutelle=payload["nom_tutelle"],
-                defaults=payload,
-            )
-            if created:
-                tutelles_created += 1
 
         organisations = []
         created_organisations = 0
@@ -128,7 +101,7 @@ class Command(BaseCommand):
         for payload in MEMBRES:
             organisation_id = organisations[payload["organisation_index"]].id_organisation
             defaults = {
-                "id_organisation": organisation_id,
+                "organisation_id": organisation_id,
                 "telephone": payload["telephone"],
                 "fonction": payload["fonction"],
             }
@@ -142,9 +115,19 @@ class Command(BaseCommand):
 
         created_operateurs = 0
         for payload in OPERATEURS:
+            org, _ = Organisation.objects.update_or_create(
+                nom_officiel=f"Operateur {payload['nif'][-4:]}",
+                defaults={
+                    "type_entite": "OPERATEUR_ECONOMIQUE",
+                    "email_contact": f"op{payload['nif'][-4:]}@example.dz",
+                },
+            )
             _, created = OperateurEconomique.objects.update_or_create(
-                nif=payload["nif"],
-                defaults=payload,
+                organisation=org,
+                defaults={
+                    "nif": payload["nif"],
+                    "num_registre_commerce": payload["num_registre_commerce"],
+                },
             )
             if created:
                 created_operateurs += 1
@@ -157,7 +140,6 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 (
                     "Acteurs seed completed. "
-                    f"Tutelles(created={tutelles_created}), "
                     f"Organisations(created={created_organisations}), "
                     f"Membres(created={created_membres}), "
                     f"Operateurs(created={created_operateurs})."

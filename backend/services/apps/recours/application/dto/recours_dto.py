@@ -40,6 +40,7 @@ class RecoursResponseDTO:
     decision: Optional[str]
     date_depot: str
     date_limite: str
+    date_fin_instruction: Optional[str]
     date_decision: Optional[str]
     traite_par: Optional[int]
     type_recours: Optional[str] = None

@@ -1,7 +1,9 @@
 from decimal import Decimal
 import json
+import uuid
 
-from django.core.management.base import BaseCommand, CommandError
+from django.conf import settings
+from django.core.management import BaseCommand, CommandError, call_command
 
 from appels_service.models import AppelOffres
 from auth_service.models import Role, Utilisateur
@@ -202,10 +204,12 @@ class Command(BaseCommand):
         if existing:
             return existing
 
-        role, _ = Role.objects.get_or_create(nom_role="admin")
+        role, _ = Role.objects.get_or_create(nom_role="ADMIN")
         user = Utilisateur.objects.filter(email=DEFAULT_SEED_EMAIL).first()
         if not user:
-            user = Utilisateur(id_role=role, id_membre=1, email=DEFAULT_SEED_EMAIL)
+            user = Utilisateur(id_role=role, id_membre=uuid.UUID(int=1), email=DEFAULT_SEED_EMAIL)
+            user.is_active = True
+            user.must_change_password = False
             user.set_password(DEFAULT_SEED_PASSWORD)
             user.save()
             self.stdout.write(self.style.SUCCESS(f"Created fallback seed user {DEFAULT_SEED_EMAIL}"))
@@ -228,9 +232,40 @@ class Command(BaseCommand):
         return [100 + i for i in range(1, count + 1)]
 
     def _operator_document_ids(self, operator_id):
-        return list(
+        document_ids = list(
             Document.objects.filter(
                 id_operateur_economique=operator_id,
                 related_type="soumission",
             ).values_list("id_document", flat=True)[:2]
         )
+        if document_ids:
+            return document_ids
+
+        self.stdout.write(
+            self.style.WARNING(
+                f"No soumission documents found for operateur {operator_id}. Seeding fallback sample documents..."
+            )
+        )
+        try:
+            call_command("seed_documents", operator_id=operator_id)
+        except Exception as exc:
+            self.stdout.write(
+                self.style.ERROR(
+                    f"Unable to automatically seed soumission documents: {exc}"
+                )
+            )
+            return []
+
+        document_ids = list(
+            Document.objects.filter(
+                id_operateur_economique=operator_id,
+                related_type="soumission",
+            ).values_list("id_document", flat=True)[:2]
+        )
+        if not document_ids:
+            self.stdout.write(
+                self.style.ERROR(
+                    f"Fallback document seeding completed, but no soumission documents were created for operateur {operator_id}."
+                )
+            )
+        return document_ids

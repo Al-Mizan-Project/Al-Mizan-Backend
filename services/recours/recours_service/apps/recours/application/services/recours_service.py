@@ -55,7 +55,7 @@ class RecoursService:
         self.domain_service.verifier_soumission_rejetee(soumission)
 
         # 3. Fetch appel offre for deadline
-        appel = self.appels_client.get_appel_offre(soumission["appel_id"])
+        appel = self.appels_client.get_appel_offre(soumission["appel_id"]) or soumission.get("id_appel_offre")
         date_limite = appel.get("date_limite_recours")
 
         now = datetime.utcnow()
