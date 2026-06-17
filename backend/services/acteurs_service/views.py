@@ -244,7 +244,8 @@ class DemandeApprouverView(APIView):
                     "email": responsable_data["email"],
                     "id_membre": str(responsable.id_membre),
                     "role_nom": "RESP_OE",
-                    "send_activation": True,
+                    # No activation link: a one-time password is generated and relayed by the SC.
+                    "send_activation": False,
                 }
                 if responsable_data.get("password"):
                     auth_payload["password"] = responsable_data["password"]
@@ -260,6 +261,7 @@ class DemandeApprouverView(APIView):
                 "operateur_id": operateur.organisation_id,
                 "id_membre": responsable.id_membre,
                 "id_utilisateur": auth_data.get("id_utilisateur"),
+                "email": responsable_data["email"],
                 "activation_url": auth_data.get("activation_url"),
                 "temporary_password": auth_data.get("temporary_password"),
             }, status=status.HTTP_200_OK)
@@ -480,7 +482,8 @@ class CreateMembreByResponsableView(APIView):
                     "email": data['email'],
                     "id_membre": str(nouveau_membre.id_membre),
                     "role_nom": role_nom,
-                    "send_activation": True,
+                    # No activation link: the responsable sets/relays the password directly.
+                    "send_activation": False,
                 }
                 if data.get("password"):
                     auth_payload["password"] = data["password"]
@@ -496,6 +499,7 @@ class CreateMembreByResponsableView(APIView):
                 "message": "Membre et compte collaborateur créés avec succès",
                 "id_membre": nouveau_membre.id_membre,
                 "id_utilisateur": auth_data.get("id_utilisateur"),
+                "email": data["email"],
                 "activation_url": auth_data.get("activation_url"),
                 "temporary_password": auth_data.get("temporary_password"),
             }, status=status.HTTP_201_CREATED)
