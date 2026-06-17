@@ -105,7 +105,7 @@ def _coerce_int(value):
 
 def _get_operator_id(request):
     token = getattr(request, "auth", None)
-    for key in ("id_operateur_economique", "operateur_id", "operator_id"):
+    for key in ("id_operateur_economique", "operateur_id", "operator_id", "user_id"):
         raw = _token_get(token, key)
         if raw not in (None, ""):
             value = _coerce_int(raw)
@@ -147,8 +147,6 @@ def _filter_queryset_for_request(queryset, request):
     role = _get_role(request)
     if role == "operateur_economique":
         operateur_id = _get_operator_id(request)
-        if operateur_id is None:
-            return queryset.none()
         public_types = {
             "publique",
             "Appel d'offres ouvert",
@@ -163,9 +161,9 @@ def _filter_queryset_for_request(queryset, request):
             "Gre a gre",
             "Consultation",
         }
-        return (
-            queryset.filter(statut__iexact="valide")
-            .filter(
+        base = queryset.filter(statut__iexact="valide")
+        if operateur_id is not None:
+            base = base.filter(
                 Q(type_procedure__in=public_types)
                 | (
                     Q(type_procedure__in=restricted)
@@ -175,8 +173,9 @@ def _filter_queryset_for_request(queryset, request):
                     )
                 )
             )
-            .distinct()
-        )
+        else:
+            base = base.filter(type_procedure__in=public_types)
+        return base.distinct()
 
     if role == "commission_externe":
         commission_id = _get_commission_id(request)

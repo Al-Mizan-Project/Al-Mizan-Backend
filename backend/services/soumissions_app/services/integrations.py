@@ -106,7 +106,8 @@ def validate_document_ids(document_ids, id_operateur=None):
             ownership_errors = []
             if id_operateur is not None:
                 for item in results:
-                    if item.get("id_operateur_economique") != id_operateur:
+                    owner = item.get("id_operateur_economique")
+                    if owner is not None and owner != id_operateur:
                         ownership_errors.append(item.get("id_document"))
 
             return len(missing) == 0 and len(ownership_errors) == 0, missing, ownership_errors
