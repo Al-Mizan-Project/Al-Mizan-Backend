@@ -83,6 +83,7 @@ class DocumentUploadView(views.APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         related_type = serializer.validated_data['related_type']
+        explicit_type_document = serializer.validated_data.get('type_document', None)
         id_operateur_economique = serializer.validated_data.get('id_operateur_economique', None)
         is_encrypted = serializer.validated_data.get('is_encrypted', False)
         visible_after = serializer.validated_data.get('visible_after', None)
@@ -112,11 +113,13 @@ class DocumentUploadView(views.APIView):
                 sha256_hash = minio_service.stream_upload_and_hash(uploaded_file, unique_obj_name)
                 
                 # Save metadata to database
+                # Use explicit type_document if provided, otherwise use file extension
+                final_type_document = explicit_type_document or extension
                 document = Document.objects.create(
                     related_type=related_type,
                     id_operateur_economique=id_operateur_economique,
                     nom=original_filename,
-                    type_document=extension,
+                    type_document=final_type_document,
                     storage_url=storage_url,
                     hash_sha256=sha256_hash,
                     taille_fichier=taille_fichier,

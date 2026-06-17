@@ -364,8 +364,10 @@ def affect_validator_to_appel(appel_id, validator_id):
     appel.validated_by = str(validator_id)
     appel.save(update_fields=["validated_by", "updated_at"])
     
-    # Créer une entrée de suivi pour le validateur
-    suivi, _ = AppelOffresSuivi.objects.get_or_create(
+    # Remplacer les suivis existants par un suivi pour le nouveau validateur
+    # (suppression des anciens, puis création d'un nouveau pour remettre le compteur à zéro)
+    AppelOffresSuivi.objects.filter(id_appel_offres=appel).delete()
+    suivi = AppelOffresSuivi.objects.create(
         id_appel_offres=appel,
         id_utilisateur=int(validator_id),
     )

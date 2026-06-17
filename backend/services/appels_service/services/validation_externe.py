@@ -140,7 +140,7 @@ def get_commission_externe_dashboard_data(membre_id):
             economic_operator = f"Multiple ({appel.operateurs_invites.count()} invités)"
 
         suivis = list(appel.suivis.all())
-        suivi_created_at = suivis[0].created_at if suivis else None
+        suivi_created_at = max((s.created_at for s in suivis), default=None) if suivis else None
 
         # Prefer explicit deadline fields on appel if present
         validation_deadline = None
@@ -150,8 +150,16 @@ def get_commission_externe_dashboard_data(membre_id):
                 validation_deadline = val
                 break
 
-        if not validation_deadline and suivi_created_at:
-            validation_deadline = suivi_created_at + datetime.timedelta(days=DELAI_VALIDATION_DAYS)
+        if not validation_deadline:
+            # Si un validateur est affecté, le délai repart de la dernière mise à jour (date d'affectation)
+            if appel.validated_by and appel.updated_at:
+                reference_date = appel.updated_at
+            elif suivi_created_at:
+                reference_date = suivi_created_at
+            else:
+                reference_date = None
+            if reference_date:
+                validation_deadline = reference_date + datetime.timedelta(days=DELAI_VALIDATION_DAYS)
 
         computed_status = 'Inconnu'
         delay_days = 0

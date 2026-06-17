@@ -114,16 +114,14 @@ class SoumissionDetailView(APIView):
 
         if "document_ids" in request.data:
             document_ids = request.data.get("document_ids") or []
-            docs_valid, missing, not_owned = validate_document_ids(
-                document_ids, id_operateur=soum.id_soumissionnaire
+            # Only validate existence, skip ownership check since system
+            # documents (decision_validation, evaluations) are created by
+            # validators, not by the opérateur économique.
+            docs_valid, missing, _ = validate_document_ids(
+                document_ids, id_operateur=None
             )
             if missing:
                 return Response({"error": f"Documents introuvables: {missing}"}, status=status.HTTP_400_BAD_REQUEST)
-            if not_owned:
-                return Response(
-                    {"error": f"Les documents suivants n'appartiennent pas a cet operateur: {not_owned}"},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
 
         allowed_fields = {
             "document_ids",
