@@ -10,6 +10,10 @@ from urllib.parse import urlencode
 from .services.access_control import user_permission_names
 from .models import Utilisateur
 from .permissions import AuthServicePermission
+import secrets
+from django.contrib.auth import password_validation
+from django.core.exceptions import ValidationError as DjangoValidationError
+
 from .serializers import (
     ChangePasswordSerializer,
     ForgotPasswordSerializer,
@@ -26,6 +30,9 @@ from .serializers import (
     UtilisateurCreateSerializer,
     UtilisateurSerializer,
     UtilisateurUpdateSerializer,
+    store_account_activation_token,
+    build_activation_url,
+    send_activation_email,
 )
 from .services.access_control import (
     add_user_permission,
@@ -470,3 +477,54 @@ class InternalSearchUsersView(APIView):
             })
             
         return Response(result, status=status.HTTP_200_OK)
+
+class InternalUpdateActeurView(APIView):
+    """ PATCH /internal/users/update-by-membre
+
+    Body: {
+      "id_membre": "<uuid>",
+      "email": "...",            # optional
+      "password": "...",         # optional
+      "resend_activation": true  # optional
+    }
+    """
+    permission_classes = []
+
+    def patch(self, request):
+        id_membre = request.data.get("id_membre")
+        if not id_membre:
+            return Response({"id_membre": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = Utilisateur.objects.select_related("id_role").get(id_membre=id_membre)
+        except Utilisateur.DoesNotExist:
+            return Response({"detail": "Utilisateur introuvable pour cet id_membre"}, status=status.HTTP_404_NOT_FOUND)
+
+        email = (request.data.get("email") or "").strip()
+        password = (request.data.get("password") or "").strip()
+        resend_activation = bool(request.data.get("resend_activation"))
+
+        if email:
+            user.email = email
+
+        if password:
+            try:
+                password_validation.validate_password(password, user=user)
+            except DjangoValidationError as exc:
+                return Response({"password": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+            user.set_password(password)
+            user.must_change_password = True
+
+        user.save()
+
+        payload = {"id_utilisateur": user.id_utilisateur, "email": user.email}
+
+        if resend_activation:
+            token = secrets.token_urlsafe(48)
+            store_account_activation_token(token, user.id_utilisateur)
+            activation_url = build_activation_url(token)
+            temp_password = password or None
+            send_activation_email(user, activation_url, temporary_password=temp_password)
+            payload["activation_url"] = activation_url
+
+        return Response(payload, status=status.HTTP_200_OK)
