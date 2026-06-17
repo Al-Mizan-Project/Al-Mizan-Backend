@@ -20,6 +20,7 @@ class Recours:
         statut: str,
         date_depot: datetime,
         date_limite: datetime,
+        date_fin_instruction: datetime = None,
         decision: str = None,
         date_decision: datetime = None,
         traite_par: int = None,
@@ -37,6 +38,7 @@ class Recours:
         self.statut = statut
         self.date_depot = date_depot
         self.date_limite = date_limite
+        self.date_fin_instruction = date_fin_instruction
         self.decision = decision
         self.date_decision = date_decision
         self.traite_par = traite_par

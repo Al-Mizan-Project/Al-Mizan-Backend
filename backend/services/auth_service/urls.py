@@ -7,6 +7,7 @@ from .views import (
     AuthChangePasswordView,
     AuthForgotPasswordView,
     AuthResetPasswordView,
+    AuthActivateView,
     UserListCreateView,
     UserRetrieveUpdateDeleteView,
     UserRoleUpdateView,
@@ -22,12 +23,14 @@ from .views import (
     InternalRegisterActeurView,
     InternalSearchUsersView,
     MemberSelfUpdateView,
+    InternalUpdateActeurView
 )
 
 urlpatterns = [
     path("auth/login", AuthLoginView.as_view()),
     path("auth/refresh", AuthRefreshView.as_view()),
     path("auth/logout", AuthLogoutView.as_view()),
+    path("auth/activate", AuthActivateView.as_view()),
     path("auth/change-password", AuthChangePasswordView.as_view()),
     path("auth/forgot-password", AuthForgotPasswordView.as_view()),
     path("auth/reset-password", AuthResetPasswordView.as_view()),
@@ -46,4 +49,6 @@ urlpatterns = [
     path("internal/users/register", InternalRegisterActeurView.as_view()),
     path("internal/users/search", InternalSearchUsersView.as_view()),
     path("users/<str:user_id>/member-update", MemberSelfUpdateView.as_view()),
+    path("internal/users/update-by-membre", InternalUpdateActeurView.as_view()),
+
 ]

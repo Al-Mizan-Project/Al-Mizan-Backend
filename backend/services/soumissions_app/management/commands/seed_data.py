@@ -1,5 +1,6 @@
 from decimal import Decimal
 import json
+import uuid
 
 from django.conf import settings
 from django.core.management import BaseCommand, CommandError, call_command
@@ -203,10 +204,12 @@ class Command(BaseCommand):
         if existing:
             return existing
 
-        role, _ = Role.objects.get_or_create(nom_role="admin")
+        role, _ = Role.objects.get_or_create(nom_role="ADMIN")
         user = Utilisateur.objects.filter(email=DEFAULT_SEED_EMAIL).first()
         if not user:
-            user = Utilisateur(id_role=role, id_membre=1, email=DEFAULT_SEED_EMAIL)
+            user = Utilisateur(id_role=role, id_membre=uuid.UUID(int=1), email=DEFAULT_SEED_EMAIL)
+            user.is_active = True
+            user.must_change_password = False
             user.set_password(DEFAULT_SEED_PASSWORD)
             user.save()
             self.stdout.write(self.style.SUCCESS(f"Created fallback seed user {DEFAULT_SEED_EMAIL}"))

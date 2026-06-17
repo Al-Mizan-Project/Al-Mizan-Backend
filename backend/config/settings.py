@@ -309,6 +309,15 @@ LOGGING = {
 }
 
 INTERNAL_BASE_URL = env_str("INTERNAL_BASE_URL", f"http://127.0.0.1:{PORT}")
+FRONTEND_BASE_URL = env_str("FRONTEND_BASE_URL", "http://localhost:3000")
+FRONTEND_LOGIN_URL = env_str("FRONTEND_LOGIN_URL", f"{FRONTEND_BASE_URL.rstrip('/')}/login")
+FRONTEND_PASSWORD_RESET_URL = env_str(
+    "FRONTEND_PASSWORD_RESET_URL",
+    f"{FRONTEND_BASE_URL.rstrip('/')}/reset-password",
+)
+ACCOUNT_ACTIVATION_TTL = env_int("ACCOUNT_ACTIVATION_TTL", 86400)
+ACCOUNT_ACTIVATION_URL = env_str("ACCOUNT_ACTIVATION_URL", f"{INTERNAL_BASE_URL.rstrip('/')}/auth/activate")
+PASSWORD_RESET_TOKEN_TTL = env_int("PASSWORD_RESET_TOKEN_TTL", 900)
 REMOTE_SERVICE_TIMEOUT = env_float("REMOTE_SERVICE_TIMEOUT", 30.0)
 INTERNAL_SERVICE_TOKEN = env_str("INTERNAL_SERVICE_TOKEN", "dev-internal-token")
 
@@ -345,3 +354,13 @@ GROQ_MODEL = env_str("GROQ_MODEL", "llama-3.3-70b-versatile")
 GROQ_MAX_TOKENS = env_int("GROQ_MAX_TOKENS", 2000)
 GROQ_MAX_RETRIES = env_int("GROQ_MAX_RETRIES", 3)
 GROQ_RETRY_BASE_DELAY = env_float("GROQ_RETRY_BASE_DELAY", 5.0)
+
+EMAIL_BACKEND = env_str("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = env_str("DEFAULT_FROM_EMAIL", "no-reply@almizan.local")
+EMAIL_HOST = env_str("EMAIL_HOST", "localhost")
+EMAIL_PORT = env_int("EMAIL_PORT", 25)
+EMAIL_HOST_USER = env_str("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = env_str("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", False)
+EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
+EMAIL_TIMEOUT = env_int("EMAIL_TIMEOUT", 10)

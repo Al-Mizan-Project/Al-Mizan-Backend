@@ -58,6 +58,13 @@ services:
       exit 0;
       "
 
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    restart: unless-stopped
+
   backend:
     build:
       context: ../backend
@@ -87,6 +94,18 @@ services:
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-almizan_redis_password}@redis:6379/0
       INTERNAL_BASE_URL: http://backend:8000
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-token}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
+      FRONTEND_PASSWORD_RESET_URL: ${FRONTEND_PASSWORD_RESET_URL:-http://localhost:3000/reset-password}
+      PASSWORD_RESET_TOKEN_TTL: ${PASSWORD_RESET_TOKEN_TTL:-900}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@almizan.local}
+      EMAIL_HOST: ${EMAIL_HOST:-mailpit}
+      EMAIL_PORT: ${EMAIL_PORT:-1025}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-False}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-False}
+      EMAIL_TIMEOUT: ${EMAIL_TIMEOUT:-10}
       MINIO_URL: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-admin_almizan}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-SecurePassword123!}
@@ -113,6 +132,8 @@ services:
         condition: service_started
       create_bucket:
         condition: service_completed_successfully
+      mailpit:
+        condition: service_started
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     restart: unless-stopped
@@ -148,6 +169,18 @@ services:
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-almizan_redis_password}@redis:6379/0
       INTERNAL_BASE_URL: http://backend:8000
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-token}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
+      FRONTEND_PASSWORD_RESET_URL: ${FRONTEND_PASSWORD_RESET_URL:-http://localhost:3000/reset-password}
+      PASSWORD_RESET_TOKEN_TTL: ${PASSWORD_RESET_TOKEN_TTL:-900}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@almizan.local}
+      EMAIL_HOST: ${EMAIL_HOST:-mailpit}
+      EMAIL_PORT: ${EMAIL_PORT:-1025}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-False}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-False}
+      EMAIL_TIMEOUT: ${EMAIL_TIMEOUT:-10}
       MINIO_URL: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-admin_almizan}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-SecurePassword123!}
@@ -157,6 +190,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     restart: unless-stopped
 
   nginx:

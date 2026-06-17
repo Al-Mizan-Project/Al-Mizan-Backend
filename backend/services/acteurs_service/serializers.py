@@ -18,7 +18,7 @@ class DemandeOperateurSerializer(serializers.ModelSerializer):
         model = DemandeOperateur
         fields = [
             'id', 'nom_organisation', 'email_contact', 'telephone', 
-            'nif', 'num_registre_commerce', 'statut', 'motif_rejet', 
+            'nif', 'num_registre_commerce', 'id_service_contractant', 'statut', 'motif_rejet',
             'cree_le', 'documents'
         ]
 
@@ -30,7 +30,7 @@ class DemandeOperateurDetailSerializer(serializers.ModelSerializer):
         model = DemandeOperateur
         fields = [
             'id', 'nom_organisation', 'email_contact', 'telephone', 
-            'nif', 'num_registre_commerce', 'statut', 'motif_rejet', 'cree_le', 
+            'nif', 'num_registre_commerce', 'id_service_contractant', 'statut', 'motif_rejet', 'cree_le',
             'documents_complets'
         ]
 
@@ -44,6 +44,7 @@ class SoumettreDemandeSerializer(serializers.Serializer):
     telephone = serializers.CharField(max_length=50)
     nif = serializers.CharField(max_length=50)
     num_registre_commerce = serializers.CharField(max_length=100)
+    id_service_contractant = serializers.IntegerField(min_value=1)
 
     doc_registre_commerce = serializers.FileField()
     doc_nif = serializers.FileField()
@@ -82,16 +83,22 @@ class CommissionExterneCreateSerializer(OrganisationCreateSerializer):
 
 class OrganisationListSerializer(serializers.ModelSerializer):
     responsable_nom = serializers.SerializerMethodField()
+    id_operateur_economique = serializers.SerializerMethodField()
 
     class Meta:
         model = Organisation
-        fields = ['id_organisation', 'nom_officiel', 'email_contact', 'responsable_nom']
+        fields = ['id_organisation', 'id_operateur_economique', 'nom_officiel', 'email_contact', 'responsable_nom', 'wilaya', 'secteur']
 
     def get_responsable_nom(self, obj):
         resp = obj.membres.order_by('created_at').first()
         if resp:
             return f"{resp.prenom} {resp.nom}"
         return "Non assigné"
+
+    def get_id_operateur_economique(self, obj):
+        if getattr(obj, "type_entite", None) != "OPERATEUR_ECONOMIQUE":
+            return None
+        return int(str(obj.id_organisation).replace("-", "")[-8:], 16) % 2_000_000_000
 
 
 class OrganisationDetailForMembreSerializer(serializers.ModelSerializer):
@@ -117,7 +124,7 @@ class CreateResponsableSerializer(serializers.Serializer):
     fonction = serializers.CharField(max_length=50, required=False, allow_blank=True)
     
     email = serializers.EmailField()
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
 
 class MembreCreateByResponsableSerializer(serializers.Serializer):
@@ -127,8 +134,10 @@ class MembreCreateByResponsableSerializer(serializers.Serializer):
     fonction = serializers.CharField(max_length=50, required=False, allow_blank=True)
     
     email = serializers.EmailField()
-    password = serializers.CharField(write_only=True)
-    permissions = serializers.ListField(child=serializers.CharField(), required=True, min_length=1)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    role_nom = serializers.CharField(required=False, allow_blank=True)
+    role = serializers.CharField(required=False, allow_blank=True)
+    permissions = serializers.ListField(child=serializers.CharField(), required=False, default=list)
 
 
 class MembreListSerializer(serializers.ModelSerializer):

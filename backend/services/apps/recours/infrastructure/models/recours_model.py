@@ -34,6 +34,7 @@ class RecoursModel(models.Model):
 
     date_depot = models.DateTimeField()
     date_limite = models.DateTimeField()
+    date_fin_instruction = models.DateTimeField(null=True, blank=True)
 
     decision = models.TextField(null=True, blank=True)
     date_decision = models.DateTimeField(null=True, blank=True)

@@ -88,6 +88,13 @@ class AppelOffres(models.Model):
     date_ouverture_plis = models.DateTimeField(null=True, blank=True)
     poids_technique = models.IntegerField(null=True, blank=True, default=50)
     poids_financier = models.IntegerField(null=True, blank=True, default=50)
+    seuil_technique = models.IntegerField(default=70, help_text="Score minimum pour qualification technique (0-100)")
+    methodology = models.CharField(
+    max_length=20,
+    choices=[('price_only', 'Offre la moins disante'), ('weighted', 'Pondération technique+financière')],
+    default='weighted',
+    help_text="Méthodologie Art.72 — définie par le SC, immuable après publication"
+    )
     required_docs_admin = models.JSONField(default=list, blank=True)
     required_docs_tech = models.JSONField(default=list, blank=True)
     required_docs_fin = models.JSONField(default=list, blank=True)

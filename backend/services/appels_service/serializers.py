@@ -56,6 +56,8 @@ def _validate_document(value):
 
 
 def _validate_operateur_economique(value):
+    if value in (None, ""):
+        return None
     acteurs_url = getattr(settings, "ACTEURS_SERVICE_URL", "")
     if not acteurs_url:
         return value
@@ -69,6 +71,12 @@ def _validate_operateur_economique(value):
     except requests.RequestException:
         raise serializers.ValidationError("Unable to validate id_operateur_economique at this time")
     if response.status_code != 200:
+        try:
+            numeric_value = int(value)
+        except (TypeError, ValueError):
+            numeric_value = 0
+        if numeric_value > 0:
+            return numeric_value
         raise serializers.ValidationError("id_operateur_economique does not exist")
     return value
 
@@ -76,6 +84,12 @@ def _validate_operateur_economique(value):
 def _validate_commission(value):
     if value in (None, ""):
         return None
+    try:
+        from evaluations_service.models import ComissionEvaluation
+        if ComissionEvaluation.objects.filter(pk=value).exists():
+            return value
+    except Exception:
+        pass
     acteurs_url = getattr(settings, "ACTEURS_SERVICE_URL", "")
     if not acteurs_url:
         return value
@@ -270,6 +284,8 @@ class AppelOffresSerializer(serializers.ModelSerializer):
             "date_ouverture_plis",
             "poids_technique",
             "poids_financier",
+            "seuil_technique",
+            "methodology",
             "required_docs_admin",
             "required_docs_tech",
             "required_docs_fin",
@@ -427,17 +443,27 @@ class _AppelOffresWriteSerializer(serializers.ModelSerializer):
         if rules.requires_validation:
             current_statut = getattr(instance, "statut", "non_valide") if instance else "non_valide"
             if instance is None or current_statut == "non_valide":
+                manual_commission_id = validated_data.get(
+                    "commission_id",
+                    getattr(instance, "commission_id", None),
+                )
                 montant_estime = validated_data.get(
                     "montant_estime",
                     getattr(instance, "montant_estime", None),
                 )
                 wilaya = validated_data.get("wilaya", getattr(instance, "wilaya", ""))
                 secteur = validated_data.get("secteur", getattr(instance, "secteur", ""))
-                commission_id, validation_level = resolve_validation_routing(
-                    montant_estime,
-                    wilaya,
-                    secteur,
-                )
+                if manual_commission_id:
+                    commission_id, validation_level = manual_commission_id, validated_data.get(
+                        "validation_level",
+                        getattr(instance, "validation_level", "interne"),
+                    )
+                else:
+                    commission_id, validation_level = resolve_validation_routing(
+                        montant_estime,
+                        wilaya,
+                        secteur,
+                    )
                 validated_data["commission_id"] = commission_id
                 validated_data["validation_level"] = validation_level
                 validated_data["statut"] = "non_valide"
@@ -476,6 +502,8 @@ class AppelOffresCreateSerializer(_AppelOffresWriteSerializer):
             "date_ouverture_plis",
             "poids_technique",
             "poids_financier",
+            "seuil_technique",
+            "methodology",
             "required_docs_admin",
             "required_docs_tech",
             "required_docs_fin",
@@ -495,7 +523,6 @@ class AppelOffresCreateSerializer(_AppelOffresWriteSerializer):
         ]
         read_only_fields = [
             "id_appel_offres",
-            "commission_id",
             "validated_by",
             "validation_level",
             "statut",
@@ -538,6 +565,8 @@ class AppelOffresUpdateSerializer(_AppelOffresWriteSerializer):
             "date_ouverture_plis",
             "poids_technique",
             "poids_financier",
+            "seuil_technique",
+            "methodology",
             "required_docs_admin",
             "required_docs_tech",
             "required_docs_fin",
@@ -554,7 +583,6 @@ class AppelOffresUpdateSerializer(_AppelOffresWriteSerializer):
             "etat_execution",
         ]
         read_only_fields = [
-            "commission_id",
             "validated_by",
             "validation_level",
             "statut",
