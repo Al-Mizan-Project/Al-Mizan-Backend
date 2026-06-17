@@ -1,45 +1,65 @@
 from django.urls import path
 
 from .views import (
+    AddMemberToCommissionView,
+    AllCommissionMembersView,
     CommissionEvaluationListCreateView,
     CommissionEvaluationMembreDetailView,
     CommissionEvaluationMembresView,
     CommissionEvaluationRetrieveUpdateDeleteView,
+    CommissionExterneCompetenteView,
     CommissionExterneListCreateView,
+    CommissionExterneMembresView,
     CommissionExterneRetrieveUpdateDeleteView,
     CommissionInterneListCreateView,
     CommissionInterneMembreDetailView,
     CommissionInterneMembresView,
     CommissionInterneRetrieveUpdateDeleteView,
+    MyServiceView,
     ServiceContractantCommissionsView,
     ServiceContractantListCreateView,
     ServiceContractantMembresView,
+    ServiceContractantMyCommissionMembersView,
     ServiceContractantRetrieveUpdateDeleteView,
-    MyServiceView,
-    CommissionExterneCompetenteView,
-    CommissionExterneMembresView,
+    UserCommissionView,
+    ValidatorsForCurrentUserView,
+    ValidatorsForCurrentUserCdcView,
 )
 
 urlpatterns = [
-    path("my-service", MyServiceView.as_view()),
     # Commission Evaluation
     path("commissions-evaluation", CommissionEvaluationListCreateView.as_view()),
     path("commissions-evaluation/<int:commission_id>", CommissionEvaluationRetrieveUpdateDeleteView.as_view()),
     path("commissions-evaluation/<int:commission_id>/membres", CommissionEvaluationMembresView.as_view()),
     path("commissions-evaluation/<int:commission_id>/membres/<int:membre_id>", CommissionEvaluationMembreDetailView.as_view()),
+
     # Commission Interne
     path("commissions-internes", CommissionInterneListCreateView.as_view()),
     path("commissions-internes/<int:commission_interne_id>", CommissionInterneRetrieveUpdateDeleteView.as_view()),
     path("commissions-internes/<int:commission_interne_id>/membres", CommissionInterneMembresView.as_view()),
     path("commissions-internes/<int:commission_interne_id>/membres/<int:membre_id>", CommissionInterneMembreDetailView.as_view()),
+
     # Service Contractant
     path("services-contractants", ServiceContractantListCreateView.as_view()),
     path("services-contractants/<int:service_id>", ServiceContractantRetrieveUpdateDeleteView.as_view()),
     path("services-contractants/<int:service_id>/membres", ServiceContractantMembresView.as_view()),
     path("services-contractants/<int:service_id>/commissions", ServiceContractantCommissionsView.as_view()),
+    path(
+        "services-contractants/<int:service_id>/commissions/membres-pour-utilisateur",
+        ServiceContractantMyCommissionMembersView.as_view(),
+    ),
+
     # Commission Externe
     path("commissions-externes", CommissionExterneListCreateView.as_view()),
     path("commissions-externes/<int:commission_externe_id>", CommissionExterneRetrieveUpdateDeleteView.as_view()),
     path("commissions-externes/<int:commission_externe_id>/membres", CommissionExterneMembresView.as_view()),
     path("commissions-externes/competente/<int:appel_id>", CommissionExterneCompetenteView.as_view()),
+
+    # Current user commission members
+    path("commission-members", ValidatorsForCurrentUserView.as_view()),
+    path("commission-members-cdc", ValidatorsForCurrentUserCdcView.as_view()),
+    path("commission-members-all", AllCommissionMembersView.as_view()),
+    path("my-commission", UserCommissionView.as_view()),
+    path("my-service", MyServiceView.as_view()),
+    path("add-member-to-commission", AddMemberToCommissionView.as_view()),
 ]

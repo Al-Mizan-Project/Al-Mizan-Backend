@@ -45,6 +45,7 @@ def apply_user_claims(token, user):
     token["must_change_password"] = bool(user.must_change_password)
 
 
+
 class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
@@ -125,6 +126,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class ForgotPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
+    language = serializers.ChoiceField(choices=["en", "fr", "ar"], default="fr")
 
 
 class ResetPasswordSerializer(serializers.Serializer):
@@ -206,6 +208,11 @@ def consume_password_reset_token(raw_token):
     return int(user_id)
 
 
+def delete_password_reset_token(raw_token):
+    digest = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    cache.delete(f"auth:pwdreset:{digest}")
+
+
 def store_account_activation_token(raw_token, user_id, timeout_seconds=None):
     digest = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
     timeout = timeout_seconds or int(getattr(settings, "ACCOUNT_ACTIVATION_TTL", 86400))
@@ -225,6 +232,50 @@ def consume_account_activation_token(raw_token):
 def build_activation_url(token):
     base_url = getattr(settings, "ACCOUNT_ACTIVATION_URL", "").rstrip("/")
     return f"{base_url}?{urlencode({'token': token})}"
+
+
+def build_password_reset_url(token):
+    base_url = getattr(settings, "FRONTEND_PASSWORD_RESET_URL", "").rstrip("/")
+    return f"{base_url}?{urlencode({'token': token})}"
+
+
+PASSWORD_RESET_EMAILS = {
+    "en": {
+        "subject": "Reset your Al-Mizan password",
+        "lines": [
+            "We received a request to reset your password.",
+            "Reset link: {reset_url}",
+            "If you did not request this, you can ignore this email.",
+        ],
+    },
+    "fr": {
+        "subject": "Reinitialisation de votre mot de passe Al-Mizan",
+        "lines": [
+            "Une demande de reinitialisation de mot de passe a ete recue.",
+            "Lien de reinitialisation: {reset_url}",
+            "Si vous n'etes pas a l'origine de cette demande, ignorez cet email.",
+        ],
+    },
+    "ar": {
+        "subject": "إعادة تعيين كلمة مرور الميزان",
+        "lines": [
+            "تلقينا طلبا لإعادة تعيين كلمة المرور الخاصة بك.",
+            "رابط إعادة التعيين: {reset_url}",
+            "إذا لم تطلب ذلك، يمكنك تجاهل هذه الرسالة.",
+        ],
+    },
+}
+
+
+def send_password_reset_email(user, reset_url, language):
+    content = PASSWORD_RESET_EMAILS[language]
+    send_mail(
+        subject=content["subject"],
+        message="\n".join(line.format(reset_url=reset_url) for line in content["lines"]),
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
 
 
 def send_activation_email(user, activation_url, temporary_password=None):

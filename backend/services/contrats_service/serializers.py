@@ -12,7 +12,68 @@ from soumissions_app.models import Attribution
 class AttributionSerializer(serializers.ModelSerializer):
     """Full read serializer — used for list and detail views."""
 
-    soumission_id = serializers.IntegerField(source="soumission.id_soumission", read_only=True)
+    soumission_id = serializers.SerializerMethodField()
+    id_soumissionnaire = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    delayDays = serializers.SerializerMethodField()
+    validationDeadline = serializers.SerializerMethodField()
+    assignmentDate = serializers.SerializerMethodField()
+
+    def get_soumission_id(self, obj):
+        try:
+            soumission = obj.soumission
+            if soumission is not None:
+                return soumission.id_soumission
+        except Exception:
+            pass
+        return None
+
+    def get_id_soumissionnaire(self, obj):
+        try:
+            soumission = obj.soumission
+            if soumission is not None:
+                return soumission.id_soumissionnaire
+        except Exception:
+            pass
+        return None
+
+    def get_assignmentDate(self, obj):
+        return obj.created_at.isoformat() if obj.created_at else None
+
+    def get_validationDeadline(self, obj):
+        from datetime import timedelta
+        if obj.created_at:
+            return (obj.created_at + timedelta(days=7)).isoformat()
+        return None
+
+    def get_status(self, obj):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        statut_str = str(obj.statut).lower()
+        if statut_str not in ["provisoire", "non_valide"]:
+            return obj.statut
+
+        if obj.created_at:
+            deadline = obj.created_at + timedelta(days=7)
+            if timezone.now() > deadline:
+                return "En Retard"
+        return "En Cours"
+
+    def get_delayDays(self, obj):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        statut_str = str(obj.statut).lower()
+        if statut_str not in ["provisoire", "non_valide"]:
+            return None
+
+        if obj.created_at:
+            deadline = obj.created_at + timedelta(days=7)
+            now = timezone.now()
+            if now > deadline:
+                return (now - deadline).days
+        return None
 
     class Meta:
         model = Attribution
@@ -20,6 +81,7 @@ class AttributionSerializer(serializers.ModelSerializer):
             "id",
             "service_contractant_id",
             "soumission_id",
+            "id_soumissionnaire",
             "appel_id",
             "commission_id",
             "validated_by",
@@ -27,6 +89,10 @@ class AttributionSerializer(serializers.ModelSerializer):
             "statut",
             "created_at",
             "updated_at",
+            "status",
+            "delayDays",
+            "validationDeadline",
+            "assignmentDate",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 

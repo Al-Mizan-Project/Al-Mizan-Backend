@@ -7,6 +7,7 @@ from .views import (
     ValiderAttributionView,
     AttributionDefinitiveListView,
     AttributionDefinitiveDetailView,
+    ValidatorAttributionsView,
 )
 
 urlpatterns = [
@@ -38,5 +39,6 @@ urlpatterns = [
     # GET  /attributions-definitives/<id>
     path("attributions-definitives/<int:attribution_definitive_id>/", AttributionDefinitiveDetailView.as_view()),
 
-
+    # GET  /validator-attributions/?user_id=X
+    path("validator-attributions/", ValidatorAttributionsView.as_view()),
 ]

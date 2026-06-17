@@ -10,6 +10,7 @@ Tests for ServiceContractant endpoints:
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from auth_service.models import Role, Utilisateur
 from contractant_service.models import (
     CommissionEvaluation,
     CommissionInterne,
@@ -176,3 +177,53 @@ class ServiceContractantCommissionsTest(TestCase):
     def test_commissions_nonexistent_service_returns_404(self):
         response = self.client.get("/services-contractants/99999/commissions")
         self.assertEqual(response.status_code, 404)
+
+
+class ServiceContractantMyCommissionMembersTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.service = make_service(code_ordonnateur="ORD-MY-COMM")
+        self.internal_commission = CommissionInterne.objects.create(
+            id_service=self.service,
+            nom_comission="CI Test",
+            type_comission="parmanante",
+        )
+
+        self.resp_valid_intern_role = Role.objects.create(nom_role="RESP_VALID_INTERN")
+        self.validator_role = Role.objects.create(nom_role="VALIDATEUR_INTERNE_MARCHE")
+        self.other_role = Role.objects.create(nom_role="OTHER_ROLE")
+
+        self.manager_user = Utilisateur.objects.create(
+            email="manager@example.com",
+            password="pass",
+            id_role=self.resp_valid_intern_role,
+            id_membre=100,
+        )
+        self.validator_user = Utilisateur.objects.create(
+            email="validator@example.com",
+            password="pass",
+            id_role=self.validator_role,
+            id_membre=200,
+        )
+        self.non_validator_user = Utilisateur.objects.create(
+            email="nonvalidator@example.com",
+            password="pass",
+            id_role=self.other_role,
+            id_membre=300,
+        )
+
+        MembresCommissionInterne.objects.create(id_service=self.service, id_membre=100)
+        MembresCommissionInterne.objects.create(id_service=self.service, id_membre=200)
+        MembresCommissionInterne.objects.create(id_service=self.service, id_membre=300)
+
+    def test_my_commission_members_returns_only_validator_users(self):
+        self.client.force_authenticate(user=self.manager_user)
+
+        response = self.client.get(
+            f"/services-contractants/{self.service.pk}/commissions/membres-pour-utilisateur"
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIsInstance(data, list)
+        returned_ids = {item["id_membre"] for item in data}
+        self.assertSetEqual(returned_ids, {200})

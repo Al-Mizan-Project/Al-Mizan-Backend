@@ -14,13 +14,30 @@ from .views import (
     AppelOffresSoumettreValidationView,
     AppelOffresValiderView,
     AppelOffresRefuserView,
+    AppelOffresAffectValidatorView,
     ServiceContractantAppelsView,
     ServiceContractantAchatsSimplesView,
     UserWatchedAppelDetailView,
     UserWatchedAppelsView,
+    CommissionInterneDossiersView,
+    CommissionExterneDossiersView,
+    CommissionAppelsUnifiedView,
 )
 
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+
+class CacheFlushView(APIView):
+    permission_classes = [AllowAny]
+    def post(self, request):
+        from .services.cache import bump_cache_version
+        bump_cache_version()
+        return Response({"status": "cache flushed"})
+
 urlpatterns = [
+    
     # Achats simples - dedicated endpoints
     path("achats-simples", AchatSimpleListCreateView.as_view()),
     path("achats-simples/<int:achat_id>", AchatSimpleRetrieveUpdateDeleteView.as_view()),
@@ -30,6 +47,7 @@ urlpatterns = [
     # Appels offres – workflow actions
     path("appels-offres/<int:appel_id>/soumettre-validation", AppelOffresSoumettreValidationView.as_view()),
     path("appels-offres/<int:appel_id>/valider", AppelOffresValiderView.as_view()),
+    path("appels-offres/<int:appel_id>/affecter-validateur", AppelOffresAffectValidatorView.as_view()),
     path("appels-offres/<int:appel_id>/refuser", AppelOffresRefuserView.as_view()),
     path("appels-offres/<int:appel_id>/publier", AppelOffresPublierView.as_view()),
     path("appels-offres/<int:appel_id>/cloturer-depot", AppelOffresCloturerDepotView.as_view()),
@@ -44,4 +62,12 @@ urlpatterns = [
     # User watched appels
     path("users/<int:user_id>/appels-offres/suivis", UserWatchedAppelsView.as_view()),
     path("users/<int:user_id>/appels-offres/<int:appel_id>/suivi", UserWatchedAppelDetailView.as_view()),
+    # Commission Interne
+    path("appels-offres/commission-interne/dossiers", CommissionInterneDossiersView.as_view()),
+    # Commission Externe
+    path("appels-offres/commission-externe/dossiers", CommissionExterneDossiersView.as_view()),
+    # Commission Unified (new)
+    path("appels-offres/commission/dossiers", CommissionAppelsUnifiedView.as_view()),
+    # Cache flush utility
+    path("cache/flush", CacheFlushView.as_view()),
 ]

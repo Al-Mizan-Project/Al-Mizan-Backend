@@ -75,6 +75,7 @@ _TYPE_ALIASES = {
     "gre a gre": "gre_a_gre",
     "gre a gre simple": "gre_a_gre",
     "consultation": "consultation",
+    "interne": "publique",
 }
 
 

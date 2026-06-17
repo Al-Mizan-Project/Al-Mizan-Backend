@@ -91,7 +91,7 @@ class Attribution(models.Model):
         related_name="attributions",
     )
     appel_id = models.IntegerField(db_index=True)
-    commission_id = models.IntegerField(db_index=True, help_text="ID de la commission chargée de valider l'attribution — même valeur que AppelOffres.commission_id")
+    commission_id = models.CharField(max_length=36, db_index=True, help_text="ID de la commission chargée de valider l'attribution — même valeur que AppelOffres.commission_id")
     validated_by = models.IntegerField(null=True, blank=True)
     validation_level = models.CharField(
         max_length=30,
