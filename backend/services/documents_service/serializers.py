@@ -19,6 +19,7 @@ class DocumentUploadSerializer(serializers.Serializer):
         allow_empty=False
     )
     related_type = serializers.CharField(max_length=50, required=True)
+    type_document = serializers.CharField(max_length=100, required=False, allow_null=True, default=None)
     id_operateur_economique = serializers.IntegerField(required=False, allow_null=True, default=None)
     is_encrypted = serializers.BooleanField(default=False)
     visible_after = serializers.DateTimeField(required=False, allow_null=True)

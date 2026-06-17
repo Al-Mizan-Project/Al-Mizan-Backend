@@ -274,6 +274,29 @@ class AffecterAttributionView(ProtectedAPIView):
         attribution.validated_by = serializer.validated_data["validated_by"]
         attribution.save(update_fields=["validated_by", "updated_at"])
 
+        # Créer une notification pour le validateur affecté
+        try:
+            from notifications_service.models import Notification
+            Notification.objects.create(
+                utilisateur_id=attribution.validated_by,
+                type_notification="assignation",
+                titre="Nouvelle soumission à valider",
+                message=f"Vous avez été affecté à la validation de la soumission #{attribution.soumission_id} (Appel d'offres #{attribution.appel_id}).",
+                priorite="haute",
+                categorie="validation",
+                entite_liee_type="soumission",
+                entite_liee_id=attribution.soumission_id,
+                statut="envoyée",
+                sent_at=timezone.now()
+            )
+            logger.info(
+                "Notification d'affectation créée pour l'utilisateur %d (Attribution %d)",
+                attribution.validated_by,
+                attribution.pk
+            )
+        except Exception as e:
+            logger.error("Erreur lors de la création de la notification d'affectation : %s", e)
+
         logger.info(
             "Attribution %d affectée au membre %d", attribution.pk, attribution.validated_by
         )
@@ -393,9 +416,8 @@ class ValidatorAttributionsView(ProtectedAPIView):
             results = []
             for attr in attributions:
                 data = AttributionSerializer(attr).data
-                suivi = AppelOffresSuivi.objects.filter(id_appel_offres_id=attr.appel_id, id_utilisateur=user_id).first()
                 
-                base_date = suivi.created_at if suivi else attr.created_at
+                base_date = attr.updated_at
                 
                 if not base_date:
                     # Fallback to now if base_date is completely missing
