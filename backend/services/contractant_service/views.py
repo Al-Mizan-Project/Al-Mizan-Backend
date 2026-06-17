@@ -57,23 +57,27 @@ CDC_VALIDATOR_ROLE_NAMES = {
 }
 
 
+def commission_member_key(user):
+    return getattr(user, "id_utilisateur", None)
+
+
 def filter_members_by_validator_roles(queryset):
     # Commission-members should only return march validators for AffectationSoumission
     member_ids = queryset.values_list("id_membre", flat=True)
-    valid_member_ids = Utilisateur.objects.filter(
-        id_membre__in=member_ids,
+    valid_user_ids = Utilisateur.objects.filter(
+        id_utilisateur__in=member_ids,
         id_role__nom_role__in=MARCHE_VALIDATOR_ROLE_NAMES,
-    ).values_list("id_membre", flat=True)
-    return queryset.filter(id_membre__in=valid_member_ids)
+    ).values_list("id_utilisateur", flat=True)
+    return queryset.filter(id_membre__in=valid_user_ids)
 
 
 def filter_members_by_cdc_validator_roles(queryset):
     member_ids = queryset.values_list("id_membre", flat=True)
-    valid_member_ids = Utilisateur.objects.filter(
-        id_membre__in=member_ids,
+    valid_user_ids = Utilisateur.objects.filter(
+        id_utilisateur__in=member_ids,
         id_role__nom_role__in=CDC_VALIDATOR_ROLE_NAMES,
-    ).values_list("id_membre", flat=True)
-    return queryset.filter(id_membre__in=valid_member_ids)
+    ).values_list("id_utilisateur", flat=True)
+    return queryset.filter(id_membre__in=valid_user_ids)
 
 
 # ── Cache mixins ─────────────────────────────────────────────────────
@@ -314,11 +318,12 @@ class ServiceContractantMyCommissionMembersView(APIView):
         role_name = str(role_name).strip().upper()
 
         membre_id = user.id_membre
+        member_key = commission_member_key(user)
         if membre_id is None:
             return Response({"error": "Invalid member ID"}, status=status.HTTP_400_BAD_REQUEST)
 
         if role_name == "RESP_CM":
-            external_link = MembresCommissionExterne.objects.filter(id_membre=membre_id).first()
+            external_link = MembresCommissionExterne.objects.filter(id_membre=member_key).first()
             if not external_link:
                 return Response([], status=status.HTTP_200_OK)
 
@@ -331,13 +336,13 @@ class ServiceContractantMyCommissionMembersView(APIView):
 
         if role_name == "RESP_VALID_INTERN":
             internal_link = MembresCommissionInterne.objects.filter(
-                id_membre=membre_id,
-                id_service_id=service_id,
+                id_membre=member_key,
+                id_commision_interne__id_service_id=service_id,
             ).first()
             if not internal_link:
                 return Response([], status=status.HTTP_200_OK)
 
-            membres = MembresCommissionInterne.objects.filter(id_service_id=service_id)
+            membres = MembresCommissionInterne.objects.filter(id_commision_interne__id_service_id=service_id)
             membres = filter_members_by_validator_roles(membres)
             payload = MembresCommissionInterneSerializer(membres, many=True).data
             return Response(payload)
@@ -364,13 +369,14 @@ class UserCommissionView(APIView):
         role_name = getattr(user.id_role, 'nom_role', '').strip().upper()
         
         id_membre_value = user.id_membre
+        member_key = commission_member_key(user)
         if not id_membre_value:
             return Response({"error": "Invalid member ID format"}, status=status.HTTP_400_BAD_REQUEST)
         
         # For internal validators (RESP_VALID_INTERN)
         if role_name == "RESP_VALID_INTERN":
-            member_link = MembresCommissionInterne.objects.select_related('id_service').filter(
-                id_membre=id_membre_value
+            member_link = MembresCommissionInterne.objects.select_related('id_commision_interne__id_service').filter(
+                id_membre=member_key
             ).first()
             
             if not member_link:
@@ -379,7 +385,7 @@ class UserCommissionView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            service = member_link.id_service
+            service = member_link.id_commision_interne.id_service
             commissions = CommissionInterne.objects.filter(id_service=service)
             
             return Response({
@@ -398,7 +404,7 @@ class UserCommissionView(APIView):
         # For external validators (RESP_CM)
         elif role_name == "RESP_CM":
             member_link = MembresCommissionExterne.objects.select_related('id_comission_externe').filter(
-                id_membre=id_membre_value
+                id_membre=member_key
             ).first()
             
             if not member_link:
@@ -490,20 +496,33 @@ class MyServiceView(APIView):
             return Response({"error": "User has no member ID"}, status=status.HTTP_400_BAD_REQUEST)
         
         id_membre_value = user.id_membre
+        member_key = commission_member_key(user)
         if not id_membre_value:
             return Response({"error": "Invalid member ID format"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Look in Evaluation Commissions
-        m_eval = MembresCommissionEvaluation.objects.filter(id_membre=id_membre_value).first()
+        payload = {"id_membre": str(id_membre_value)}
+        member_key = commission_member_key(user)
+
+        # Resolve the organisation from the acteurs Membre record.
+        try:
+            from acteurs_service.models import Membre
+            membre = Membre.objects.filter(id_membre=id_membre_value).select_related("organisation").first()
+            if membre and membre.organisation_id:
+                payload["id_organisation"] = str(membre.organisation_id)
+        except Exception:
+            pass
+
+        # Resolve the numeric service id from commission membership.
+        m_eval = MembresCommissionEvaluation.objects.filter(id_membre=member_key).first()
         if m_eval:
-            return Response({"id_service": m_eval.id_comission.id_service_id})
+            payload["id_service"] = m_eval.id_comission.id_service_id
+            return Response(payload)
 
-        # Look in Internal Commissions
-        m_int = MembresCommissionInterne.objects.filter(id_membre=id_membre_value).first()
+        m_int = MembresCommissionInterne.objects.filter(id_membre=member_key).first()
         if m_int:
-            return Response({"id_service": m_int.id_commision_interne.id_service_id})
+            payload["id_service"] = m_int.id_commision_interne.id_service_id
 
-        return Response({"error": "Service not found for this member"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(payload)
 
 
 class ValidatorsForCurrentUserView(APIView):
@@ -558,7 +577,7 @@ class ValidatorsForCurrentUserView(APIView):
         if role_name == "RESP_CM":
             # Find current user's external commission membership
             member_link = MembresCommissionExterne.objects.filter(
-                id_membre=id_membre_value
+                id_membre=member_key
             ).first()
             
             if not member_link:
@@ -585,7 +604,7 @@ class ValidatorsForCurrentUserView(APIView):
         elif role_name == "RESP_VALID_INTERN":
             # Find current user's internal commission membership
             member_link = MembresCommissionInterne.objects.filter(
-                id_membre=id_membre_value
+                id_membre=member_key
             ).first()
             
             if not member_link:
@@ -594,10 +613,9 @@ class ValidatorsForCurrentUserView(APIView):
                     "members": []
                 }, status=status.HTTP_200_OK)
             
-            # Get all members with the same id_service
-            service_id = member_link.id_service_id
+            service_id = member_link.id_commision_interne.id_service_id
             all_members = MembresCommissionInterne.objects.filter(
-                id_service_id=service_id
+                id_commision_interne__id_service_id=service_id
             )
             all_members = filter_members_by_validator_roles(all_members)
             
@@ -631,12 +649,13 @@ class ValidatorsForCurrentUserCdcView(APIView):
 
         role_name = getattr(user.id_role, 'nom_role', '').strip().upper()
         id_membre_value = user.id_membre
+        member_key = commission_member_key(user)
         if not id_membre_value:
             return Response({"error": "Invalid member ID format"}, status=status.HTTP_400_BAD_REQUEST)
 
         if role_name == "RESP_CM":
             member_link = MembresCommissionExterne.objects.filter(
-                id_membre=id_membre_value
+                id_membre=member_key
             ).first()
 
             if not member_link:
@@ -660,7 +679,7 @@ class ValidatorsForCurrentUserCdcView(APIView):
 
         elif role_name == "RESP_VALID_INTERN":
             member_link = MembresCommissionInterne.objects.filter(
-                id_membre=id_membre_value
+                id_membre=member_key
             ).first()
 
             if not member_link:
@@ -669,9 +688,9 @@ class ValidatorsForCurrentUserCdcView(APIView):
                     "members": []
                 }, status=status.HTTP_200_OK)
 
-            service_id = member_link.id_service_id
+            service_id = member_link.id_commision_interne.id_service_id
             all_members = MembresCommissionInterne.objects.filter(
-                id_service_id=service_id
+                id_commision_interne__id_service_id=service_id
             )
             all_members = filter_members_by_cdc_validator_roles(all_members)
 
@@ -727,6 +746,7 @@ class AllCommissionMembersView(APIView):
         role_name = getattr(user.id_role, 'nom_role', '').strip().upper()
         
         id_membre_value = user.id_membre
+        member_key = commission_member_key(user)
         if not id_membre_value:
             return Response({"error": "Invalid member ID format"}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -734,7 +754,7 @@ class AllCommissionMembersView(APIView):
         if role_name == "RESP_CM":
             # Find current user's external commission membership
             member_link = MembresCommissionExterne.objects.filter(
-                id_membre=id_membre_value
+                id_membre=member_key
             ).first()
             
             if not member_link:
@@ -760,7 +780,7 @@ class AllCommissionMembersView(APIView):
         elif role_name == "RESP_VALID_INTERN":
             # Find current user's internal commission membership
             member_link = MembresCommissionInterne.objects.filter(
-                id_membre=id_membre_value
+                id_membre=member_key
             ).first()
             
             if not member_link:
@@ -769,10 +789,9 @@ class AllCommissionMembersView(APIView):
                     "members": []
                 }, status=status.HTTP_200_OK)
             
-            # Get ALL members with the same id_service (NO role filtering)
-            service_id = member_link.id_service_id
+            service_id = member_link.id_commision_interne.id_service_id
             all_members = MembresCommissionInterne.objects.filter(
-                id_service_id=service_id
+                id_commision_interne__id_service_id=service_id
             )
             
             payload = MembresCommissionInterneSerializer(all_members, many=True).data
@@ -872,9 +891,10 @@ class AddMemberToCommissionView(APIView):
                 )
 
             # Determine the current user's external commission if not explicitly provided
+            member_key = commission_member_key(request.user)
             if not id_commission_externe:
                 user_commission_link = MembresCommissionExterne.objects.filter(
-                    id_membre=request.user.id_membre
+                    id_membre=member_key
                 ).first()
                 if not user_commission_link:
                     return Response(
@@ -884,7 +904,7 @@ class AddMemberToCommissionView(APIView):
                 id_commission_externe = user_commission_link.id_comission_externe_id
             else:
                 user_commission_link = MembresCommissionExterne.objects.filter(
-                    id_membre=request.user.id_membre,
+                    id_membre=member_key,
                     id_comission_externe=id_commission_externe
                 ).first()
                 if not user_commission_link:
@@ -973,8 +993,8 @@ class AddMemberToCommissionView(APIView):
             try:
                 with transaction.atomic():
                     association = MembresCommissionExterne.objects.create(
-                        id_membre=id_membre,
-                        id_comission_externe_id=str(id_commission_externe)
+                        id_membre=int(id_utilisateur),
+                        id_comission_externe_id=int(id_commission_externe)
                     )
             except Exception as e:
                 return Response(

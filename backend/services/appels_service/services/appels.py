@@ -245,6 +245,7 @@ def action_soumettre_validation(appel_id, validated_by=None):
         appel.montant_estime,
         appel.wilaya,
         appel.secteur,
+        service_id=appel.id_service_contractant,
     )
     appel.commission_id = commission_id
     appel.validation_level = validation_level

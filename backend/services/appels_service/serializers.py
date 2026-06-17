@@ -443,27 +443,22 @@ class _AppelOffresWriteSerializer(serializers.ModelSerializer):
         if rules.requires_validation:
             current_statut = getattr(instance, "statut", "non_valide") if instance else "non_valide"
             if instance is None or current_statut == "non_valide":
-                manual_commission_id = validated_data.get(
-                    "commission_id",
-                    getattr(instance, "commission_id", None),
-                )
                 montant_estime = validated_data.get(
                     "montant_estime",
                     getattr(instance, "montant_estime", None),
                 )
                 wilaya = validated_data.get("wilaya", getattr(instance, "wilaya", ""))
                 secteur = validated_data.get("secteur", getattr(instance, "secteur", ""))
-                if manual_commission_id:
-                    commission_id, validation_level = manual_commission_id, validated_data.get(
-                        "validation_level",
-                        getattr(instance, "validation_level", "interne"),
-                    )
-                else:
-                    commission_id, validation_level = resolve_validation_routing(
-                        montant_estime,
-                        wilaya,
-                        secteur,
-                    )
+                service_id = validated_data.get(
+                    "id_service_contractant",
+                    getattr(instance, "id_service_contractant", None),
+                )
+                commission_id, validation_level = resolve_validation_routing(
+                    montant_estime,
+                    wilaya,
+                    secteur,
+                    service_id=service_id,
+                )
                 validated_data["commission_id"] = commission_id
                 validated_data["validation_level"] = validation_level
                 validated_data["statut"] = "non_valide"
@@ -523,6 +518,7 @@ class AppelOffresCreateSerializer(_AppelOffresWriteSerializer):
         ]
         read_only_fields = [
             "id_appel_offres",
+            "commission_id",
             "validated_by",
             "validation_level",
             "statut",
@@ -583,6 +579,7 @@ class AppelOffresUpdateSerializer(_AppelOffresWriteSerializer):
             "etat_execution",
         ]
         read_only_fields = [
+            "commission_id",
             "validated_by",
             "validation_level",
             "statut",

@@ -83,6 +83,7 @@ class ReadyView(APIView):
 
 class AuthLoginView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_scope = "auth_login"
 
     def post(self, request):
@@ -97,6 +98,7 @@ class AuthLoginView(APIView):
 
 class AuthRefreshView(TokenRefreshView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     serializer_class = RedisAwareTokenRefreshSerializer
 
 
@@ -124,6 +126,7 @@ class AuthChangePasswordView(APIView):
 
 class AuthForgotPasswordView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_scope = "auth_password_reset"
 
     def post(self, request):
@@ -138,6 +141,7 @@ class AuthForgotPasswordView(APIView):
 
 class AuthResetPasswordView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_scope = "auth_password_reset"
 
     def post(self, request):
@@ -450,7 +454,9 @@ class InternalRegisterActeurView(APIView):
             activation_url = getattr(serializer, "activation_url", None)
             if activation_url:
                 payload["activation_url"] = activation_url
-            if settings.DEBUG and getattr(serializer, "temporary_password", None):
+            # When no activation link is sent, the creator relays the password manually,
+            # so it must be returned once to the calling service.
+            if not activation_url and getattr(serializer, "temporary_password", None):
                 payload["temporary_password"] = serializer.temporary_password
             return Response(payload, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

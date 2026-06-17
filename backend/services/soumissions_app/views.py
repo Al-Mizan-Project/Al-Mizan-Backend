@@ -381,6 +381,24 @@ class AppelOffreSoumissionsView(APIView):
     """
 
     def get(self, request, appel_id, *args, **kwargs):
+        # Submissions are confidential until the opening of the plis (ouverture des plis).
+        # Before that point the Service Contractant must not see deposited offers.
+        from django.utils import timezone
+        try:
+            from appels_service.models import AppelOffres
+            appel = AppelOffres.objects.filter(id_appel_offres=appel_id).first()
+        except Exception:
+            appel = None
+
+        ouverture_done = False
+        if appel is not None:
+            if str(getattr(appel, "etat_execution", "")) == "plis_ouverts":
+                ouverture_done = True
+            elif appel.date_ouverture_plis and appel.date_ouverture_plis <= timezone.now():
+                ouverture_done = True
+        if not ouverture_done:
+            return Response([], status=status.HTTP_200_OK)
+
         queryset = Soumission.objects.filter(id_appel_offre=appel_id).order_by("-date_soumission")
         serializer = SoumissionListSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

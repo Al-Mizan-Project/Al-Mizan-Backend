@@ -43,6 +43,7 @@ def apply_user_claims(token, user):
     token["role"] = user.id_role.nom_role
     token["permissions"] = user_permission_names(user)
     token["must_change_password"] = bool(user.must_change_password)
+    token["id_membre"] = str(user.id_membre) if user.id_membre else ""
 
 
 
