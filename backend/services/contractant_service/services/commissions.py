@@ -57,20 +57,16 @@ def get_commission_externe_or_404(commission_externe_id):
 
 
 def _validate_membre_exists(membre_id):
-    acteurs_url = settings.ACTEURS_SERVICE_URL
-    if not acteurs_url:
-        return
-    url = f"{acteurs_url.rstrip('/')}/membres/{membre_id}"
     try:
-        response = requests.get(
-            url,
-            timeout=settings.ACTEURS_SERVICE_TIMEOUT,
-            headers={"X-Internal-Service-Token": settings.INTERNAL_SERVICE_TOKEN},
-        )
-    except requests.RequestException:
-        raise ValidationError({"id_membre": ["Unable to validate id_membre at this time"]})
-    if response.status_code != 200:
+        user_id = int(membre_id)
+    except (TypeError, ValueError):
+        raise ValidationError({"id_membre": ["id_membre must be an auth user id"]})
+
+    from auth_service.models import Utilisateur
+
+    if not Utilisateur.objects.filter(id_utilisateur=user_id).exists():
         raise ValidationError({"id_membre": ["id_membre does not exist"]})
+    return user_id
 
 
 # ── Commission Evaluation: membres ──────────────────────────────────
@@ -83,8 +79,8 @@ def list_commission_eval_membres(commission_id):
 
 def add_membre_to_commission_eval(commission_id, membre_id):
     commission = get_commission_eval_or_404(commission_id)
-    _validate_membre_exists(membre_id)
-    MembresCommissionEvaluation.objects.get_or_create(id_comission=commission, id_membre=membre_id)
+    user_id = _validate_membre_exists(membre_id)
+    MembresCommissionEvaluation.objects.get_or_create(id_comission=commission, id_membre=user_id)
     bump_cache_version()
 
 
@@ -108,15 +104,16 @@ def list_commission_interne_membres(commission_interne_id):
 
 def add_membre_to_commission_interne(commission_interne_id, membre_id):
     commission = get_commission_interne_or_404(commission_interne_id)
-    _validate_membre_exists(membre_id)
-    MembresCommissionInterne.objects.get_or_create(id_commision_interne=commission, id_membre=membre_id)
+    user_id = _validate_membre_exists(membre_id)
+    MembresCommissionInterne.objects.get_or_create(id_commision_interne=commission, id_membre=user_id)
     bump_cache_version()
 
 
 def remove_membre_from_commission_interne(commission_interne_id, membre_id):
     commission = get_commission_interne_or_404(commission_interne_id)
+    user_id = _validate_membre_exists(membre_id)
     deleted_count, _ = MembresCommissionInterne.objects.filter(
-        id_commision_interne=commission, id_membre=membre_id,
+        id_commision_interne=commission, id_membre=user_id,
     ).delete()
     if deleted_count == 0:
         raise NotFound("Membre not linked to this commission")

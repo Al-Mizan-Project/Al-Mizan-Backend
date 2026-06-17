@@ -72,6 +72,21 @@ USERS = [
 ]
 SC_DASH_MEMBRES = [1, 2, 3, 4, 5, 6, 7]   # resolve to ID_SERVICE via capital commission
 
+# Extra SC members so each commission role has at least 3 candidates to assign separately.
+# (id_utilisateur, id_role, email, prenom, nom, fonction)
+EXTRA_MEMBRES = [
+ (101, 3, "eval2@sc.dz", "Hamza",   "Belaid",     "Evaluateur"),
+ (102, 3, "eval3@sc.dz", "Karima",  "Saidi",      "Evaluatrice"),
+ (103, 4, "ct2@sc.dz",   "Walid",   "Mansouri",   "Membre comite technique"),
+ (104, 4, "ct3@sc.dz",   "Samira",  "Haddad",     "Membre comite technique"),
+ (105, 5, "rvi2@sc.dz",  "Nabil",   "Cherfaoui",  "Responsable validation interne"),
+ (106, 5, "rvi3@sc.dz",  "Leila",   "Brahimi",    "Responsable validation interne"),
+ (107, 6, "vim2@sc.dz",  "Rachid",  "Slimani",    "Validateur interne marche"),
+ (108, 6, "vim3@sc.dz",  "Sabrina", "Toumi",      "Validateur interne marche"),
+ (109, 7, "vic2@sc.dz",  "Yasmine", "Kaci",       "Validateur interne CDC"),
+ (110, 7, "vic3@sc.dz",  "Adel",    "Boukhalfa",  "Validateur interne CDC"),
+]
+
 # ------------------------------------------------------------- AO definitions
 # state -> statut, etat_execution, (pub,lim,ouv) day offsets from now (None = NULL)
 STATE = {
@@ -163,6 +178,7 @@ w("INSERT INTO \"Comission_evaluation\" (id_comission, nom_comission, categorie,
 w("INSERT INTO \"Comission_interne\" (id_comission_interne, nom_comission, type_comission, id_service) VALUES (1, 'Commission interne de validation - DTP Alger', 'parmanante', %d);" % ID_SERVICE)
 cap = ["(%d, %d)" % (m, COM_ID) for m in SC_DASH_MEMBRES]
 w("INSERT INTO \"Membres_Commission_evaluation\" (id_membre, id_comission) VALUES\n" + ",\n".join(cap) + ";")
+w("INSERT INTO \"Membres_Commission_interne\" (id_membre, id_commision_interne) VALUES (5, 1), (6, 1), (7, 1);")
 w()
 
 w("-- 5) Accounts (one per role) + membres")
@@ -178,10 +194,21 @@ for (rid, role, email, mint, prenom, nom, fonction, org) in USERS:
 w("INSERT INTO utilisateurs (id_utilisateur, id_membre, email, password_hash, id_role, created_at, updated_at, is_active, must_change_password) VALUES\n" + ",\n".join(urows) + ";")
 w()
 
+w("-- 5b) Extra SC members (>=3 candidates per commission role)")
+ex_mrows = ["(%s, %s, %s, %s, %s, NOW(), NOW())" % (
+    q(membre_uuid(uid)), q(SC_ORG), q(nom), q(prenom), q(fonction))
+    for (uid, rid, email, prenom, nom, fonction) in EXTRA_MEMBRES]
+w("INSERT INTO membre (id_membre, organisation_id, nom, prenom, fonction, created_at, updated_at) VALUES\n" + ",\n".join(ex_mrows) + ";")
+ex_urows = ["(%d, %s, %s, %s, %d, NOW(), NOW(), true, false)" % (
+    uid, q(membre_uuid(uid)), q(email), q(PWHASH), rid)
+    for (uid, rid, email, prenom, nom, fonction) in EXTRA_MEMBRES]
+w("INSERT INTO utilisateurs (id_utilisateur, id_membre, email, password_hash, id_role, created_at, updated_at, is_active, must_change_password) VALUES\n" + ",\n".join(ex_urows) + ";")
+w()
+
 w("-- 6) COPEO membership (evaluations service) + CT assignment")
 # id_utilisateur of eval(3), ct(4), rvi(5)
 w("INSERT INTO comission_evaluation (id_comission, id_service, nom_comission, categorie) VALUES (%d, %d, 'COPEO - DTP Alger', 'Travaux');" % (COM_ID, ID_SERVICE))
-w("INSERT INTO membres_commission_evaluation (id_utilisateur, id_comission, role_label) VALUES (3, %d, 'PRESIDENT'), (4, %d, 'MEMBRE'), (5, %d, 'MEMBRE');" % (COM_ID, COM_ID, COM_ID))
+w("INSERT INTO membres_commission_evaluation (id_utilisateur, id_comission, role_label) VALUES (3, %d, 'president'), (4, %d, 'membre'), (5, %d, 'membre');" % (COM_ID, COM_ID, COM_ID))
 w("INSERT INTO assignation_ct (id_utilisateur, assigned_at, id_comission_id) VALUES (4, NOW(), %d);" % COM_ID)
 w()
 

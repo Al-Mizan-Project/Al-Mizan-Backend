@@ -102,7 +102,7 @@ def get_procedure_rules(type_procedure: str | None) -> ProcedureRules:
     return PROCEDURE_RULES[normalized]
 
 
-def resolve_validation_routing(montant_estime, wilaya: str, secteur: str) -> tuple[str | None, str]:
+def resolve_validation_routing(montant_estime, wilaya: str, secteur: str, service_id=None) -> tuple[str | None, str]:
     if montant_estime is None:
         raise ValidationError({"montant_estime": ["Le montant estime est obligatoire pour la validation."]})
     try:
@@ -156,4 +156,4 @@ def resolve_validation_routing(montant_estime, wilaya: str, secteur: str) -> tup
     if montant > wilaya_commission.seuil:
         return str(wilaya_commission.organisation_id), "externe_wilaya"
 
-    return None, "interne"
+    return (str(service_id) if service_id is not None else None), "interne"

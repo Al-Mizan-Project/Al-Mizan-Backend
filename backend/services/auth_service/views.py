@@ -76,6 +76,7 @@ class ReadyView(APIView):
 
 class AuthLoginView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_scope = "auth_login"
 
     def post(self, request):
@@ -90,6 +91,7 @@ class AuthLoginView(APIView):
 
 class AuthRefreshView(TokenRefreshView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     serializer_class = RedisAwareTokenRefreshSerializer
 
 
@@ -117,6 +119,7 @@ class AuthChangePasswordView(APIView):
 
 class AuthForgotPasswordView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_scope = "auth_password_reset"
 
     def post(self, request):
@@ -131,6 +134,7 @@ class AuthForgotPasswordView(APIView):
 
 class AuthResetPasswordView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_scope = "auth_password_reset"
 
     def post(self, request):

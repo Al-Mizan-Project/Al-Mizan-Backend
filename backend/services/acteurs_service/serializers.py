@@ -158,3 +158,10 @@ class MembreDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Membre
         fields = ['id_membre', 'nom', 'prenom', 'telephone', 'fonction', 'created_at', 'updated_at', 'organisation']
+
+
+class MembreUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Membre
+        fields = ['id_membre', 'nom', 'prenom', 'telephone', 'fonction', 'organisation']
+        read_only_fields = ['id_membre', 'organisation']

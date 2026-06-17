@@ -10,7 +10,7 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from auth_service.rbac import normalize_role_name
 from .models import Membre ,OperateurEconomique , TypeDocument ,DemandeDocument, DemandeOperateur, StatutDemande ,DemandeOperateur ,Organisation, ServiceContractant, CommissionExterne, TypeEntite
-from .serializers import OrganisationCreateSerializer, ServiceContractantCreateSerializer, CommissionExterneCreateSerializer, MembreDetailSerializer
+from .serializers import OrganisationCreateSerializer, ServiceContractantCreateSerializer, CommissionExterneCreateSerializer, MembreDetailSerializer, MembreUpdateSerializer
 from .serializers import DemandeOperateurSerializer
 from .serializers import DemandeOperateurDetailSerializer , MembreListSerializer
 from .serializers import CreateResponsableSerializer , MembreCreateByResponsableSerializer
@@ -244,26 +244,22 @@ class DemandeApprouverView(APIView):
                     "email": responsable_data["email"],
                     "id_membre": str(responsable.id_membre),
                     "role_nom": "RESP_OE",
-                    # No activation link: a one-time password is generated and relayed by the SC.
-                    "send_activation": False,
+                    # Activation link is emailed to the operator; no password is exposed to the SC.
+                    "send_activation": True,
                 }
-                if responsable_data.get("password"):
-                    auth_payload["password"] = responsable_data["password"]
                 auth_response = _auth_register(auth_payload)
                 auth_data = _auth_response_data(auth_response)
                 if auth_response.status_code != 201:
                     raise Exception(f"Erreur Service Auth: {auth_response.text}")
 
             return Response({
-                "message": "Demande approuvée avec succès. L'entreprise a été créée.",
+                "message": "Demande approuvée avec succès. Un lien d'activation a été envoyé à l'opérateur.",
                 "demande_id": demande.id,
                 "organisation_id": organisation.id_organisation,
                 "operateur_id": operateur.organisation_id,
                 "id_membre": responsable.id_membre,
                 "id_utilisateur": auth_data.get("id_utilisateur"),
                 "email": responsable_data["email"],
-                "activation_url": auth_data.get("activation_url"),
-                "temporary_password": auth_data.get("temporary_password"),
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -482,26 +478,20 @@ class CreateMembreByResponsableView(APIView):
                     "email": data['email'],
                     "id_membre": str(nouveau_membre.id_membre),
                     "role_nom": role_nom,
-                    # No activation link: the responsable sets/relays the password directly.
-                    "send_activation": False,
+                    # Activation link is emailed to the member; no password is exposed.
+                    "send_activation": True,
                 }
-                if data.get("password"):
-                    auth_payload["password"] = data["password"]
 
-                # Appel vers le service Auth
-                # L'URL pointe vers la nouvelle route interne
                 auth_response = _auth_register(auth_payload)
                 auth_data = _auth_response_data(auth_response)
                 if auth_response.status_code != 201:
                     raise Exception(f"Erreur Auth: {auth_response.text}")
 
             return Response({
-                "message": "Membre et compte collaborateur créés avec succès",
+                "message": "Membre et compte collaborateur créés avec succès. Un lien d'activation a été envoyé.",
                 "id_membre": nouveau_membre.id_membre,
                 "id_utilisateur": auth_data.get("id_utilisateur"),
                 "email": data["email"],
-                "activation_url": auth_data.get("activation_url"),
-                "temporary_password": auth_data.get("temporary_password"),
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
@@ -715,20 +705,18 @@ class SoumettreDemandeOperateurView(APIView):
             status=status.HTTP_201_CREATED
         )
         
-class MembreDetailView(generics.RetrieveAPIView):
+class MembreDetailView(generics.RetrieveUpdateAPIView):
     """
-    Endpoint: GET /api/acteurs/membres/{id_membre}/
-    Description: Récupère les détails d'un membre spécifique et les infos de son organisation.
+    Endpoint: GET/PATCH /api/acteurs/membres/{id_membre}/
+    Récupère ou met à jour les informations d'un membre (nom, prénom, téléphone, fonction).
     """
-    # L'utilisation de select_related permet d'optimiser la requête SQL (évite le problème N+1)
     queryset = Membre.objects.select_related('organisation').all()
-    serializer_class = MembreDetailSerializer
-    
-    # On précise à DRF que l'ID dans l'URL correspond au champ 'id_membre' dans le modèle
-    lookup_field = 'id_membre' 
+    lookup_field = 'id_membre'
 
-    # Décommente cette ligne si tu veux que seul un utilisateur connecté puisse voir ces infos
-    # permission_classes = [IsAuthenticated]
+    def get_serializer_class(self):
+        if self.request.method in {"PATCH", "PUT"}:
+            return MembreUpdateSerializer
+        return MembreDetailSerializer
 
 
 class OrganisationResponsableByTypeView(APIView):
