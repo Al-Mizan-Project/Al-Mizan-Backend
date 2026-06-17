@@ -311,7 +311,19 @@ class DemandeRejeterView(APIView):
 
 
 class CreerResponsableView(APIView):
+    """
+    POST /api/acteurs/organisations/{org_id}/responsable/
+
+    Upsert du responsable de l'organisation :
+      - S'il n'existe pas encore de membre pour cette organisation,
+        on le crée (Membre + compte Auth + email d'activation/dashboard).
+      - S'il existe déjà (le premier membre créé = responsable),
+        on met simplement à jour ses informations (nom, prénom,
+        téléphone, fonction). Le compte Auth (email, rôle, permissions)
+        n'est pas modifié ici.
+    """
     permission_classes = [IsAuthenticated, IsAdminRole]
+
     def post(self, request, org_id):
         serializer = CreateResponsableSerializer(data=request.data)
         if not serializer.is_valid():
@@ -320,44 +332,92 @@ class CreerResponsableView(APIView):
         organisation = get_object_or_404(Organisation, id_organisation=org_id)
         data = serializer.validated_data
 
-        # Configuration Rôle/Permission selon le type d'organisation (PDF Page 2)
+        existing_responsable = (
+            Membre.objects.filter(organisation=organisation)
+            .order_by('created_at')
+            .first()
+        )
+
+        # ── CAS 1 : Le responsable existe déjà → mise à jour ──────────────────
+        if existing_responsable:
+            existing_responsable.nom = data['nom']
+            existing_responsable.prenom = data['prenom']
+            existing_responsable.telephone = data.get('telephone', existing_responsable.telephone)
+            existing_responsable.fonction = data.get('fonction', existing_responsable.fonction)
+            existing_responsable.save(update_fields=['nom', 'prenom', 'telephone', 'fonction', 'updated_at'])
+
+            auth_result = {}
+            email = data.get('email')
+            password = data.get('password')
+            resend_activation = bool(request.data.get('resend_activation'))
+
+            if email or password or resend_activation:
+                auth_url = _auth_service_base_url() + "/internal/users/update-by-membre"
+                auth_payload = {"id_membre": str(existing_responsable.id_membre)}
+                if email:
+                    auth_payload["email"] = email
+                if password:
+                    auth_payload["password"] = password
+                if resend_activation:
+                    auth_payload["resend_activation"] = True
+
+                try:
+                    auth_response = requests.patch(auth_url, json=auth_payload, headers=_internal_headers())
+                    auth_result = _auth_response_data(auth_response)
+                    if auth_response.status_code != 200:
+                        return Response(
+                            {"erreur": "Échec de la mise à jour du compte Auth", "details": auth_result},
+                            status=status.HTTP_502_BAD_GATEWAY,
+                        )
+                except requests.exceptions.RequestException as e:
+                    return Response(
+                        {"erreur": f"Service Auth injoignable: {str(e)}"},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    )
+
+            return Response({
+                "message": "Responsable mis à jour avec succès",
+                "id_membre": existing_responsable.id_membre,
+                "created": False,
+                "activation_url": auth_result.get("activation_url"),
+            }, status=status.HTTP_200_OK)
+
+        # ── CAS 2 : Aucun responsable → création complète ────────────────────
+        if not data.get('email'):
+            return Response({"email": ["Ce champ est obligatoire."]}, status=status.HTTP_400_BAD_REQUEST)
+
         mapping = {
             TypeEntite.OPERATEUR_ECONOMIQUE: "RESP_OE",
             TypeEntite.SERVICE_CONTRACTANT: "RESP_SC",
             TypeEntite.COMMISSION_EXTERNE: "RESP_CM",
         }
-        
+
         role_nom = mapping.get(organisation.type_entite)
         if not role_nom:
             return Response({"erreur": "Type d'organisation non supporté"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             with transaction.atomic():
-                # ÉTAPE A : Créer le membre localement pour obtenir l'id_membre
                 membre = Membre.objects.create(
                     organisation=organisation,
                     nom=data['nom'],
                     prenom=data['prenom'],
                     telephone=data.get('telephone'),
-                    fonction=data.get('fonction')
+                    fonction=data.get('fonction'),
                 )
 
-                # ÉTAPE B : Préparer l'appel au service Auth
-                # On envoie l'id_membre pour que l'utilisateur pointe vers lui
                 auth_payload = {
                     "email": data['email'],
-                    "id_membre": str(membre.id_membre), 
+                    "id_membre": str(membre.id_membre),
                     "role_nom": role_nom,
                     "send_activation": True,
                 }
                 if data.get("password"):
                     auth_payload["password"] = data["password"]
 
-               # L'URL pointe vers la nouvelle route interne
                 auth_response = _auth_register(auth_payload)
                 auth_data = _auth_response_data(auth_response)
                 if auth_response.status_code != 201:
-                    # Si Auth échoue, on rollback la création du membre
                     raise Exception(f"Erreur Service Auth: {auth_response.text}")
 
             return Response({
@@ -366,6 +426,7 @@ class CreerResponsableView(APIView):
                 "id_utilisateur": auth_data.get("id_utilisateur"),
                 "activation_url": auth_data.get("activation_url"),
                 "temporary_password": auth_data.get("temporary_password"),
+                "created": True,
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
