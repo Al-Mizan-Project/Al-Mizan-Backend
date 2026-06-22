@@ -105,7 +105,7 @@ class DocumentUploadView(views.APIView):
             
             # Generate unique storage name
             unique_obj_name = f"{uuid.uuid4()}.{extension}"
-            storage_url = f"{minio_service.bucket}/{unique_obj_name}"
+            storage_url = unique_obj_name
 
             # Stream upload directly to MinIO and calculate SHA-256 on the fly
             try:
@@ -164,7 +164,7 @@ class DocumentDownloadView(views.APIView):
         
         # Extract object key from storage URL – use the full path after the
         # leading slash so that keys like "documents/CDC.pdf" are preserved.
-        object_name = document.storage_url.lstrip('/')
+        object_name = document.storage_url.split('/')[-1]
         
         # Verify the file exists in MinIO BEFORE starting the stream.
         # get_file_stream is a generator so its body only runs when Django

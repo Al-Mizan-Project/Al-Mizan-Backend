@@ -10,6 +10,7 @@ from .views import (
     CdcRedigerView,
     CdcReviserView,
     DetecterAnomaliesAutoView,
+    DetecterAnomaliesMultiAgentView,
     DetecterAnomaliesView,
     DetecterSaucissonnageAutoView,
     DetecterSaucissonnageView,
@@ -22,6 +23,7 @@ urlpatterns = [
     # ── Collusion & Price-fixing Detection ──────────────────────────────
     path("ia/anomalies/detecter", DetecterAnomaliesView.as_view(), name="ia_anomalies_detecter"),
     path("ia/anomalies/detecter-auto", DetecterAnomaliesAutoView.as_view(), name="ia_anomalies_detecter_auto"),
+    path("ia/anomalies/detecter-multi-agent", DetecterAnomaliesMultiAgentView.as_view(), name="ia_anomalies_detecter_multi_agent"),
 
     # ── Saucissonnage (Market Splitting) Detection ──────────────────────
     path("ia/saucissonnage/detecter", DetecterSaucissonnageView.as_view(), name="ia_saucissonnage_detecter"),

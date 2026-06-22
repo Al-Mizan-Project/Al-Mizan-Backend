@@ -47,7 +47,7 @@ class CommissionInterne(models.Model):
 
 
 class MembresCommissionEvaluation(models.Model):
-    id_membre = models.UUIDField(db_index=True)
+    id_membre = models.IntegerField(db_index=True)
     id_comission = models.ForeignKey(
         CommissionEvaluation,
         on_delete=models.CASCADE,
@@ -66,7 +66,7 @@ class MembresCommissionEvaluation(models.Model):
 
 
 class MembresCommissionInterne(models.Model):
-    id_membre = models.UUIDField(db_index=True)
+    id_membre = models.IntegerField(db_index=True)
     id_service = models.ForeignKey(
         ServiceContractant,
         on_delete=models.CASCADE,
@@ -98,7 +98,7 @@ class CommissionExterne(models.Model):
     seuils_competence_financiere = models.CharField(max_length=255)
 
 class MembresCommissionExterne(models.Model):
-    id_membre = models.UUIDField(db_index=True)
+    id_membre = models.IntegerField(db_index=True)
     # Final FK: point directly to acteurs_service.CommissionExterne using
     # the column name `id_comission_externe` (will be UUID after migration).
     id_comission_externe = models.ForeignKey(

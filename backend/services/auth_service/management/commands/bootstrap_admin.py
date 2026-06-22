@@ -32,12 +32,11 @@ class Command(BaseCommand):
         if not role_name:
             raise CommandError("INITIAL_ADMIN_ROLE must not be empty")
         try:
-            membre_id_int = int(membre_id_raw)
+            membre_id = int(membre_id_raw)
         except ValueError as exc:
             raise CommandError("INITIAL_ADMIN_MEMBRE_ID must be an integer") from exc
-        if membre_id_int < 1:
+        if membre_id < 1:
             raise CommandError("INITIAL_ADMIN_MEMBRE_ID must be >= 1")
-        membre_id = uuid.UUID(int=membre_id_int)
 
         role, _ = Role.objects.get_or_create(nom_role=role_name)
         user, _ = Utilisateur.objects.get_or_create(

@@ -185,8 +185,6 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-admin_almizan}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-SecurePassword123!}
       MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-almizan-documents}
-    volumes:
-      - ../backend:/app
     depends_on:
       postgres:
         condition: service_healthy
