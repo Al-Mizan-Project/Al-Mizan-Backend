@@ -57,6 +57,7 @@ from .services.integrations import (
 )
 from .services.ocr import extract_document_text, extract_documents_text_parallel
 from .services.saucissonnage import detect_saucissonnage
+from .services.agents.orchestrator_agent import run_agent_pipeline
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +299,87 @@ class DetecterAnomaliesAutoView(AuthenticatedAnomalyAPIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+# ---------------------------------------------------------------------------
+# Multi-Agent Anomaly Detection — POST /ia/anomalies/detecter-multi-agent
+# ---------------------------------------------------------------------------
+class DetecterAnomaliesMultiAgentView(AuthenticatedAnomalyAPIView):
+    """
+    POST /ia/anomalies/detecter-multi-agent
+
+    Utilise le système multi-agent pour détecter les anomalies.
+    Décompose l'analyse en sous-tâches distribuées à des agents spécialisés
+    (AgentPrix, AgentDelai, AgentDispersion, AgentRotation) et agrège
+    leurs résultats.
+
+    Request:  { "id_soumission": 45, "id_appel_offre": 10, "trace": true }
+
+    Response:
+    {
+      "id_appel_offre": 10,
+      "id_soumission": 45,
+      "resume": { ... },
+      "anomalies": [ ... ],
+      "analyse_multi_agents": {
+        "nb_agents_sollicites": 4,
+        "details_par_agent": [ ... ]
+      },
+      "collaboration": { ... },
+      "trace_collaboration": { ... }   // si trace=true
+    }
+    """
+
+    def post(self, request):
+        from .serializers import DetecterAnomaliesInputSerializer
+        serializer = DetecterAnomaliesInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        id_soumission = serializer.validated_data["id_soumission"]
+        id_appel_offre = serializer.validated_data["id_appel_offre"]
+        trace = request.data.get("trace", True)
+
+        # Fetch target soumission
+        soumission_sync = fetch_soumission_details(id_soumission)
+        if not soumission_sync.get("ok"):
+            return Response(
+                {"error": "Impossible de récupérer la soumission", "details": soumission_sync.get("error")},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        soumission = soumission_sync.get("soumission", {})
+
+        # Fetch appel d'offre
+        appel_sync = fetch_appel_details(id_appel_offre)
+        if not appel_sync.get("ok"):
+            return Response(
+                {"error": "Impossible de récupérer l'appel d'offres", "details": appel_sync.get("error")},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        appel = appel_sync.get("appel", {})
+
+        # Fetch all soumissions for multi-rule analysis
+        all_sync = fetch_soumissions_for_appel(id_appel_offre)
+        all_soumissions = all_sync.get("soumissions", [soumission]) if all_sync.get("ok") else [soumission]
+
+        # Run multi-agent pipeline
+        rapport = run_agent_pipeline(
+            soumission=soumission,
+            appel=appel,
+            all_soumissions=all_soumissions,
+            trace=bool(trace),
+        )
+
+        # Persist anomalies
+        created = []
+        for a in rapport.get("anomalies", []):
+            record = _create_anomaly_record(id_appel_offre, a)
+            created.append(record)
+
+        rapport["id_appel_offre"] = id_appel_offre
+        rapport["id_soumission"] = id_soumission
+        rapport["anomalies_persistees"] = [_serialize_anomaly(r) for r in created]
+
+        return Response(rapport, status=status.HTTP_201_CREATED)
 
 
 # ---------------------------------------------------------------------------
@@ -734,15 +816,26 @@ class VerifierConformiteSoumissionView(APIView):
 
 
 class VerifierConformiteSoumissionAutoView(APIView):
+    """
+    POST /ia/conformite/verifier-soumission-auto/<soumission_id>
+
+    Multi-agent conformity analysis.
+
+    OrchestratorAgent coordinates three specialized agents:
+      1. DocAnalyzerAgent  — OCR text extraction from documents
+      2. DocClassifierAgent — document type classification
+      3. ConformityAgent   — conformity validation against requirements
+    """
+
     def post(self, request, soumission_id):
         serializer = VerifierConformiteAutomatiqueInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         id_appel_offre = serializer.validated_data["id_appel_offre"]
         provided_document_ids = serializer.validated_data.get("provided_document_ids", [])
-        enforce_validity_checks = serializer.validated_data.get("enforce_validity_checks", True)
         perform_ocr = serializer.validated_data.get("perform_ocr", True)
 
+        # ── Resolve required documents ─────────────────────────────────
         required_documents = serializer.validated_data.get("required_documents", [])
         required_document_ids = serializer.validated_data.get("required_document_ids", [])
 
@@ -775,8 +868,11 @@ class VerifierConformiteSoumissionAutoView(APIView):
                     },
                     status=status.HTTP_502_BAD_GATEWAY,
                 )
-            required_documents = build_required_documents_from_metadata(required_meta_sync.get("documents", []))
+            required_documents = build_required_documents_from_metadata(
+                required_meta_sync.get("documents", [])
+            )
 
+        # ── Fetch provided document metadata ──────────────────────────
         provided_meta_sync = fetch_documents_metadata(provided_document_ids)
         if not provided_meta_sync.get("ok"):
             return Response(
@@ -787,56 +883,52 @@ class VerifierConformiteSoumissionAutoView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        provided_documents = build_provided_documents_from_metadata(
-            provided_meta_sync.get("documents", []),
-            enforce_validity_checks=enforce_validity_checks,
-        )
+        provided_documents_meta = provided_meta_sync.get("documents", [])
 
-        ocr_processed = 0
-        ocr_succeeded = 0
+        # ── Fetch document binaries for OCR ────────────────────────────
+        provided_documents_binaries = []
         if perform_ocr:
-            original_docs_by_id = {
-                doc.get("id_document"): doc
-                for doc in provided_meta_sync.get("documents", [])
-                if doc.get("id_document") is not None
-            }
-
-            ocr_tasks = []
-            ocr_task_indices = []
-
-            for idx, projected_doc in enumerate(provided_documents):
-                doc_id = projected_doc.get("id_document")
-                original_doc = original_docs_by_id.get(doc_id)
-                if doc_id is not None and original_doc is not None:
+            for doc in provided_documents_meta:
+                doc_id = doc.get("id_document")
+                if doc_id is not None:
                     binary = fetch_document_binary(int(doc_id))
                     if binary.get("ok"):
-                        ocr_tasks.append(
-                            (binary.get("content", b""), str(original_doc.get("nom", "")))
-                        )
-                        ocr_task_indices.append(idx)
+                        provided_documents_binaries.append({
+                            "id_document": doc_id,
+                            "binary": binary.get("content", b""),
+                            "filename": str(doc.get("nom", "")),
+                        })
 
-            ocr_processed = len(ocr_tasks)
-            ocr_results = extract_documents_text_parallel(ocr_tasks)
+        # ── Multi-agent conformity analysis ────────────────────────────
+        from .agents import OrchestratorAgent, AgentMessage
 
-            enriched_provided = [{**doc} for doc in provided_documents]
-            for task_pos, doc_idx in enumerate(ocr_task_indices):
-                extraction = ocr_results[task_pos]
-                if extraction.get("used"):
-                    ocr_succeeded += 1
-                    inferred_from_ocr = infer_document_type_from_text(extraction.get("text", ""))
-                    if inferred_from_ocr:
-                        enriched_provided[doc_idx]["type_document"] = inferred_from_ocr
-            provided_documents = enriched_provided
+        orchestrator = OrchestratorAgent()
+        agent_request = AgentMessage(
+            sender="view",
+            recipient="orchestrator",
+            msg_type="request",
+            payload={
+                "required_documents": required_documents,
+                "provided_documents_meta": provided_documents_meta,
+                "provided_documents_binaries": provided_documents_binaries,
+                "perform_ocr": perform_ocr,
+            },
+            context={"soumission_id": soumission_id, "id_appel_offre": id_appel_offre},
+        )
 
-        conformite_statut, rapport = run_conformite_check(required_documents, provided_documents)
+        agent_response = orchestrator.process(agent_request)
+        result = agent_response.payload
 
+        conformite_statut = result.get("conformite_statut", "ERROR")
+        rapport = result.get("conformite_rapport", {})
+        analysis_context = result.get("analysis_context", {})
+
+        # ── Persist result ─────────────────────────────────────────────
         soumission_sync = patch_soumission_conformite(
             id_soumission=soumission_id,
             conformite_statut=conformite_statut,
             conformite_rapport=rapport,
         )
-
-        document_sync = []
 
         return Response(
             {
@@ -849,20 +941,15 @@ class VerifierConformiteSoumissionAutoView(APIView):
                     "required_documents": required_documents,
                     "required_document_ids": required_document_ids,
                     "provided_document_ids": provided_document_ids,
-                    "provided_documents_detected": provided_documents,
-                    "ocr": {
-                        "enabled": bool(perform_ocr),
-                        "processed": ocr_processed,
-                        "succeeded": ocr_succeeded,
+                    "agent_workflow": {
+                        "orchestrator": "OrchestratorAgent",
+                        "agents": ["DocAnalyzerAgent", "DocClassifierAgent", "ConformityAgent"],
+                        "message_passing": True,
                     },
-                    "missing_metadata_required_ids": required_meta_sync.get("missing_ids", [])
-                    if not serializer.validated_data.get("required_documents")
-                    else [],
-                    "missing_metadata_provided_ids": provided_meta_sync.get("missing_ids", []),
+                    **analysis_context,
                 },
                 "integrations": {
                     "soumission_sync": soumission_sync,
-                    "documents_sync": document_sync,
                 },
             }
         )

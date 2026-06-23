@@ -106,7 +106,7 @@ class DocumentUploadView(views.APIView):
             
             # Generate unique storage name
             unique_obj_name = f"{uuid.uuid4()}.{extension}"
-            storage_url = f"{minio_service.bucket}/{unique_obj_name}"
+            storage_url = unique_obj_name
 
             # Stream upload directly to MinIO and calculate SHA-256 on the fly
             try:

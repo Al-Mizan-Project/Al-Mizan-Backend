@@ -348,6 +348,16 @@ MINIO_BUCKET_NAME = env_str("MINIO_BUCKET_NAME", "almizan-documents")
 MAX_OCR_FILE_SIZE = env_int("MAX_OCR_FILE_SIZE", 20 * 1024 * 1024)
 OCR_MAX_WORKERS = env_int("OCR_MAX_WORKERS", 4)
 
+# ---------------------------------------------------------------------------
+# Semantic embedding — conformité document type matching
+# ---------------------------------------------------------------------------
+EMBEDDING_MODEL_NAME = env_str(
+    "EMBEDDING_MODEL_NAME", "paraphrase-multilingual-mpnet-base-v2"
+)
+EMBEDDING_SIMILARITY_THRESHOLD = env_float(
+    "EMBEDDING_SIMILARITY_THRESHOLD", 0.55
+)
+
 
 GROQ_API_KEY = env_str("GROQ_API_KEY", "")
 GROQ_MODEL = env_str("GROQ_MODEL", "llama-3.3-70b-versatile")
