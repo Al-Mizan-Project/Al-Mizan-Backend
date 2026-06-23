@@ -38,12 +38,14 @@ class AttributionSerializer(serializers.ModelSerializer):
         return None
 
     def get_assignmentDate(self, obj):
-        return obj.created_at.isoformat() if obj.created_at else None
+        base_date = obj.updated_at if obj.validated_by else obj.created_at
+        return base_date.isoformat() if base_date else None
 
     def get_validationDeadline(self, obj):
         from datetime import timedelta
-        if obj.created_at:
-            return (obj.created_at + timedelta(days=7)).isoformat()
+        base_date = obj.updated_at if obj.validated_by else obj.created_at
+        if base_date:
+            return (base_date + timedelta(days=7)).isoformat()
         return None
 
     def get_status(self, obj):
@@ -54,8 +56,9 @@ class AttributionSerializer(serializers.ModelSerializer):
         if statut_str not in ["provisoire", "non_valide"]:
             return obj.statut
 
-        if obj.created_at:
-            deadline = obj.created_at + timedelta(days=7)
+        base_date = obj.updated_at if obj.validated_by else obj.created_at
+        if base_date:
+            deadline = base_date + timedelta(days=7)
             if timezone.now() > deadline:
                 return "En Retard"
         return "En Cours"
@@ -68,8 +71,9 @@ class AttributionSerializer(serializers.ModelSerializer):
         if statut_str not in ["provisoire", "non_valide"]:
             return None
 
-        if obj.created_at:
-            deadline = obj.created_at + timedelta(days=7)
+        base_date = obj.updated_at if obj.validated_by else obj.created_at
+        if base_date:
+            deadline = base_date + timedelta(days=7)
             now = timezone.now()
             if now > deadline:
                 return (now - deadline).days

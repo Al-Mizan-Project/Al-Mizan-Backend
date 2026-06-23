@@ -67,19 +67,19 @@ class MembresCommissionEvaluation(models.Model):
 
 class MembresCommissionInterne(models.Model):
     id_membre = models.IntegerField(db_index=True)
-    id_service = models.ForeignKey(
-        ServiceContractant,
+    id_commision_interne = models.ForeignKey(
+        CommissionInterne,
         on_delete=models.CASCADE,
-        db_column="id_service",
-        related_name="responsables_commission_interne",
+        db_column="id_commision_interne",
+        related_name="membre_links",
     )
 
     class Meta:
         db_table = "Membres_Commission_interne"
         constraints = [
             models.UniqueConstraint(
-                fields=["id_membre", "id_service"],
-                name="unique_membre_service_contractant",
+                fields=["id_membre", "id_commision_interne"],
+                name="unique_membre_commission_interne",
             ),
         ]
 
@@ -99,10 +99,8 @@ class CommissionExterne(models.Model):
 
 class MembresCommissionExterne(models.Model):
     id_membre = models.IntegerField(db_index=True)
-    # Final FK: point directly to acteurs_service.CommissionExterne using
-    # the column name `id_comission_externe` (will be UUID after migration).
     id_comission_externe = models.ForeignKey(
-        'acteurs_service.CommissionExterne',
+        CommissionExterne,
         on_delete=models.CASCADE,
         db_column="id_comission_externe",
         related_name="membre_links",

@@ -10,6 +10,10 @@ from urllib.parse import urlencode
 from .services.access_control import user_permission_names
 from .models import Utilisateur
 from .permissions import AuthServicePermission
+import secrets
+from django.contrib.auth import password_validation
+from django.core.exceptions import ValidationError as DjangoValidationError
+
 from .serializers import (
     ChangePasswordSerializer,
     ForgotPasswordSerializer,
@@ -26,6 +30,9 @@ from .serializers import (
     UtilisateurCreateSerializer,
     UtilisateurSerializer,
     UtilisateurUpdateSerializer,
+    store_account_activation_token,
+    build_activation_url,
+    send_activation_email,
 )
 from .services.access_control import (
     add_user_permission,
@@ -76,6 +83,7 @@ class ReadyView(APIView):
 
 class AuthLoginView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_scope = "auth_login"
 
     def post(self, request):
@@ -90,6 +98,7 @@ class AuthLoginView(APIView):
 
 class AuthRefreshView(TokenRefreshView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     serializer_class = RedisAwareTokenRefreshSerializer
 
 
@@ -117,6 +126,7 @@ class AuthChangePasswordView(APIView):
 
 class AuthForgotPasswordView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_scope = "auth_password_reset"
 
     def post(self, request):
@@ -131,6 +141,7 @@ class AuthForgotPasswordView(APIView):
 
 class AuthResetPasswordView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_scope = "auth_password_reset"
 
     def post(self, request):
@@ -443,7 +454,9 @@ class InternalRegisterActeurView(APIView):
             activation_url = getattr(serializer, "activation_url", None)
             if activation_url:
                 payload["activation_url"] = activation_url
-            if settings.DEBUG and getattr(serializer, "temporary_password", None):
+            # When no activation link is sent, the creator relays the password manually,
+            # so it must be returned once to the calling service.
+            if not activation_url and getattr(serializer, "temporary_password", None):
                 payload["temporary_password"] = serializer.temporary_password
             return Response(payload, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -474,3 +487,149 @@ class InternalSearchUsersView(APIView):
             })
             
         return Response(result, status=status.HTTP_200_OK)
+
+
+class MemberSelfUpdateView(APIView):
+    """
+    PATCH /users/<user_id>/member-update
+    Permet à un RESP_CM ou RESP_VALID_INTERN de modifier les infos (nom, prenom)
+    d'un utilisateur membre de sa propre commission, sans avoir besoin de users.write.
+
+    DELETE /users/<user_id>/member-update
+    Permet à un RESP_CM ou RESP_VALID_INTERN de supprimer un compte membre de
+    sa propre commission.
+    """
+    ALLOWED_ROLES = {"resp_cm", "resp_valid_intern"}
+
+    def _check_caller(self, request):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        role_name = getattr(getattr(user, "id_role", None), "nom_role", "").strip().lower()
+        return role_name in self.ALLOWED_ROLES
+
+    def _get_target_user(self, user_id):
+        """Cherche l'utilisateur par id_utilisateur (entier) ou par id_membre (UUID)."""
+        # Essayer comme entier (id_utilisateur)
+        try:
+            int_id = int(user_id)
+            return Utilisateur.objects.get(id_utilisateur=int_id)
+        except (ValueError, TypeError, Utilisateur.DoesNotExist):
+            pass
+        # Sinon chercher par id_membre (UUID)
+        return Utilisateur.objects.filter(id_membre=user_id).first()
+
+    def patch(self, request, user_id):
+        if not self._check_caller(request):
+            return Response(
+                {"error": {"code": "forbidden", "message": "Réservé aux responsables de commission."}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        target_user = self._get_target_user(user_id)
+        if not target_user:
+            return Response({"error": "Utilisateur introuvable."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Seuls nom/prenom sont acceptés ici ; email/mot de passe passent par d'autres routes
+        allowed_fields = {"nom", "prenom", "nom_prenom"}
+        data = {k: v for k, v in request.data.items() if k in allowed_fields}
+
+        # Only perform a best-effort update on the external acteurs service.
+        nom = request.data.get("nom")
+        prenom = request.data.get("prenom")
+
+        if nom is None and prenom is None:
+            return Response({"error": "No updatable fields provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.conf import settings as dj_settings
+        import requests as http_requests
+        acteurs_url = getattr(dj_settings, "ACTEURS_SERVICE_URL",
+                              getattr(dj_settings, "INTERNAL_BASE_URL", "http://backend:8000")).rstrip("/")
+        membre_id = str(target_user.id_membre) if target_user.id_membre else None
+        if not membre_id:
+            return Response({"error": "Utilisateur lié à aucun membre externe."}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload = {}
+        if nom is not None:
+            payload["nom"] = nom
+        if prenom is not None:
+            payload["prenom"] = prenom
+
+        internal_token = getattr(dj_settings, "INTERNAL_SERVICE_TOKEN", "")
+        try:
+            resp = http_requests.patch(
+                f"{acteurs_url}/api/acteurs/membres/{membre_id}/",
+                json=payload,
+                headers={"X-Internal-Service-Token": internal_token},
+                timeout=5,
+            )
+            if not (200 <= resp.status_code < 300):
+                # Propagate error from acteurs service
+                return Response({"error": {"code": "external_error", "message": resp.text}}, status=resp.status_code)
+        except Exception as exc:
+            print(f"[MemberSelfUpdateView] Failed to update acteurs membre: {exc}")
+            return Response({"error": {"code": "external_unreachable", "message": str(exc)}}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({"message": "Membre mis à jour avec succès."}, status=status.HTTP_200_OK)
+
+    def delete(self, request, user_id):
+        if not self._check_caller(request):
+            return Response(
+                {"error": {"code": "forbidden", "message": "Réservé aux responsables de commission."}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        target_user = self._get_target_user(user_id)
+        if not target_user:
+            return Response({"error": "Utilisateur introuvable."}, status=status.HTTP_404_NOT_FOUND)
+
+        target_user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+class InternalUpdateActeurView(APIView):
+    """ PATCH /internal/users/update-by-membre
+
+    Body: {
+      "id_membre": "<uuid>",
+      "email": "...",            # optional
+      "password": "...",         # optional
+      "resend_activation": true  # optional
+    }
+    """
+    permission_classes = []
+
+    def patch(self, request):
+        id_membre = request.data.get("id_membre")
+        if not id_membre:
+            return Response({"id_membre": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = Utilisateur.objects.select_related("id_role").get(id_membre=id_membre)
+        except Utilisateur.DoesNotExist:
+            return Response({"detail": "Utilisateur introuvable pour cet id_membre"}, status=status.HTTP_404_NOT_FOUND)
+
+        email = (request.data.get("email") or "").strip()
+        password = (request.data.get("password") or "").strip()
+        resend_activation = bool(request.data.get("resend_activation"))
+
+        if email:
+            user.email = email
+
+        if password:
+            try:
+                password_validation.validate_password(password, user=user)
+            except DjangoValidationError as exc:
+                return Response({"password": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+            user.set_password(password)
+            user.must_change_password = True
+
+        user.save()
+
+        payload = {"id_utilisateur": user.id_utilisateur, "email": user.email}
+
+        if resend_activation:
+            token = secrets.token_urlsafe(48)
+            store_account_activation_token(token, user.id_utilisateur)
+            activation_url = build_activation_url(token)
+            temp_password = password or None
+            send_activation_email(user, activation_url, temporary_password=temp_password)
+            payload["activation_url"] = activation_url
+
+        return Response(payload, status=status.HTTP_200_OK)

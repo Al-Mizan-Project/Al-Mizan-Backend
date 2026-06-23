@@ -102,7 +102,7 @@ def get_procedure_rules(type_procedure: str | None) -> ProcedureRules:
     return PROCEDURE_RULES[normalized]
 
 
-def resolve_validation_routing(montant_estime, wilaya: str, secteur: str) -> tuple[str | None, str]:
+def resolve_validation_routing(montant_estime, wilaya: str, secteur: str, service_id=None) -> tuple[str | None, str]:
     if montant_estime is None:
         raise ValidationError({"montant_estime": ["Le montant estime est obligatoire pour la validation."]})
     try:
@@ -114,46 +114,40 @@ def resolve_validation_routing(montant_estime, wilaya: str, secteur: str) -> tup
 
     from acteurs_service.models import CommissionExterne, NiveauCompetence
 
+    # Threshold escalation: an AO routes to the highest external commission whose
+    # seuil it exceeds (national > sectorielle > wilaya), otherwise to internal
+    # validation. Levels that are not configured are skipped instead of failing,
+    # so creation always succeeds and naturally falls back to internal review.
     national = (
         CommissionExterne.objects.filter(niveau_competence=NiveauCompetence.NATIONAL)
         .order_by("-seuil")
         .first()
     )
-    if not national:
-        raise ValidationError({"commission": ["Aucune commission nationale configuree."]})
-    if montant > national.seuil:
+    if national and montant > national.seuil:
         return str(national.organisation_id), "externe_nationale"
 
-    if not secteur:
-        raise ValidationError({"secteur": ["Le secteur est obligatoire pour determiner la commission sectorielle."]})
-
-    sectorielle = (
-        CommissionExterne.objects.filter(
-            niveau_competence=NiveauCompetence.SECTORIELLE,
-            organisation__secteur__iexact=secteur,
+    if secteur:
+        sectorielle = (
+            CommissionExterne.objects.filter(
+                niveau_competence=NiveauCompetence.SECTORIELLE,
+                organisation__secteur__iexact=secteur,
+            )
+            .order_by("-seuil")
+            .first()
         )
-        .order_by("-seuil")
-        .first()
-    )
-    if not sectorielle:
-        raise ValidationError({"secteur": ["Aucune commission sectorielle configuree pour ce secteur."]})
-    if montant > sectorielle.seuil:
-        return str(sectorielle.organisation_id), "externe_secteur"
+        if sectorielle and montant > sectorielle.seuil:
+            return str(sectorielle.organisation_id), "externe_secteur"
 
-    if not wilaya:
-        raise ValidationError({"wilaya": ["La wilaya est obligatoire pour determiner la commission de wilaya."]})
-
-    wilaya_commission = (
-        CommissionExterne.objects.filter(
-            niveau_competence=NiveauCompetence.WILAYA,
-            organisation__wilaya__iexact=wilaya,
+    if wilaya:
+        wilaya_commission = (
+            CommissionExterne.objects.filter(
+                niveau_competence=NiveauCompetence.WILAYA,
+                organisation__wilaya__iexact=wilaya,
+            )
+            .order_by("-seuil")
+            .first()
         )
-        .order_by("-seuil")
-        .first()
-    )
-    if not wilaya_commission:
-        raise ValidationError({"wilaya": ["Aucune commission de wilaya configuree pour cette wilaya."]})
-    if montant > wilaya_commission.seuil:
-        return str(wilaya_commission.organisation_id), "externe_wilaya"
+        if wilaya_commission and montant > wilaya_commission.seuil:
+            return str(wilaya_commission.organisation_id), "externe_wilaya"
 
-    return None, "interne"
+    return (str(service_id) if service_id is not None else None), "interne"

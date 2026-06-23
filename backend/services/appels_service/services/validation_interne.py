@@ -126,11 +126,11 @@ def get_commission_interne_dashboard_data(membre_id):
             economic_operator = f"Multiple ({appel.operateurs_invites.count()} invités)"
 
         suivis = list(appel.suivis.all())
-        suivi_created_at = suivis[0].created_at if suivis else None
+        suivi_created_at = max((s.created_at for s in suivis), default=None) if suivis else None
         
         # Calcul de la date limite
-        # Prefer an explicit validation deadline on the appel if available
-        # (field names vary across installations). Fallback to first suivi + default days.
+        # Priorité : date d'affectation (updated_at quand validated_by est défini) > deadline explicite > suivi + 7j
+        # Cela permet de relancer le compteur de 7 jours à chaque nouvelle affectation.
         validation_deadline = None
         # check common variant names
         for attr in ('date_limite_validation', 'validation_deadline', 'date_limite_validation_at', 'date_limite_validation_dt'):
@@ -139,8 +139,16 @@ def get_commission_interne_dashboard_data(membre_id):
                 validation_deadline = val
                 break
 
-        if not validation_deadline and suivi_created_at:
-            validation_deadline = suivi_created_at + datetime.timedelta(days=DELAI_VALIDATION_DAYS)
+        if not validation_deadline:
+            # Si un validateur est affecté, le délai repart de la dernière mise à jour (date d'affectation)
+            if appel.validated_by and appel.updated_at:
+                reference_date = appel.updated_at
+            elif suivi_created_at:
+                reference_date = suivi_created_at
+            else:
+                reference_date = None
+            if reference_date:
+                validation_deadline = reference_date + datetime.timedelta(days=DELAI_VALIDATION_DAYS)
 
         # Logique des états (strictement selon vos règles)
         computed_status = "Inconnu"

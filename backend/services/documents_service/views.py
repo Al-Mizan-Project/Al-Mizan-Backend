@@ -83,6 +83,7 @@ class DocumentUploadView(views.APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         related_type = serializer.validated_data['related_type']
+        explicit_type_document = serializer.validated_data.get('type_document', None)
         id_operateur_economique = serializer.validated_data.get('id_operateur_economique', None)
         is_encrypted = serializer.validated_data.get('is_encrypted', False)
         visible_after = serializer.validated_data.get('visible_after', None)
@@ -112,11 +113,13 @@ class DocumentUploadView(views.APIView):
                 sha256_hash = minio_service.stream_upload_and_hash(uploaded_file, unique_obj_name)
                 
                 # Save metadata to database
+                # Use explicit type_document if provided, otherwise use file extension
+                final_type_document = explicit_type_document or extension
                 document = Document.objects.create(
                     related_type=related_type,
                     id_operateur_economique=id_operateur_economique,
                     nom=original_filename,
-                    type_document=extension,
+                    type_document=final_type_document,
                     storage_url=storage_url,
                     hash_sha256=sha256_hash,
                     taille_fichier=taille_fichier,
@@ -162,9 +165,14 @@ class DocumentDownloadView(views.APIView):
             
         minio_service = MinioStorageService()
         
-        # Extract object key from storage URL – use the full path after the
-        # leading slash so that keys like "documents/CDC.pdf" are preserved.
-        object_name = document.storage_url.split('/')[-1]
+        # Extract the object key from the storage URL. Uploads persist
+        # `storage_url = "{bucket}/{key}"`, so the bucket prefix must be stripped
+        # to recover the real MinIO key (otherwise the bucket name is wrongly
+        # included in the key and HeadObject 404s). Bare keys are left untouched.
+        object_name = document.storage_url.lstrip('/')
+        bucket_prefix = f"{minio_service.bucket}/"
+        if object_name.startswith(bucket_prefix):
+            object_name = object_name[len(bucket_prefix):]
         
         # Verify the file exists in MinIO BEFORE starting the stream.
         # get_file_stream is a generator so its body only runs when Django
@@ -182,9 +190,26 @@ class DocumentDownloadView(views.APIView):
 
         try:
             file_stream = minio_service.get_file_stream(object_name)
-            response = StreamingHttpResponse(file_stream)
-            safe_filename = slugify(document.nom.replace('.' + document.type_document, '')) + '.' + document.type_document
-            response['Content-Disposition'] = f'attachment; filename="{safe_filename}"'
+            # Serve with the real MIME type and inline disposition so the file can be
+            # previewed directly (e.g. a PDF in an <iframe>) instead of being treated as
+            # an opaque text/html download.
+            doc_type = (document.type_document or '').strip().lower()
+            if '/' in doc_type:
+                content_type = doc_type
+                ext = doc_type.rsplit('/', 1)[-1]
+            else:
+                ext = doc_type or document.nom.rsplit('.', 1)[-1].lower()
+                content_type = {
+                    'pdf': 'application/pdf',
+                    'png': 'image/png',
+                    'jpg': 'image/jpeg',
+                    'jpeg': 'image/jpeg',
+                    'webp': 'image/webp',
+                }.get(ext, 'application/octet-stream')
+            response = StreamingHttpResponse(file_stream, content_type=content_type)
+            base_name = document.nom.rsplit('.', 1)[0] if '.' in document.nom else document.nom
+            safe_filename = slugify(base_name) + '.' + ext
+            response['Content-Disposition'] = f'inline; filename="{safe_filename}"'
             return response
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)

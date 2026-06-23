@@ -21,7 +21,9 @@ from .views import (
     RolePermissionsView,
     RolePermissionDetailView,
     InternalRegisterActeurView,
-    InternalSearchUsersView
+    InternalSearchUsersView,
+    MemberSelfUpdateView,
+    InternalUpdateActeurView
 )
 
 urlpatterns = [
@@ -46,4 +48,7 @@ urlpatterns = [
     path("roles/<int:role_id>/permissions/<int:permission_id>", RolePermissionDetailView.as_view()),
     path("internal/users/register", InternalRegisterActeurView.as_view()),
     path("internal/users/search", InternalSearchUsersView.as_view()),
+    path("users/<str:user_id>/member-update", MemberSelfUpdateView.as_view()),
+    path("internal/users/update-by-membre", InternalUpdateActeurView.as_view()),
+
 ]

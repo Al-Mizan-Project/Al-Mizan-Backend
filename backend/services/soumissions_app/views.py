@@ -114,16 +114,14 @@ class SoumissionDetailView(APIView):
 
         if "document_ids" in request.data:
             document_ids = request.data.get("document_ids") or []
-            docs_valid, missing, not_owned = validate_document_ids(
-                document_ids, id_operateur=soum.id_soumissionnaire
+            # Only validate existence, skip ownership check since system
+            # documents (decision_validation, evaluations) are created by
+            # validators, not by the opérateur économique.
+            docs_valid, missing, _ = validate_document_ids(
+                document_ids, id_operateur=None
             )
             if missing:
                 return Response({"error": f"Documents introuvables: {missing}"}, status=status.HTTP_400_BAD_REQUEST)
-            if not_owned:
-                return Response(
-                    {"error": f"Les documents suivants n'appartiennent pas a cet operateur: {not_owned}"},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
 
         allowed_fields = {
             "document_ids",
@@ -383,6 +381,24 @@ class AppelOffreSoumissionsView(APIView):
     """
 
     def get(self, request, appel_id, *args, **kwargs):
+        # Submissions are confidential until the opening of the plis (ouverture des plis).
+        # Before that point the Service Contractant must not see deposited offers.
+        from django.utils import timezone
+        try:
+            from appels_service.models import AppelOffres
+            appel = AppelOffres.objects.filter(id_appel_offres=appel_id).first()
+        except Exception:
+            appel = None
+
+        ouverture_done = False
+        if appel is not None:
+            if str(getattr(appel, "etat_execution", "")) == "plis_ouverts":
+                ouverture_done = True
+            elif appel.date_ouverture_plis and appel.date_ouverture_plis <= timezone.now():
+                ouverture_done = True
+        if not ouverture_done:
+            return Response([], status=status.HTTP_200_OK)
+
         queryset = Soumission.objects.filter(id_appel_offre=appel_id).order_by("-date_soumission")
         serializer = SoumissionListSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

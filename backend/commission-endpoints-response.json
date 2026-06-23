@@ -1,0 +1,94 @@
+{
+  "responses": {
+    "commission-unified": {
+      "updatedAt": "2026-06-17T12:23:28.707769+00:00",
+      "status": 200,
+      "body": {
+        "stats": {
+          "enAttente": 2,
+          "enCours": 0,
+          "enRetard": 0,
+          "pret": 2,
+          "enAttentePct": 50,
+          "enCoursPct": 0,
+          "enRetardPct": 0,
+          "pretPct": 50
+        },
+        "appels": [
+          {
+            "id": "ID-3001",
+            "rawId": 3001,
+            "reference": "EXT-AO-ATT",
+            "economicOperator": "Non spécifié",
+            "submissionDate": "2026-05-28",
+            "validationDeadline": "-",
+            "status": "En Attente",
+            "etape": "En attente",
+            "delayDays": 0,
+            "validator": "Non assigné",
+            "has_suivi": false,
+            "suivi_count": 0,
+            "suivis": []
+          },
+          {
+            "id": "ID-3003",
+            "rawId": 3003,
+            "reference": "EXT-AO-RET",
+            "economicOperator": "Non spécifié",
+            "submissionDate": "2026-05-18",
+            "validationDeadline": "-",
+            "status": "En Attente",
+            "etape": "En retard",
+            "delayDays": 0,
+            "validator": "Non assigné",
+            "has_suivi": false,
+            "suivi_count": 0,
+            "suivis": []
+          },
+          {
+            "id": "ID-3004",
+            "rawId": 3004,
+            "reference": "EXT-AO-PRT",
+            "economicOperator": "Non spécifié",
+            "submissionDate": "2026-05-13",
+            "validationDeadline": "2026-06-24",
+            "status": "Prêt",
+            "etape": "Pret",
+            "delayDays": 0,
+            "validator": "e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55",
+            "has_suivi": true,
+            "suivi_count": 1,
+            "suivis": [
+              {
+                "id_utilisateur": 6,
+                "created_at": "2026-06-17T08:55:19.224198+00:00"
+              }
+            ]
+          },
+          {
+            "id": "ID-3002",
+            "rawId": 3002,
+            "reference": "EXT-AO-ENC",
+            "economicOperator": "Non spécifié",
+            "submissionDate": "2026-05-28",
+            "validationDeadline": "2026-06-24",
+            "status": "Prêt",
+            "etape": "En cours",
+            "delayDays": 0,
+            "validator": "e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55",
+            "has_suivi": true,
+            "suivi_count": 1,
+            "suivis": [
+              {
+                "id_utilisateur": 6,
+                "created_at": "2026-06-17T12:11:20.443217+00:00"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "lastUpdated": "2026-06-17T12:23:28.707819+00:00",
+  "lastEndpoint": "commission-unified"
+}
